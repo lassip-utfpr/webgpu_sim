@@ -18,7 +18,7 @@ wsz = 2
 # Field config
 nx = 256  # number of grid points in x-direction
 nz = 256  # number of grid points in z-direction
-nt = 1000  # number of time steps
+nt = 100  # number of time steps
 c = .2  # wave velocity
 # Source term
 src_x = nx // 2  # source location in x-direction
@@ -50,8 +50,10 @@ shader_test = f"""
         coef: array<f32>    // discrete coefs
     }};
 
+    //@group(1) @binding(0)   // info buffer
     @group(0) @binding(0)   // info buffer
     var<storage,read_write> lv: LapValues;
+    //var<storage,read> lv: LapValues;
 
     @group(0) @binding(1) // pressure field k
     var<storage,read_write> PK: array<f32>;
@@ -64,6 +66,15 @@ shader_test = f"""
     
     @group(0) @binding(4) // source term
     var<storage,read_write> src: array<f32>;
+    
+    @group(0) @binding(5) // source term
+    var<storage,read_write> src_out: array<f32>;
+    
+    @group(0) @binding(6) // source term
+    var<storage,read_write> diff: array<f32>;
+    
+    @group(0) @binding(7) // source term
+    var<storage,read_write> b7: array<f32>;
     
     // function to convert 2D [z,x] index into 1D [zx] index
     fn zx(z: i32, x: i32) -> i32 {{
@@ -146,6 +157,7 @@ shader_test = f"""
         }}
     }} 
 
+    
     // function to calculate laplacian
     fn laplacian(z: i32, x: i32) -> f32 {{
         let num_coef: i32 = i32(lv.num_coef);   // num coefs
@@ -181,6 +193,7 @@ shader_test = f"""
         let z_src: i32 = i32(lv.z_sz)/2;        // source term z position
         let x_src: i32 = i32(lv.x_sz)/2;        // source term x position
         var lap: f32 = 0.0;                     // laplacian
+        // let k: i32 = i32(lv.k);
 
         // --------------------
         // Calculate laplacian
@@ -189,6 +202,8 @@ shader_test = f"""
         // --------------------
         // Update pressure field
         add_src = f32(!bool(zx(z,x)-zx(z_src,x_src)));
+        //setPK(z, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c*c*lap + b7[0]*add_src);
+        //setPK(z, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c*c*lap + src_out[0]*add_src);
         setPK(z, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c*c*lap + src[i32(lv.k)]*add_src);
             
         // --------------------
@@ -197,10 +212,38 @@ shader_test = f"""
         setPKm1(z, x, getPK(z, x));
         
         if(z == 0 && x == 0) {{
-            lv.k += 1.0;
+            src_out[i32(lv.k)] = src[i32(lv.k)];
+            //src_out[i32(lv.k)] = lv.k;
+            //diff[i32(lv.k)] = b7[0];
+            //lv.k += 1.0;
         }}
+        //if(z == 0 && x == x_src) {{
+            //src_out[i32(lv.k)] = getPK(z, x);
+            //src_out[i32(lv.k)] = lv.k;
+            //lv.k += 1.0;
+        //}}
     }}
     """
+
+shader_increment = f"""
+struct LapValues {{
+        z_sz: f32,          // Z field size
+        x_sz: f32,          // X field size
+        num_coef: f32,      // num of discrete coefs
+        c: f32,             // velocity
+        k: f32,
+        coef: array<f32>    // discrete coefs
+    }};
+
+    @group(1) @binding(0)   // info buffer
+    var<storage,read_write> lv: LapValues;
+
+    @stage(compute)
+    @workgroup_size(1)
+    fn main_inc(@builtin(global_invocation_id) index: vec3<u32>) {{
+        lv.k += 1.0;
+    }}
+"""
 
 # Simulação completa na GPU com LAP FOR
 def sim_webgpu_for(coef):
@@ -212,14 +255,17 @@ def sim_webgpu_for(coef):
     src_gpu = src.astype(dtype)
     # auxiliar variables
     info = np.array([nz, nx, len(coef), c, 0], dtype=dtype)
+    # info = np.array([nz, nx, len(coef), c], dtype=dtype)
     info = np.concatenate((info, coef))
     # =====================
     # webgpu configurations
     device = wgpu.utils.get_default_device()
     cshader = device.create_shader_module(code=shader_test)
+    # cshader_inc = device.create_shader_module(code=shader_increment)
     # info buffer
     b0 = device.create_buffer_with_data(data=info, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE |
                                                        wgpu.BufferUsage.COPY_SRC)
+    # b0 = device.create_buffer_with_data(data=info, usage=wgpu.BufferUsage.STORAGE)
     # field pressure at time k-2
     b1 = device.create_buffer_with_data(data=PKm2, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE)
     # field pressure at time k-1
@@ -229,7 +275,24 @@ def sim_webgpu_for(coef):
                                                        wgpu.BufferUsage.COPY_SRC)
     # source term
     b4 = device.create_buffer_with_data(data=src_gpu, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE)
+    # b4 = device.create_buffer(size=4, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE)
+    b5 = device.create_buffer(size=src.nbytes, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+    b6 = device.create_buffer(size=src.nbytes, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE |
+                                                     wgpu.BufferUsage.COPY_SRC)
+    b7 = device.create_buffer(size=4, usage=wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.STORAGE)
 
+    # Setup layouts and bindings
+    # binding_layouts_lap_values = [
+    #     {
+    #         "binding": 0,
+    #         "visibility": wgpu.ShaderStage.COMPUTE,
+    #         "buffer": {
+    #             # "type": wgpu.BufferBindingType.read_only_storage,
+    #             "type": wgpu.BufferBindingType.storage,
+    #         },
+    #     },
+    # ]
     binding_layouts = [
         {
             "binding": 0,
@@ -267,7 +330,34 @@ def sim_webgpu_for(coef):
                 "type": wgpu.BufferBindingType.storage,
             },
         },
+        {
+            "binding": 5,
+            "visibility": wgpu.ShaderStage.COMPUTE,
+            "buffer": {
+                "type": wgpu.BufferBindingType.storage,
+            },
+        },
+        {
+            "binding": 6,
+            "visibility": wgpu.ShaderStage.COMPUTE,
+            "buffer": {
+                "type": wgpu.BufferBindingType.storage,
+            },
+        },
+        {
+            "binding": 7,
+            "visibility": wgpu.ShaderStage.COMPUTE,
+            "buffer": {
+                "type": wgpu.BufferBindingType.storage,
+            },
+        },
     ]
+    # bindings_lap_values = [
+    #     {
+    #         "binding": 0,
+    #         "resource": {"buffer": b0, "offset": 0, "size": b0.size},
+    #     },
+    # ]
     bindings = [
         {
             "binding": 0,
@@ -289,11 +379,27 @@ def sim_webgpu_for(coef):
             "binding": 4,
             "resource": {"buffer": b4, "offset": 0, "size": b4.size},
         },
+        {
+            "binding": 5,
+            "resource": {"buffer": b5, "offset": 0, "size": b5.size},
+        },
+        {
+            "binding": 6,
+            "resource": {"buffer": b6, "offset": 0, "size": b6.size},
+        },
+        {
+            "binding": 7,
+            "resource": {"buffer": b7, "offset": 0, "size": b7.size},
+        },
     ]
 
     # Put everything together
+    # bind_group_layout_lp = device.create_bind_group_layout(entries=binding_layouts_lap_values)
     bind_group_layout = device.create_bind_group_layout(entries=binding_layouts)
+    # pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bind_group_layout_lp, bind_group_layout])
     pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bind_group_layout])
+    # pipeline_layout_inc = device.create_pipeline_layout(bind_group_layouts=[bind_group_layout_lp])
+    # bind_group_lp = device.create_bind_group(layout=bind_group_layout_lp, entries=bindings_lap_values)
     bind_group = device.create_bind_group(layout=bind_group_layout, entries=bindings)
 
     # Create and run the pipeline
@@ -301,20 +407,34 @@ def sim_webgpu_for(coef):
         layout=pipeline_layout,
         compute={"module": cshader, "entry_point": "main"},
     )
+    # compute_pipeline_inc = device.create_compute_pipeline(
+    #     layout=pipeline_layout_inc,
+    #     compute={"module": cshader_inc, "entry_point": "main_inc"},
+    # )
     command_encoder = device.create_command_encoder()
-    compute_pass = command_encoder.begin_compute_pass()
-    compute_pass.set_pipeline(compute_pipeline)
-    compute_pass.set_bind_group(0, bind_group, [], 0, 999999)  # last 2 elements not used
+    # compute_pass = command_encoder.begin_compute_pass()
+    # compute_pass.set_pipeline(compute_pipeline)
+    # compute_pass.set_bind_group(0, bind_group, [], 0, 999999)  # last 2 elements not used
     for i in range(nt):
-        # compute_pass = command_encoder.begin_compute_pass()
-        # compute_pass.set_pipeline(compute_pipeline)
-        # compute_pass.set_bind_group(0, bind_group, [], 0, 999999)  # last 2 elements not used
+        compute_pass = command_encoder.begin_compute_pass()
+        compute_pass.set_pipeline(compute_pipeline)
+        compute_pass.set_bind_group(0, bind_group, [], 0, 999999)  # last 2 elements not used
+        # compute_pass.set_bind_group(1, bind_group_lp, [], 0, 999999)  # last 2 elements not used
         compute_pass.dispatch_workgroups(nx)  # x y z -- num blocks
+        compute_pass.end()
+
+        # device.queue.write_buffer(b5, 0, src[i].tobytes())
+        # compute_pass = command_encoder.begin_compute_pass()
+        # compute_pass.set_pipeline(compute_pipeline_inc)
+        # compute_pass.set_bind_group(1, bind_group_lp, [], 0, 999999)  # last 2 elements not used
+        # compute_pass.dispatch_workgroups(1)  # x y z -- num blocks
         # compute_pass.end()
 
-    compute_pass.end()
+    # compute_pass.end()
     device.queue.submit([command_encoder.finish()])
     out = device.queue.read_buffer(b3).cast("f")  # reads from buffer 3
+    src_out = np.asarray(device.queue.read_buffer(b5).cast("f"))
+    df = np.asarray(device.queue.read_buffer(b6).cast("f"))
     return np.asarray(out).reshape((nz, nx))
 
 

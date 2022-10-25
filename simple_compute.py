@@ -12,9 +12,11 @@ from wgpu.utils import compute_with_buffers  # Convenience function
 shader_source = """
 @group(0) @binding(0)
 var<storage,read> data1: array<i32>;
-@group(0) @binding(1)
+
+@group(1) @binding(0)
 var<storage,read_write> data2: array<i32>;
-@group(0) @binding(2)
+
+@group(2) @binding(0)
 var<storage,read_write> k: array<i32>;
 
 @stage(compute)
@@ -43,7 +45,7 @@ buffer2 = device.create_buffer(size=data.nbytes, usage=wgpu.BufferUsage.STORAGE 
 buffer3 = device.create_buffer(size=4, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_DST)
 
 # Setup layout and bindings
-binding_layouts = [
+bl_0 = [
     {
         "binding": 0,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -51,6 +53,8 @@ binding_layouts = [
             "type": wgpu.BufferBindingType.read_only_storage,
         },
     },
+]
+bl_1 = [
     {
         "binding": 1,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -58,6 +62,8 @@ binding_layouts = [
             "type": wgpu.BufferBindingType.storage,
         },
     },
+]
+bl_2 = [
     {
         "binding": 2,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -66,23 +72,27 @@ binding_layouts = [
         },
     },
 ]
-bindings = [
+bind_0 = [
     {
         "binding": 0,
         "resource": {"buffer": buffer1, "offset": 0, "size": buffer1.size},
     },
+]
+bind_1 = [
     {
-        "binding": 1,
+        "binding": 0,
         "resource": {"buffer": buffer2, "offset": 0, "size": buffer2.size},
     },
+]
+bind_2 = [
     {
-        "binding": 2,
+        "binding": 0,
         "resource": {"buffer": buffer3, "offset": 0, "size": buffer3.size},
     },
 ]
 
 # Put everything together
-bind_group_layout = device.create_bind_group_layout(entries=binding_layouts)
+bgl_0 = device.create_bind_group_layout(entries=binding_layouts)
 pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bind_group_layout])
 bind_group = device.create_bind_group(layout=bind_group_layout, entries=bindings)
 
