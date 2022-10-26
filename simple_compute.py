@@ -29,7 +29,8 @@ fn incr_k() {
 @workgroup_size(1)
 fn main(@builtin(global_invocation_id) index: vec3<u32>) {
     let i: u32 = index.x;
-    data2[i] = k[0] * 100 + data1[i] + data2[i];
+    //data2[i] = data1[i] + data2[i] + k[0];
+    data2[i] = data1[i] + data2[i] * k[0];
 }
 """
 
@@ -120,14 +121,14 @@ compute_incr_k = device.create_compute_pipeline(
 
 command_encoder = device.create_command_encoder()
 compute_pass = command_encoder.begin_compute_pass()
-compute_pass.set_pipeline(compute_pipeline)
+# compute_pass.set_pipeline(compute_pipeline)
 compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
 # compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
 # compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
 
-for i in range(5):
+for i in range(4):
     device.queue.write_buffer(buffer3, 0, i.to_bytes(4, 'little'))
-    # compute_pass.set_pipeline(compute_pipeline)
+    compute_pass.set_pipeline(compute_pipeline)
     compute_pass.dispatch_workgroups(n)  # x y z
     # compute_pass.end()
 
