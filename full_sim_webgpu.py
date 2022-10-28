@@ -1,6 +1,7 @@
 import wgpu.backends.rs  # Select backend
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
+from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from lap_webgpu import lap_pipa
 from time import time
@@ -11,15 +12,13 @@ from time import time
 
 dtype = np.float32
 
-wsx = 20
-wsy = 20
-wsz = 2
-
 # Field config
 nx = 256  # number of grid points in x-direction
 nz = 256  # number of grid points in z-direction
 nt = 1000  # number of time steps
 c = .2  # wave velocity
+wsx = 8  # workgroup x size
+wsy = 8  # workgroup y size
 
 # Source term
 src_x = nx // 2  # source location in x-direction
@@ -29,8 +28,8 @@ src = np.exp(-(t - nt / 10) ** 2 / 500, dtype=np.float32)
 src[:-1] -= src[1:]
 
 # Sensor signal
-sens_x = src_x // 2
-sens_z = 0
+sens_x = nx // 2
+sens_z = nz // 3
 sensor = np.zeros(nt, dtype=np.float32)
 
 
@@ -42,7 +41,7 @@ def sim_full():
         u[:, :, k] = -u[:, :, k - 2] + 2.0 * u[:, :, k - 1] + c * c * lap_pipa(u[:, :, k - 1], c8)
         u[src_z, src_z, k] += src[k]
 
-    return u
+    return u[:, :, -1]
 
 
 # Shader [kernel] para a simulação com Lap FOR
@@ -162,15 +161,13 @@ shader_test = f"""
     }}
 
     @stage(compute)
-    @workgroup_size({nz}) // z --> num threads per block -- hardcoded
-    fn main(@builtin(local_invocation_id) threadIdx: vec3<u32>,
-            @builtin(workgroup_id) blockIdx: vec3<u32>) {{
-
+    @workgroup_size({wsx}, {wsy})
+    fn main(@builtin(global_invocation_id) index: vec3<u32>) {{
         var add_src: f32 = 0.0;                 // 'boolean' to check if thread is in source position
         let c: f32 = lfv.c;                     // velocity
 
-        let z: i32 = i32(threadIdx.x);          // z thread index
-        let x: i32 = i32(blockIdx.x);           // x thread index
+        let z: i32 = i32(index.x);          // z thread index
+        let x: i32 = i32(index.y);           // x thread index
         let z_src: i32 = liv.z_src;            // source term z position
         let x_src: i32 = liv.x_src;            // source term x position
         var lap: f32 = 0.0;                     // laplacian
@@ -342,10 +339,10 @@ def sim_webgpu_for(coef):
     compute_pass.set_bind_group(0, bind_group, [], 0, 999999)  # last 2 elements not used
     for i in range(nt):
         compute_pass.set_pipeline(compute_simul)
-        compute_pass.dispatch_workgroups(nx)  # x y z -- num blocks
+        compute_pass.dispatch_workgroups(nz//wsx, nx//wsy)
 
         compute_pass.set_pipeline(compute_incr_k)
-        compute_pass.dispatch_workgroups(1)  # x y z
+        compute_pass.dispatch_workgroups(1)
 
     compute_pass.end()
     device.queue.submit([command_encoder.finish()])
@@ -369,17 +366,18 @@ u_for, sensor = sim_webgpu_for(c8)
 t_for = time() - t_for
 # serial
 t_ser = time()
-# u_ser = sim_full()
+u_ser = sim_full()
 t_ser = time() - t_ser
 
 print(f'TEMPO - {nt} pontos de tempo:\nFor: {t_for:.3}s\nSerial: {t_ser:.3}s')
+print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 
 plt.figure(1)
 plt.title('Full sim. na GPU com lap for')
 plt.imshow(u_for, aspect='auto', cmap='turbo_r')
-# plt.figure(2)
-# plt.title('Full sim. na CPU')
-# plt.imshow(u_ser[:, :, -1], aspect='auto', cmap='turbo_r')
+plt.figure(2)
+plt.title('Full sim. na CPU')
+plt.imshow(u_ser, aspect='auto', cmap='turbo_r')
 plt.figure(3)
 plt.title(f'Sensor em z = {sens_z} e x = {sens_x}')
 plt.plot(t, sensor)
