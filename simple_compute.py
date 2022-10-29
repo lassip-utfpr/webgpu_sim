@@ -48,31 +48,34 @@ shader_source = f"""
     @stage(compute)
     @workgroup_size(1)
     fn main(@builtin(global_invocation_id) index: vec3<u32>) {{
-        let i: i32 = i32(index.x);
+        let i: i32 = i32(index.y);
         let j: i32 = k[0];
         let ix: i32 = idx(j, i);
         
-        //data2[i] = data1[i] + data2[i] + k[0];
-        data2[i] = data1[i] + data2[i] * k[0];
+        data2[i] = data1[i] + data2[i] + k[0];
+        //data2[i] = data1[i] + data2[i] * k[0];
         out[ix] = data2[i];
     }}
 """
 
-# %% The long version using the wgpu API
-
 # Create device and shader object
 device = wgpu.utils.get_default_device()
+# adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
+# device = adapter.request_device()
 cshader = device.create_shader_module(code=shader_source)
 
-# Create buffer objects, input buffer is mapped.
-buffer1 = device.create_buffer_with_data(data=data, usage=wgpu.BufferUsage.STORAGE)
-buffer2 = device.create_buffer(size=data.nbytes, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
-buffer3 = device.create_buffer(size=4, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC |
-                                             wgpu.BufferUsage.COPY_DST | wgpu.BufferUsage.MAP_WRITE)
-buffer4 = device.create_buffer_with_data(data=out, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+# Create buffer objects
+data1_bf = device.create_buffer_with_data(data=data, usage=wgpu.BufferUsage.STORAGE)
+data2_bf = device.create_buffer(size=data.nbytes, usage=wgpu.BufferUsage.STORAGE |
+                                                        wgpu.BufferUsage.COPY_SRC)
+k_bf = device.create_buffer(size=4, usage=wgpu.BufferUsage.STORAGE |
+                                          wgpu.BufferUsage.COPY_DST |
+                                          wgpu.BufferUsage.COPY_SRC)
+out_bf = device.create_buffer_with_data(data=out, usage=wgpu.BufferUsage.STORAGE |
+                                                        wgpu.BufferUsage.COPY_SRC)
 
 # Setup layout and bindings
-bl_0 = [
+binding_layout = [
     {
         "binding": 0,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -80,8 +83,6 @@ bl_0 = [
             "type": wgpu.BufferBindingType.read_only_storage,
         },
     },
-# ]
-# bl_1 = [
     {
         "binding": 1,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -89,8 +90,6 @@ bl_0 = [
             "type": wgpu.BufferBindingType.storage,
         },
     },
-# ]
-# bl_2 = [
     {
         "binding": 2,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -98,8 +97,6 @@ bl_0 = [
             "type": wgpu.BufferBindingType.storage,
         },
     },
-# ]
-# bl_3 = [
     {
         "binding": 3,
         "visibility": wgpu.ShaderStage.COMPUTE,
@@ -108,45 +105,33 @@ bl_0 = [
         },
     },
 ]
-bind_0 = [
+
+binding = [
     {
         "binding": 0,
-        "resource": {"buffer": buffer1, "offset": 0, "size": buffer1.size},
+        "resource": {"buffer": data1_bf, "offset": 0, "size": data1_bf.size},
     },
-# ]
-# bind_1 = [
     {
         "binding": 1,
-        "resource": {"buffer": buffer2, "offset": 0, "size": buffer2.size},
+        "resource": {"buffer": data2_bf, "offset": 0, "size": data2_bf.size},
     },
-# ]
-# bind_2 = [
     {
         "binding": 2,
-        "resource": {"buffer": buffer3, "offset": 0, "size": buffer3.size},
+        "resource": {"buffer": k_bf, "offset": 0, "size": k_bf.size},
     },
-# ]
-# bind_3 = [
     {
         "binding": 3,
-        "resource": {"buffer": buffer4, "offset": 0, "size": buffer4.size},
+        "resource": {"buffer": out_bf, "offset": 0, "size": out_bf.size},
     },
 ]
 
 # Put everything together
-bgl_0 = device.create_bind_group_layout(entries=bl_0)
-# bgl_1 = device.create_bind_group_layout(entries=bl_1)
-# bgl_2 = device.create_bind_group_layout(entries=bl_2)
-# bgl_3 = device.create_bind_group_layout(entries=bl_3)
-# pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2, bgl_3])
-pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0])
-bg_0 = device.create_bind_group(layout=bgl_0, entries=bind_0)
-# bg_1 = device.create_bind_group(layout=bgl_0, entries=bind_1)
-# bg_2 = device.create_bind_group(layout=bgl_0, entries=bind_2)
-# bg_3 = device.create_bind_group(layout=bgl_0, entries=bind_3)
+bind_group_layout = device.create_bind_group_layout(entries=binding_layout)
+pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bind_group_layout])
+binding_group = device.create_bind_group(layout=bind_group_layout, entries=binding)
 
 # Create and run the pipeline
-compute_pipeline = device.create_compute_pipeline(
+compute_main = device.create_compute_pipeline(
     layout=pipeline_layout,
     compute={"module": cshader, "entry_point": "main"},
 )
@@ -157,28 +142,21 @@ compute_incr_k = device.create_compute_pipeline(
 
 command_encoder = device.create_command_encoder()
 compute_pass = command_encoder.begin_compute_pass()
-compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
-# compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
-# compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
-# compute_pass.set_bind_group(3, bg_3, [], 0, 999999)  # last 2 elements not used
-# compute_pass.set_pipeline(compute_pipeline)
+compute_pass.set_bind_group(0, binding_group, [], 0, 999999)
 
 for i in range(j):
-    # device.queue.write_buffer(buffer3, 0, i.to_bytes(4, 'little'))
-    buffer3.map_write(i.to_bytes(4, 'little'))
-    compute_pass.set_pipeline(compute_pipeline)
-    compute_pass.dispatch_workgroups(n)  # x y z
-    # compute_pass.end()
+    compute_pass.set_pipeline(compute_main)
+    compute_pass.dispatch_workgroups(j, n)
 
-    # compute_pass.set_pipeline(compute_incr_k)
-    # compute_pass.dispatch_workgroups(1)  # x y z
+    compute_pass.set_pipeline(compute_incr_k)
+    compute_pass.dispatch_workgroups(1)
 
 compute_pass.end()
 device.queue.submit([command_encoder.finish()])
 
 # Read result
-result = device.queue.read_buffer(buffer2).cast("i").tolist()
-k = device.queue.read_buffer(buffer3).cast("i").tolist()
-out = np.asarray(device.queue.read_buffer(buffer4).cast("i")).reshape((j, n))
+result = device.queue.read_buffer(data2_bf).cast("i").tolist()
+k = device.queue.read_buffer(k_bf).cast("i").tolist()
+out = np.asarray(device.queue.read_buffer(out_bf).cast("i")).reshape((j, n))
 print(result)
-assert result == list(range(20))
+print(out)
