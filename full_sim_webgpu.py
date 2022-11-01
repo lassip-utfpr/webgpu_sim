@@ -103,6 +103,7 @@ shader_test = f"""
         
         if(index != -1) {{
             PK[index] = val;
+            storageBarrier();
         }}
     }}
     
@@ -119,6 +120,7 @@ shader_test = f"""
         
         if(index != -1) {{
             PKm1[index] = val;
+            storageBarrier();
         }}
     }} 
 
@@ -135,6 +137,7 @@ shader_test = f"""
         
         if(index != -1) {{
             PKm2[index] = val;
+            storageBarrier();
         }}
     }} 
 
@@ -210,6 +213,9 @@ def sim_webgpu_for(coef):
     # =====================
     # webgpu configurations
     device = wgpu.utils.get_default_device()
+    # adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
+    # device = adapter.request_device()
+    print(f'GPU: {device.adapter.properties["name"]}')
     cshader = device.create_shader_module(code=shader_test)
 
     # info integer buffer
