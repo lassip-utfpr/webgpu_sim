@@ -16,13 +16,15 @@ dtype = np.float32
 nx = 256  # number of grid points in x-direction
 nz = 256  # number of grid points in z-direction
 nt = 1000  # number of time steps
-c = .2  # wave velocity
+c = np.zeros((nz, nx), dtype=dtype)  # wave velocity field
+c[:, :] = .2
+c[nz//2-10:nz//2+10, nx//2-10:nx//2+10] = 0.0  # add reflector in the center of the grid
 wsx = 8  # workgroup x size
 wsy = 8  # workgroup y size
 
 # Source term
 src_x = nx // 2  # source location in x-direction
-src_z = nz // 2  # source location in z-direction
+src_z = 0  # source location in z-direction
 t = np.arange(nt)
 src = np.exp(-(t - nt / 10) ** 2 / 500, dtype=np.float32)
 src[:-1] -= src[1:]
@@ -39,7 +41,7 @@ def sim_full():
 
     for k in range(2, nt):
         u[:, :, k] = -u[:, :, k - 2] + 2.0 * u[:, :, k - 1] + c * c * lap_pipa(u[:, :, k - 1], c8)
-        u[src_z, src_z, k] += src[k]
+        u[src_z, src_x, k] += src[k]
 
     return u[:, :, -1]
 
@@ -56,17 +58,12 @@ shader_test = f"""
         num_coef: i32,      // num of discrete coefs
         k: i32              // iteraction
     }};
-    
-    struct LapFloatValues {{
-        c: f32,             // velocity
-        coef: array<f32>    // coefficients
-    }};
 
     @group(0) @binding(0)   // info_int buffer
     var<storage,read_write> liv: LapIntValues;
     
     @group(0) @binding(1) // info_float buffer
-    var<storage,read> lfv: LapFloatValues;
+    var<storage,read> coef: array<f32>;
 
     @group(0) @binding(2) // pressure field k
     var<storage,read_write> PK: array<f32>;
@@ -82,6 +79,9 @@ shader_test = f"""
     
     @group(0) @binding(6) // sensor signal
     var<storage,read_write> sensor: array<f32>;
+    
+    @group(0) @binding(7) // velocity map
+    var<storage,read> c: array<f32>;
     
     // function to convert 2D [z,x] index into 1D [zx] index
     fn zx(z: i32, x: i32) -> i32 {{
@@ -146,10 +146,10 @@ shader_test = f"""
         let num_coef: i32 = liv.num_coef;   // num coefs
              
         // central
-        var lap: f32 = 2.0 * lfv.coef[0] * getPKm1(z, x);
+        var lap: f32 = 2.0 * coef[0] * getPKm1(z, x);
    
         for (var i = 1; i < num_coef; i = i + 1) {{
-            lap += lfv.coef[i] * (getPKm1(z - i, x) +  // i acima
+            lap += coef[i] * (getPKm1(z - i, x) +  // i acima
                                   getPKm1(z + i, x) +  // i abaixo
                                   getPKm1(z, x - i) +  // i a esquerda
                                   getPKm1(z, x + i));  // i a direita
@@ -167,7 +167,6 @@ shader_test = f"""
     @workgroup_size({wsx}, {wsy})
     fn main(@builtin(global_invocation_id) index: vec3<u32>) {{
         var add_src: f32 = 0.0;                 // 'boolean' to check if thread is in source position
-        let c: f32 = lfv.c;                     // velocity
 
         let z: i32 = i32(index.x);          // z thread index
         let x: i32 = i32(index.y);           // x thread index
@@ -182,7 +181,7 @@ shader_test = f"""
         // --------------------
         // Update pressure field
         add_src = f32(!bool(zx(z,x)-zx(z_src,x_src)));
-        setPK(z, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c*c*lap + src[liv.k]*add_src);
+        setPK(z, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c[zx(z,x)]*c[zx(z,x)]*lap + src[liv.k]*add_src);
             
         // --------------------
         // Circular buffer
@@ -207,8 +206,7 @@ def sim_webgpu_for(coef):
 
     # auxiliar variables
     info_i32 = np.array([nz, nx, src_z, src_x, sens_z, sens_x, len(coef), 0], dtype=np.int32)
-    info_f32 = np.array([c], dtype=dtype)
-    info_f32 = np.concatenate((info_f32, coef.astype(dtype)))
+    info_f32 = coef.astype(dtype)
 
     # =====================
     # webgpu configurations
@@ -242,6 +240,10 @@ def sim_webgpu_for(coef):
     b6 = device.create_buffer_with_data(data=sensor, usage=wgpu.BufferUsage.STORAGE |
                                                            wgpu.BufferUsage.COPY_DST |
                                                            wgpu.BufferUsage.COPY_SRC)
+
+    # velocity map
+    b7 = device.create_buffer_with_data(data=c, usage=wgpu.BufferUsage.STORAGE |
+                                                      wgpu.BufferUsage.COPY_SRC)
 
     binding_layouts = [
         {
@@ -293,6 +295,13 @@ def sim_webgpu_for(coef):
                 "type": wgpu.BufferBindingType.storage,
             },
         },
+        {
+            "binding": 7,
+            "visibility": wgpu.ShaderStage.COMPUTE,
+            "buffer": {
+                "type": wgpu.BufferBindingType.read_only_storage,
+            },
+        },
     ]
     bindings = [
         {
@@ -322,6 +331,10 @@ def sim_webgpu_for(coef):
         {
             "binding": 6,
             "resource": {"buffer": b6, "offset": 0, "size": b6.size},
+        },
+        {
+            "binding": 7,
+            "resource": {"buffer": b7, "offset": 0, "size": b7.size},
         },
     ]
 
