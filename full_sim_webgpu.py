@@ -18,8 +18,20 @@ nt = 1000  # number of time steps
 c = np.zeros((nz, nx), dtype=dtype)  # wave velocity field
 c[:, :] = .2
 c[nz // 2 - 10:nz // 2 + 10, nx // 2 - 10:nx // 2 + 10] = 0.0  # add reflector in the center of the grid
-wsx = 8  # workgroup x size
-wsy = 8  # workgroup y size
+
+# Escolha do valor de wsx
+wsx = 1
+for i in range(15, 0, -1):
+    if (nz % i) == 0:
+        wsx = i  # workgroup x size
+        break
+
+# Escolha do valor de wsy
+wsy = 1
+for i in range(15, 0, -1):
+    if (nx % i) == 0:
+        wsy = i  # workgroup x size
+        break
 
 # Source term
 src_x = nx // 2  # source location in x-direction
@@ -443,6 +455,7 @@ t_ser = time()
 u_ser = sim_full()
 t_ser = time() - t_ser
 
+print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
 print(f'TEMPO - {nt} pontos de tempo:\nFor: {t_for:.3}s\nSerial: {t_ser:.3}s')
 print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 
