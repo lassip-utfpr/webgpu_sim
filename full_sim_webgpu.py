@@ -446,17 +446,23 @@ c6 = np.array([-49 / 18, 3 / 2, -3 / 20, 1 / 90], dtype=dtype)
 c8 = np.array([-205 / 72, 8 / 5, -1 / 5, 8 / 315, -1 / 560], dtype=dtype)
 
 # --------------------------
+times_for = list()
+times_ser = list()
 # webgpu
-t_for = time()
-u_for, sensor = sim_webgpu_for(c8)
-t_for = time() - t_for
-# serial
-t_ser = time()
-u_ser = sim_full()
-t_ser = time() - t_ser
+for n in range(20):
+    t_for = time()
+    u_for, sensor = sim_webgpu_for(c8)
+    times_for.append(time() - t_for)
+    # serial
+    if n == 0:
+        t_ser = time()
+        u_ser = sim_full()
+        times_ser.append(time() - t_ser)
 
 print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
-print(f'TEMPO - {nt} pontos de tempo:\nFor: {t_for:.3}s\nSerial: {t_ser:.3}s')
+print(f'TEMPO - {nt} pontos de tempo:\nFor: '
+      f'{(sum(times_for) / len(times_for)):.3}s\nSerial: '
+      f'{(sum(times_ser) / len(times_for)):.3}s')
 print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 
 plt.figure(1)
