@@ -462,7 +462,7 @@ for n in range(20):
 print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
 print(f'TEMPO - {nt} pontos de tempo:\nFor: '
       f'{(sum(times_for) / len(times_for)):.3}s\nSerial: '
-      f'{(sum(times_ser) / len(times_for)):.3}s')
+      f'{(sum(times_ser) / len(times_ser)):.3}s')
 print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 
 plt.figure(1)
