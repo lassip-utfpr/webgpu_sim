@@ -21,16 +21,16 @@ c[nz // 2 - 10:nz // 2 + 10, nx // 2 - 10:nx // 2 + 10] = 0.0  # add reflector i
 
 # Escolha do valor de wsx
 wsx = 1
-for i in range(15, 0, -1):
-    if (nz % i) == 0:
-        wsx = i  # workgroup x size
+for n in range(15, 0, -1):
+    if (nz % n) == 0:
+        wsx = n  # workgroup x size
         break
 
 # Escolha do valor de wsy
 wsy = 1
-for i in range(15, 0, -1):
-    if (nx % i) == 0:
-        wsy = i  # workgroup x size
+for n in range(15, 0, -1):
+    if (nx % n) == 0:
+        wsy = n  # workgroup x size
         break
 
 # Source term
@@ -446,23 +446,31 @@ c6 = np.array([-49 / 18, 3 / 2, -3 / 20, 1 / 90], dtype=dtype)
 c8 = np.array([-205 / 72, 8 / 5, -1 / 5, 8 / 315, -1 / 560], dtype=dtype)
 
 # --------------------------
+u_for = 0.0
+u_ser = 0.0
 times_for = list()
 times_ser = list()
 # webgpu
-for n in range(20):
+for n in range(25):
+    print(f'Iteracao {n}')
     t_for = time()
     u_for, sensor = sim_webgpu_for(c8)
     times_for.append(time() - t_for)
+    print(f'{times_for[-1]:.3}s')
     # serial
-    if n == 0:
-        t_ser = time()
-        u_ser = sim_full()
-        times_ser.append(time() - t_ser)
 
+    print(f'Simulacao CPU')
+    t_ser = time()
+    u_ser = sim_full()
+    times_ser.append(time() - t_ser)
+    print(f'{times_ser[-1]:.3}s')
+
+times_for = np.array(times_for)
+times_ser = np.array(times_ser)
 print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
-print(f'TEMPO - {nt} pontos de tempo:\nFor: '
-      f'{(sum(times_for) / len(times_for)):.3}s\nSerial: '
-      f'{(sum(times_ser) / len(times_ser)):.3}s')
+print(f'TEMPO - {nt} pontos de tempo:\n'
+      f'For: {times_for[5:].mean():.3}s (std = {times_for[5:].std()})\n'
+      f'Serial: {times_ser[5:].mean():.3}s (std = {times_ser[5:].std()})')
 print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 
 plt.figure(1)
