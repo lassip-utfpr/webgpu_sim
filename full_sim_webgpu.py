@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from time import time
+from datetime import datetime
 
 # ==========================================================
 # Esse arquivo contém as simulações realizadas dentro da GPU.
@@ -11,13 +12,24 @@ from time import time
 
 dtype = np.float32
 
+# Parametros dos ensaios
+n_iter_gpu = 25
+n_iter_cpu = 1
+do_sim_gpu = True
+do_sim_cpu = True
+use_refletors = False
+plot_results = True
+show_results = False
+save_results = True
+
 # Field config
 nx = 256  # number of grid points in x-direction
 nz = 256  # number of grid points in z-direction
 nt = 1000  # number of time steps
 c = np.zeros((nz, nx), dtype=dtype)  # wave velocity field
 c[:, :] = .2
-c[nz // 2 - 10:nz // 2 + 10, nx // 2 - 10:nx // 2 + 10] = 0.0  # add reflector in the center of the grid
+if use_refletors:
+    c[nz // 2 - 10:nz // 2 + 10, nx // 2 - 10:nx // 2 + 10] = 0.0  # add reflector in the center of the grid
 
 # Escolha do valor de wsx
 wsx = 1
@@ -240,7 +252,6 @@ def sim_webgpu_for(coef):
     device = wgpu.utils.get_default_device()
     # adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
     # device = adapter.request_device()
-    print(f'GPU: {device.adapter.properties["name"]}')
     cshader = device.create_shader_module(code=shader_test)
 
     # info integer buffer
@@ -434,7 +445,7 @@ def sim_webgpu_for(coef):
     device.queue.submit([command_encoder.finish()])
     out = device.queue.read_buffer(b3).cast("f")  # reads from buffer 3
     sens = np.array(device.queue.read_buffer(b6).cast("f"))
-    return np.asarray(out).reshape((nz, nx)), sens
+    return np.asarray(out).reshape((nz, nx)), sens, device.adapter.properties["name"]
 
 
 # --------------------------
@@ -451,35 +462,97 @@ u_ser = 0.0
 times_for = list()
 times_ser = list()
 # webgpu
-for n in range(25):
-    print(f'Iteracao {n}')
-    t_for = time()
-    u_for, sensor = sim_webgpu_for(c8)
-    times_for.append(time() - t_for)
-    print(f'{times_for[-1]:.3}s')
-    # serial
+if do_sim_gpu:
+    for n in range(n_iter_gpu):
+        print(f'Simulacao GPU')
+        print(f'Iteracao {n}')
+        t_for = time()
+        u_for, sensor, gpu_str = sim_webgpu_for(c8)
+        times_for.append(time() - t_for)
+        print(gpu_str)
+        print(f'{times_for[-1]:.3}s')
 
-    print(f'Simulacao CPU')
-    t_ser = time()
-    u_ser = sim_full()
-    times_ser.append(time() - t_ser)
-    print(f'{times_ser[-1]:.3}s')
+# serial
+if do_sim_cpu:
+    for n in range(n_iter_cpu):
+        print(f'Simulacao CPU')
+        print(f'Iteracao {n}')
+        t_ser = time()
+        u_ser = sim_full()
+        times_ser.append(time() - t_ser)
+        print(f'{times_ser[-1]:.3}s')
 
 times_for = np.array(times_for)
 times_ser = np.array(times_ser)
-print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
-print(f'TEMPO - {nt} pontos de tempo:\n'
-      f'For: {times_for[5:].mean():.3}s (std = {times_for[5:].std()})\n'
-      f'Serial: {times_ser[5:].mean():.3}s (std = {times_ser[5:].std()})')
-print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
+if do_sim_gpu:
+    print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
 
-plt.figure(1)
-plt.title('Full sim. na GPU com lap for')
-plt.imshow(u_for, aspect='auto', cmap='turbo_r')
-plt.figure(2)
-plt.title('Full sim. na CPU')
-plt.imshow(u_ser, aspect='auto', cmap='turbo_r')
-plt.figure(3)
-plt.title(f'Sensor em z = {sens_z} e x = {sens_x}')
-plt.plot(t, sensor)
-plt.show()
+print(f'TEMPO - {nt} pontos de tempo')
+if do_sim_gpu and n_iter_gpu > 5:
+    print(f'GPU: {times_for[5:].mean():.3}s (std = {times_for[5:].std()})')
+
+if do_sim_cpu and n_iter_cpu > 5:
+    print(f'CPU: {times_ser[5:].mean():.3}s (std = {times_ser[5:].std()})')
+
+if do_sim_gpu and do_sim_cpu:
+    print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
+
+if plot_results:
+    if do_sim_gpu:
+        gpu_sim_result = plt.figure()
+        plt.title(f'GPU simulation ({nz}x{nx})')
+        plt.imshow(u_for, aspect='auto', cmap='turbo_r')
+
+        sensor_gpu_result = plt.figure()
+        plt.title(f'Sensor at z = {sens_z} and x = {sens_x}')
+        plt.plot(t, sensor)
+
+    if do_sim_cpu:
+        cpu_sim_result = plt.figure()
+        plt.title(f'CPU simulation ({nz}x{nx})')
+        plt.imshow(u_ser, aspect='auto', cmap='turbo_r')
+
+    if show_results:
+        plt.show()
+
+if save_results:
+    now = datetime.now()
+    name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}'
+    if plot_results:
+        if do_sim_gpu:
+            gpu_sim_result.savefig(name + '_gpu.png')
+            sensor_gpu_result.savefig(name + '_sensor.png')
+
+        if do_sim_cpu:
+            cpu_sim_result.savefig(name + 'cpu.png')
+
+    np.savetxt(name + '_GPU.csv', times_for, '%10.3f', delimiter=',')
+    np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')
+    with open(name + '_desc.txt', 'w') as f:
+        f.write('Parametros do ensaio\n')
+        f.write('--------------------\n')
+        f.write('\n')
+        f.write(f'Quantidade de iteracoes no tempo: {nt}\n')
+        f.write(f'Tamanho da ROI: {nz}x{nx}\n')
+        f.write(f'Refletores na ROI: {"Sim" if use_refletors else "Nao"}\n')
+        f.write(f'Simulacao GPU: {"Sim" if do_sim_gpu else "Nao"}\n')
+        if do_sim_gpu:
+            f.write(f'GPU: {gpu_str}\n')
+            f.write(f'Numero de simulacoes GPU: {n_iter_gpu}\n')
+            if n_iter_gpu > 5:
+                f.write(f'Tempo medio de execucao: {times_for[5:].mean():.3}s\n')
+                f.write(f'Desvio padrao: {times_for[5:].std()}\n')
+            else:
+                f.write(f'Tempo execucao: {times_for[0]:.3}s\n')
+
+        f.write(f'Simulacao CPU: {"Sim" if do_sim_cpu else "Nao"}\n')
+        if do_sim_cpu:
+            f.write(f'Numero de simulacoes CPU: {n_iter_cpu}\n')
+            if n_iter_cpu > 5:
+                f.write(f'Tempo medio de execucao: {times_ser[5:].mean():.3}s\n')
+                f.write(f'Desvio padrao: {times_ser[5:].std()}\n')
+            else:
+                f.write(f'Tempo execucao: {times_ser[0]:.3}s\n')
+
+        if do_sim_gpu and do_sim_cpu:
+            f.write(f'MSE entre as simulacoes: {mean_squared_error(u_ser, u_for)}')
