@@ -5,6 +5,14 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from time import time
 from datetime import datetime
+from pylab import cm
+from matplotlib import rc
+
+# plots style configuration
+rc('text', usetex=True)
+plt.rcParams['font.size'] = 12
+plt.rcParams['axes.linewidth'] = 1.5
+colors = cm.get_cmap('tab10', 2)
 
 # ==========================================================
 # Esse arquivo contém as simulações realizadas dentro da GPU.
@@ -14,11 +22,11 @@ dtype = np.float32
 
 # Parametros dos ensaios
 n_iter_gpu = 25
-n_iter_cpu = 1
+n_iter_cpu = 25
 do_sim_gpu = True
 do_sim_cpu = True
 use_refletors = False
-plot_results = True
+plot_results = False
 show_results = False
 save_results = True
 
@@ -500,16 +508,22 @@ if do_sim_gpu and do_sim_cpu:
 if plot_results:
     if do_sim_gpu:
         gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation ({nz}x{nx})')
+        plt.title(f'{nt} temporal points GPU simulation ({nz} x {nx} grid size)')
+        plt.xlabel('x')
+        plt.ylabel('z')
         plt.imshow(u_for, aspect='auto', cmap='turbo_r')
 
         sensor_gpu_result = plt.figure()
         plt.title(f'Sensor at z = {sens_z} and x = {sens_x}')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
         plt.plot(t, sensor)
 
     if do_sim_cpu:
         cpu_sim_result = plt.figure()
-        plt.title(f'CPU simulation ({nz}x{nx})')
+        plt.title(f'{nt} temporal points CPU simulation ({nz} x {nx} grid size)')
+        plt.xlabel('x')
+        plt.ylabel('z')
         plt.imshow(u_ser, aspect='auto', cmap='turbo_r')
 
     if show_results:
@@ -517,14 +531,15 @@ if plot_results:
 
 if save_results:
     now = datetime.now()
-    name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}'
+    name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}_{nt}_tpoints'
+
     if plot_results:
         if do_sim_gpu:
             gpu_sim_result.savefig(name + '_gpu.png')
             sensor_gpu_result.savefig(name + '_sensor.png')
 
         if do_sim_cpu:
-            cpu_sim_result.savefig(name + 'cpu.png')
+            cpu_sim_result.savefig(name + '_cpu.png')
 
     np.savetxt(name + '_GPU.csv', times_for, '%10.3f', delimiter=',')
     np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')

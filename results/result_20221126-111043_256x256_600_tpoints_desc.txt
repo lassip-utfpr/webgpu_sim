@@ -1,0 +1,16 @@
+Parametros do ensaio
+--------------------
+
+Quantidade de iteracoes no tempo: 600
+Tamanho da ROI: 256x256
+Refletores na ROI: Nao
+Simulacao GPU: Sim
+GPU: NVIDIA GeForce GTX 1050 Ti
+Numero de simulacoes GPU: 25
+Tempo medio de execucao: 0.0762s
+Desvio padrao: 0.0062241618733856535
+Simulacao CPU: Sim
+Numero de simulacoes CPU: 25
+Tempo medio de execucao: 4.0s
+Desvio padrao: 0.07997274598990145
+MSE entre as simulacoes: 1.0930240219864107e-11

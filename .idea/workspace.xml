@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="7d59fdaa-9f1d-45a7-8605-8494785a7da3" name="Changes" comment="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid.">
+      <change beforePath="$PROJECT_DIR$/full_sim_webgpu.py" beforeDir="false" afterPath="$PROJECT_DIR$/full_sim_webgpu.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_desc.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_CPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_GPU.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_desc.txt" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GithubDefaultAccount">
+    <option name="defaultAccountId" value="399337d9-0aae-46f3-b332-d3f04b8db1c6" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectId" id="2Gs4ymsgSeFDloYtXDbuyGwsfCN" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="node.js.detected.package.eslint" value="true" />
+    <property name="node.js.selected.package.eslint" value="(autodetect)" />
+    <property name="settings.editor.selected.configurable" value="PyScientificConfigurable" />
+  </component>
+  <component name="RunManager" selected="Python.generate_results">
+    <configuration name="full_sim_webgpu" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/full_sim_webgpu.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="generate_results" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/generate_results.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.generate_results" />
+        <item itemvalue="Python.full_sim_webgpu" />
+        <item itemvalue="Python.full_sim_webgpu" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7d59fdaa-9f1d-45a7-8605-8494785a7da3" name="Changes" comment="" />
+      <created>1667164214153</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1667164214153</updated>
+      <workItem from="1667164215253" duration="3712000" />
+      <workItem from="1667222745854" duration="679000" />
+      <workItem from="1669217042654" duration="290000" />
+      <workItem from="1669217389122" duration="3898000" />
+      <workItem from="1669410529879" duration="13293000" />
+      <workItem from="1669467816627" duration="1451000" />
+      <workItem from="1669469297690" duration="4389000" />
+    </task>
+    <task id="LOCAL-00001" summary="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid.">
+      <created>1667168242877</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1667168242877</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="origin/master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid." />
+    <option name="LAST_COMMIT_MESSAGE" value="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid." />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/generate_results.py</url>
+          <line>157</line>
+          <option name="timeStamp" value="24" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/generate_results.py</url>
+          <line>238</line>
+          <option name="timeStamp" value="25" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/generate_results.py</url>
+          <line>249</line>
+          <option name="timeStamp" value="27" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/andregalera_webgpu_sim$generate_results.coverage" NAME="generate_results Coverage Results" MODIFIED="1669473686326" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/andregalera_webgpu_sim$full_sim_webgpu.coverage" NAME="full_sim_webgpu Coverage Results" MODIFIED="1669472377230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>
