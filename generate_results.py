@@ -14,10 +14,10 @@ plt.rcParams['font.size'] = 12
 plt.rcParams['axes.linewidth'] = 1.5
 colors = cm.get_cmap('tab10', 2)
 
-show_results = True
+show_results = False
 plot_results = True
-save_combined_results = True
-save_plots = False
+save_combined_results = False
+save_plots = True
 # resultados para incremento no numero de pontos temporais com grid fixa
 temporal_points_test = True
 
@@ -259,19 +259,19 @@ if save_combined_results:
         name = f'combined_results/cpu_tpoints_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, nvidia_tsim_cpu, '%10.3f', delimiter=',')
     else:
-        name = f'combined_results/cpu_vs_nvidia_times_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
+        name = f'combined_results/cpu_vs_nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, nvidia_tsim, '%10.3f', delimiter=',')
 
-        name = f'combined_results/nvidia_times_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
+        name = f'combined_results/nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, nvidia_tsim_gpu, '%10.3f', delimiter=',')
 
-        name = f'combined_results/cpu_times_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
+        name = f'combined_results/cpu_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, nvidia_tsim_cpu, '%10.3f', delimiter=',')
 
-        name = f'combined_results/cpu_vs_intel_times_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
+        name = f'combined_results/cpu_vs_intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, intel_tsim, '%10.3f', delimiter=',')
 
-        name = f'combined_results/intel_times_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
+        name = f'combined_results/intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.txt'
         np.savetxt(name, intel_tsim_gpu, '%10.3f', delimiter=',')
 
 if save_plots:
@@ -283,13 +283,13 @@ if save_plots:
             cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_tpoints_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
             cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_tpoints_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
         else:
-            cpu_sim_result.savefig(f'time_plots/cpu_time_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            nvidia_sim_result.savefig(f'time_plots/nvidia_time_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_time_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            intel_sim_result.savefig(f'time_plots/intel_time_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_intel_sim_result.savefig(f'time_plots/cpu_vs_intel_time_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_intel_speedup_result.savefig(f'time_plots/cpu_vs_intel_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_sim_result.savefig(f'time_plots/cpu_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            nvidia_sim_result.savefig(f'time_plots/nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            intel_sim_result.savefig(f'time_plots/intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_intel_sim_result.savefig(f'time_plots/cpu_vs_intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_intel_speedup_result.savefig(f'time_plots/cpu_vs_intel_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
 
 
 

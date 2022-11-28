@@ -1,29 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="7d59fdaa-9f1d-45a7-8605-8494785a7da3" name="Changes" comment="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid.">
-      <change beforePath="$PROJECT_DIR$/full_sim_webgpu.py" beforeDir="false" afterPath="$PROJECT_DIR$/full_sim_webgpu.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-192759_900x900_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-202943_800x800_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221121-212359_700x700_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180521_60x60_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180552_70x70_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180626_80x80_desc.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_CPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_GPU.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/result_20221122-180706_90x90_desc.txt" beforeDir="false" />
+    <list default="true" id="7d59fdaa-9f1d-45a7-8605-8494785a7da3" name="Changes" comment="Script para geração dos plots baseado na data de geração dos dados.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/generate_results.py" beforeDir="false" afterPath="$PROJECT_DIR$/generate_results.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_time_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_tpoints_2022-11-26_11-36-06.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_intel_speedup_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_intel_time_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_nvidia_speedup_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_nvidia_time_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_nvidia_tpoints_2022-11-26_11-36-06.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/cpu_vs_nvidia_tpoints_speedup_2022-11-26_11-36-06.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/intel_time_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/nvidia_time_2022-11-26_10-25-01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/time_plots/nvidia_tpoints_2022-11-26_11-36-06.png" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -132,7 +123,8 @@
       <workItem from="1669217389122" duration="3898000" />
       <workItem from="1669410529879" duration="13293000" />
       <workItem from="1669467816627" duration="1451000" />
-      <workItem from="1669469297690" duration="4389000" />
+      <workItem from="1669469297690" duration="4796000" />
+      <workItem from="1669475729036" duration="228000" />
     </task>
     <task id="LOCAL-00001" summary="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid.">
       <created>1667168242877</created>
@@ -141,7 +133,14 @@
       <option name="project" value="LOCAL" />
       <updated>1667168242877</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Script para geração dos plots baseado na data de geração dos dados.">
+      <created>1669473929939</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1669473929939</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -172,7 +171,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid." />
-    <option name="LAST_COMMIT_MESSAGE" value="Adição do campo/mapa de velocidades com ponto refletor localizado no centro da grid." />
+    <MESSAGE value="Script para geração dos plots baseado na data de geração dos dados." />
+    <option name="LAST_COMMIT_MESSAGE" value="Script para geração dos plots baseado na data de geração dos dados." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -196,7 +196,7 @@
     </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/andregalera_webgpu_sim$generate_results.coverage" NAME="generate_results Coverage Results" MODIFIED="1669473686326" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/andregalera_webgpu_sim$generate_results.coverage" NAME="generate_results Coverage Results" MODIFIED="1669475887066" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/andregalera_webgpu_sim$full_sim_webgpu.coverage" NAME="full_sim_webgpu Coverage Results" MODIFIED="1669472377230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
