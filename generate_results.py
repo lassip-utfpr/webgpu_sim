@@ -12,14 +12,14 @@ warnings.filterwarnings("ignore") # igora warning the arquivo vazio
 rc('text', usetex=True)
 plt.rcParams['font.size'] = 12
 plt.rcParams['axes.linewidth'] = 1.5
-colors = cm.get_cmap('tab10', 2)
+colors = cm.get_cmap('tab10', 3)
 
 show_results = False
 plot_results = True
 save_combined_results = False
 save_plots = True
 # resultados para incremento no numero de pontos temporais com grid fixa
-temporal_points_test = True
+temporal_points_test = False
 
 
 if temporal_points_test:
@@ -188,60 +188,84 @@ if plot_results:
         plt.ylabel('Speed up')
         plt.grid()
     else:
-        cpu_sim_result = plt.figure()
-        plt.title(f'1.000 temporal points CPU simulation')
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim_cpu[:, 1])
-        plt.xlabel('Number of pixels')
-        plt.ylabel('Time (s)')
-        plt.grid()
-
-        nvidia_sim_result = plt.figure()
-        plt.title(f'1.000 temporal points NVIDIA GPU simulation')
-        plt.plot(nvidia_tsim_gpu[:, 0]**2, nvidia_tsim_gpu[:, 1])
-        plt.xlabel('Number of pixels')
-        plt.ylabel('Time (s)')
-        plt.grid()
-
-        cpu_vs_nvidia_sim_result = plt.figure()
-        plt.title(f'1.000 temporal points CPU vs NVIDIA GPU simulation')
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1], label="CPU", color=colors(0))
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 2], label="NVIDIA GPU", color=colors(1))
+        cpu_vs_gpu_roi_result = plt.figure()
+        plt.plot(nvidia_tsim[:, 0]**2 , nvidia_tsim[:, 1], label="CPU", color=colors(1), marker="s")
+        plt.plot(nvidia_tsim[:, 0] ** 2, nvidia_tsim[:, 2], label="NVIDIA", color=colors(0), marker="o")
+        plt.plot(intel_tsim_gpu[:, 0][:17] ** 2, intel_tsim_gpu[:, 1][:17], label="Intel", color=colors(2), marker="^")
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.grid(which='minor', axis='both', c='0.95')
         plt.legend(frameon=False, loc='lower right')
-        plt.yscale("log")
         plt.xlabel('Number of pixels')
         plt.ylabel('Time (s)')
         plt.grid()
 
-        cpu_vs_nvidia_speedup_result = plt.figure()
-        plt.title(f'1.000 temporal points CPU vs NVIDIA GPU speed up')
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1]/nvidia_tsim[:, 2])
+        cpu_vs_gpu_speedup_result = plt.figure()
+        plt.plot(nvidia_tsim[:, 0] ** 2, nvidia_tsim[:, 1]/nvidia_tsim[:, 2], label="NVIDIA", color=colors(1),
+                 marker="o")
+        plt.plot(intel_tsim_gpu[:, 0][:17] ** 2, nvidia_tsim[:, 1] / intel_tsim_gpu[:, 1][:17], label="Intel",
+                 color=colors(0), marker="^")
+        plt.xscale('log')
+        plt.legend(frameon=False, loc='upper left')
         plt.xlabel('Number of pixels')
-        plt.ylabel('Speed up')
+        plt.ylabel('Speedup')
+        plt.grid(which='minor', axis='x', c='0.95')
         plt.grid()
 
-        intel_sim_result = plt.figure()
-        plt.title(f'1.000 temporal points Intel GPU simulation')
-        plt.plot(intel_tsim_gpu[:, 0]**2, intel_tsim_gpu[:, 1])
-        plt.xlabel('Number of pixels')
-        plt.ylabel('Time (s)')
-        plt.grid()
-
-        cpu_vs_intel_sim_result = plt.figure()
-        plt.title(f'1.000 temporal points CPU vs Intel GPU simulation')
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1], label="CPU", color=colors(0))  # CPU não importa a "GPU"
-        plt.plot(intel_tsim_gpu[:, 0][:17]**2, intel_tsim_gpu[:, 1][:17], label="Intel GPU", color=colors(1))
-        plt.legend(frameon=False, loc='lower right')
-        plt.yscale("log")
-        plt.xlabel('Number of pixels')
-        plt.ylabel('Time (s)')
-        plt.grid()
-
-        cpu_vs_intel_speedup_result = plt.figure()
-        plt.title(f'1.000 temporal points CPU vs Intel GPU speed up')
-        plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1] / intel_tsim_gpu[:, 1][:17])
-        plt.xlabel('Number of pixels')
-        plt.ylabel('Speed up')
-        plt.grid()
+        # cpu_sim_result = plt.figure()
+        # plt.title(f'1.000 temporal points CPU simulation')
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim_cpu[:, 1])
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Time (s)')
+        # plt.grid()
+        #
+        # nvidia_sim_result = plt.figure()
+        # plt.title(f'1.000 temporal points NVIDIA GPU simulation')
+        # plt.plot(nvidia_tsim_gpu[:, 0]**2, nvidia_tsim_gpu[:, 1])
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Time (s)')
+        # plt.grid()
+        #
+        # cpu_vs_nvidia_sim_result = plt.figure()
+        # plt.title(f'1.000 temporal points CPU vs NVIDIA GPU simulation')
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1], label="CPU", color=colors(0))
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 2], label="NVIDIA GPU", color=colors(1))
+        # plt.legend(frameon=False, loc='lower right')
+        # plt.yscale("log")
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Time (s)')
+        # plt.grid()
+        #
+        # cpu_vs_nvidia_speedup_result = plt.figure()
+        # plt.title(f'1.000 temporal points CPU vs NVIDIA GPU speed up')
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1]/nvidia_tsim[:, 2])
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Speed up')
+        # plt.grid()
+        #
+        # intel_sim_result = plt.figure()
+        # plt.title(f'1.000 temporal points Intel GPU simulation')
+        # plt.plot(intel_tsim_gpu[:, 0]**2, intel_tsim_gpu[:, 1])
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Time (s)')
+        # plt.grid()
+        #
+        # cpu_vs_intel_sim_result = plt.figure()
+        # plt.title(f'1.000 temporal points CPU vs Intel GPU simulation')
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1], label="CPU", color=colors(0))  # CPU não importa a "GPU"
+        # plt.plot(intel_tsim_gpu[:, 0][:17]**2, intel_tsim_gpu[:, 1][:17], label="Intel GPU", color=colors(1))
+        # plt.legend(frameon=False, loc='lower right')
+        # plt.yscale("log")
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Time (s)')
+        # plt.grid()
+        #
+        # cpu_vs_intel_speedup_result = plt.figure()
+        # plt.title(f'1.000 temporal points CPU vs Intel GPU speed up')
+        # plt.plot(nvidia_tsim[:, 0]**2, nvidia_tsim[:, 1] / intel_tsim_gpu[:, 1][:17])
+        # plt.xlabel('Number of pixels')
+        # plt.ylabel('Speed up')
+        # plt.grid()
 
     if show_results:
         plt.show()
@@ -283,13 +307,15 @@ if save_plots:
             cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_tpoints_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
             cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_tpoints_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
         else:
-            cpu_sim_result.savefig(f'time_plots/cpu_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            nvidia_sim_result.savefig(f'time_plots/nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            intel_sim_result.savefig(f'time_plots/intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_intel_sim_result.savefig(f'time_plots/cpu_vs_intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
-            cpu_vs_intel_speedup_result.savefig(f'time_plots/cpu_vs_intel_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_gpu_roi_result.savefig(f'time_plots/cpu_vs_gpu_roi_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            cpu_vs_gpu_speedup_result.savefig(f'time_plots/cpu_vs_gpu_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # cpu_sim_result.savefig(f'time_plots/cpu_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # nvidia_sim_result.savefig(f'time_plots/nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # cpu_vs_nvidia_sim_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # cpu_vs_nvidia_speedup_result.savefig(f'time_plots/cpu_vs_nvidia_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # intel_sim_result.savefig(f'time_plots/intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # cpu_vs_intel_sim_result.savefig(f'time_plots/cpu_vs_intel_pixels_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
+            # cpu_vs_intel_speedup_result.savefig(f'time_plots/cpu_vs_intel_pixels_speedup_{now.strftime("%Y-%m-%d_%H-%M-%S")}.png')
 
 
 
