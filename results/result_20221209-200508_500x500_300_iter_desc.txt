@@ -1,0 +1,12 @@
+Parametros do ensaio
+--------------------
+
+Quantidade de iteracoes no tempo: 300
+Tamanho da ROI: 500x500
+Refletores na ROI: Nao
+Simulacao GPU: Sim
+GPU: Intel(R) HD Graphics 530 (SKL GT2)
+Numero de simulacoes GPU: 25
+Tempo medio de execucao: 0.693s
+Desvio padrao: 0.05169242733158033
+Simulacao CPU: Nao
