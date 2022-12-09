@@ -14,17 +14,18 @@ dtype = np.float32
 
 # Parametros dos ensaios
 n_iter_gpu = 25
-n_iter_cpu = 1
+n_iter_cpu = 25
 do_sim_gpu = True
-do_sim_cpu = True
+do_sim_cpu = False
 use_refletors = False
 plot_results = True
-show_results = False
+show_results = True
 save_results = True
+gpu_type = "INTEL"
 
 # Field config
-nx = 256  # number of grid points in x-direction
-nz = 256  # number of grid points in z-direction
+nx = 500  # number of grid points in x-direction
+nz = 500  # number of grid points in z-direction
 nt = 1000  # number of time steps
 c = np.zeros((nz, nx), dtype=dtype)  # wave velocity field
 c[:, :] = .2
@@ -249,9 +250,12 @@ def sim_webgpu_for(coef):
 
     # =====================
     # webgpu configurations
-    device = wgpu.utils.get_default_device()
-    # adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
-    # device = adapter.request_device()
+    if gpu_type == "NVIDIA":
+        device = wgpu.utils.get_default_device()
+    else:
+        adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
+        device = adapter.request_device()
+
     cshader = device.create_shader_module(code=shader_test)
 
     # info integer buffer
@@ -517,16 +521,16 @@ if plot_results:
 
 if save_results:
     now = datetime.now()
-    name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}'
+    name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}_{nt}_iter'
     if plot_results:
         if do_sim_gpu:
-            gpu_sim_result.savefig(name + '_gpu.png')
-            sensor_gpu_result.savefig(name + '_sensor.png')
+            gpu_sim_result.savefig(name + '_gpu_' + gpu_type +'.png')
+            sensor_gpu_result.savefig(name + '_sensor_' + gpu_type + '.png')
 
         if do_sim_cpu:
             cpu_sim_result.savefig(name + 'cpu.png')
 
-    np.savetxt(name + '_GPU.csv', times_for, '%10.3f', delimiter=',')
+    np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_for, '%10.3f', delimiter=',')
     np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')
     with open(name + '_desc.txt', 'w') as f:
         f.write('Parametros do ensaio\n')
