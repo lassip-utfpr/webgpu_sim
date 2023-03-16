@@ -39,7 +39,7 @@ shader_source_main = f"""
         return select(-1, index, j >= 0 && j < j_sz && n >= 0 && n < n_sz);
     }}
 
-    @stage(compute)
+    @compute
     @workgroup_size(1)
     fn main(@builtin(global_invocation_id) index: vec3<u32>) {{
         let i: i32 = i32(index.y);
@@ -56,7 +56,7 @@ shader_source_incr_k = f"""
     @group(0) @binding(2)
     var<storage,read_write> k: array<i32>;
 
-    @stage(compute)
+    @compute
     @workgroup_size(1)
     fn incr_k() {{
         k[0] += 1;
