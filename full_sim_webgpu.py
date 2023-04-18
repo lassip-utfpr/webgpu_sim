@@ -13,15 +13,16 @@ from datetime import datetime
 dtype = np.float32
 
 # Parametros dos ensaios
-n_iter_gpu = 25
-n_iter_cpu = 25
+n_iter_gpu = 1
+n_iter_cpu = 1
 do_sim_gpu = True
-do_sim_cpu = False
+do_sim_cpu = True
+do_comp_fig_cpu_gpu = True
 use_refletors = False
 plot_results = True
 show_results = True
 save_results = True
-gpu_type = "INTEL"
+gpu_type = "NVIDIA"
 
 # Field config
 nx = 500  # number of grid points in x-direction
@@ -516,6 +517,12 @@ if plot_results:
         plt.title(f'CPU simulation ({nz}x{nx})')
         plt.imshow(u_ser, aspect='auto', cmap='turbo_r')
 
+    if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
+        comp_sim_result = plt.figure()
+        plt.title(f'CPU vs GPU ({gpu_type}) error simulation ({nz}x{nx})')
+        plt.imshow(u_ser - u_for, aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
     if show_results:
         plt.show()
 
@@ -529,6 +536,9 @@ if save_results:
 
         if do_sim_cpu:
             cpu_sim_result.savefig(name + 'cpu.png')
+
+        if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
+            comp_sim_result.savefig(name + 'comp_cpu_gpu_' + gpu_type +'.png')
 
     np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_for, '%10.3f', delimiter=',')
     np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')
