@@ -180,7 +180,7 @@ shader_test = f"""
     }} 
 
     // function to calculate laplacian
-    @stage(compute)
+    @compute
     @workgroup_size({wsx}, {wsy})
     fn laplacian(@builtin(global_invocation_id) index: vec3<u32>) {{
         let z: i32 = i32(index.x);          // z thread index
@@ -201,13 +201,13 @@ shader_test = f"""
         }}
     }}
 
-    @stage(compute)
+    @compute
     @workgroup_size(1)
     fn incr_k() {{
         liv.k += 1;
     }}
 
-    @stage(compute)
+    @compute
     @workgroup_size({wsx}, {wsy})
     fn sim(@builtin(global_invocation_id) index: vec3<u32>) {{
         var add_src: f32 = 0.0;             // Source term
@@ -450,7 +450,8 @@ def sim_webgpu_for(coef):
     device.queue.submit([command_encoder.finish()])
     out = device.queue.read_buffer(b3).cast("f")  # reads from buffer 3
     sens = np.array(device.queue.read_buffer(b6).cast("f"))
-    return np.asarray(out).reshape((nz, nx)), sens, device.adapter.properties["name"]
+    adapter_info = device.adapter.request_adapter_info()
+    return np.asarray(out).reshape((nz, nx)), sens, adapter_info["device"]
 
 
 # --------------------------
