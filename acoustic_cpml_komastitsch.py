@@ -50,7 +50,7 @@ class Window(QMainWindow):
         # setting animation
         self.isAnimated()
 
-        #setting image
+        # setting image
         self.image = np.random.normal(size=(500, 500))
 
         # showing all the widgets
@@ -101,7 +101,7 @@ NPOINTS_PML = 10
 
 # P-velocity and density
 cp_unrelaxed = 2000.0  # [m/s] ??
-density = 2000.0  #  [kg / m ** 3] ??
+density = 2000.0  # [kg / m ** 3] ??
 
 # Total number of time steps
 nstep = 1500
@@ -122,11 +122,10 @@ jsource = int(ysource / dy) + 1
 
 # Receivers
 nrec = 1
-xdeb = 561.0   # First receiver x in meters
-ydeb = 561.0   # First receiver y in meters
-xfin = 561.0   # Last receiver x in meters
-yfin = 561.0   # Last receiver y in meters
-
+xdeb = 561.0  # First receiver x in meters
+ydeb = 561.0  # First receiver y in meters
+xfin = 561.0  # Last receiver x in meters
+yfin = 561.0  # Last receiver y in meters
 
 # Zero
 ZERO = 0.0
@@ -141,7 +140,7 @@ STABILITY_THRESHOLD = 1.0e25
 p_2 = np.zeros((ny, nx))  # Pressão passada
 p_1 = np.zeros((ny, nx))  # Pressão presente
 p_0 = np.zeros((ny, nx))  # Pressão futura
-dp_x = np.zeros((ny, nx))  
+dp_x = np.zeros((ny, nx))
 dp_y = np.zeros((ny, nx))
 dp = np.zeros((ny, nx))  # Derivada primeira da pressão
 v_x = np.zeros((ny, nx))
@@ -227,9 +226,6 @@ xrec = np.zeros(nrec)
 yrec = np.zeros(nrec)
 myNREC = nrec
 
-# for seismograms
-sispressure = np.zeros((nrec, nstep))
-
 i = 0
 j = 0
 it = 0
@@ -246,7 +242,7 @@ print(f"size of the model along Y = {(ny - 1) * dy}\n")
 print(f"Total number of grid points = {nx * ny}\n")
 
 # define profile of absorption in PML region
-#thickness of PML layers in meters
+# thickness of PML layers in meters
 thickness_PML_x = NPOINTS_PML * dx
 thickness_PML_y = NPOINTS_PML * dy
 
@@ -380,8 +376,8 @@ print(f"There are {nrec} receivers")
 if nrec > 1:
     # this is to avoid a warning with GNU gfortran at compile time about division by zero when NREC = 1
     myNREC = nrec
-    xspacerec = (xfin-xdeb) / (myNREC-1)
-    yspacerec = (yfin-ydeb) / (myNREC-1)
+    xspacerec = (xfin - xdeb) / (myNREC - 1)
+    yspacerec = (yfin - ydeb) / (myNREC - 1)
 else:
     xspacerec = 0
     yspacerec = 0
@@ -414,7 +410,6 @@ if Courant_number > 1:
     print("time step is too large, simulation will be unstable")
     exit(1)
 
-
 ## Exhiibition Setup
 App = pg.QtWidgets.QApplication([])
 
@@ -438,20 +433,20 @@ start_time = perf_counter()
 # Main loop
 for it in range(1, nstep):
     # Compute the first spatial derivatives divided by density
-    vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx  # p_1 deve ser guardado
-    mdp_x = b_x_half * mdp_x + a_x_half * vdp_x  # mdp_x, b_x_half e a_x_half devem ser guardados
+    vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx  # p_1[ny, nx] deve ser guardado
+    mdp_x = b_x_half * mdp_x + a_x_half * vdp_x  # mdp_x[ny, nx], b_x_half[nx] e a_x_half[nx] devem ser guardados
     vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
-    mdp_y = b_y_half * mdp_y + a_y_half * vdp_y  # mdp_y, b_y_half e a_y_half devem ser guardados
-    dp_x = (vdp_x / K_x_half + mdp_x) / rho_half_x  # dp_x, K_x_half e rho_half_x devem ser guardados
-    dp_y = (vdp_y / K_y_half + mdp_y) / rho_half_y  # dp_y, K_y_half e rho_half_y devem ser guardados
+    mdp_y = b_y_half * mdp_y + a_y_half * vdp_y  # mdp_y[ny, nx], b_y_half[ny] e a_y_half[ny] devem ser guardados
+    dp_x = (vdp_x/K_x_half + mdp_x) / rho_half_x  # dp_x[ny, nx], K_x_half[nx] e rho_half_x[ny, nx] devem ser guardados
+    dp_y = (vdp_y/K_y_half + mdp_y) / rho_half_y  # dp_y[ny, nx], K_y_half[ny] e rho_half_y[ny, nx] devem ser guardados
 
     # Compute the second spatial derivatives
     vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
-    dmdp_x = b_x * dmdp_x + a_x * vdp_xx  # dmdp_x, b_x e a_x devem ser guardados
+    dmdp_x = b_x * dmdp_x + a_x * vdp_xx  # dmdp_x[ny, nx], b_x[nx] e a_x[nx] devem ser guardados
     vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
-    dmdp_y = b_y * dmdp_y + a_y * vdp_yy  # dmdp_y, b_y e a_y devem ser guardados
-    v_x = vdp_xx / K_x + dmdp_x  # v_x deve ser guardado
-    v_y = vdp_yy / K_y + dmdp_y  # v_y deve ser guardado
+    dmdp_y = b_y * dmdp_y + a_y * vdp_yy  # dmdp_y[ny, nx], b_y[ny] e a_y[ny] devem ser guardados
+    v_x = vdp_xx / K_x + dmdp_x  # v_x[ny, nx] deve ser guardado
+    v_y = vdp_yy / K_y + dmdp_y  # v_y[ny, nx] deve ser guardado
 
     # add the source (pressure located at a given grid point)
     a = math.pi ** 2 * f0 ** 2
@@ -464,12 +459,14 @@ for it in range(1, nstep):
     # source_term = factor * (t - t0) * np.exp(-a * (t-t0) ** 2)
 
     # Ricker source time function (second derivative of a Gaussian)
-    source_term = factor * (1.0 - 2.0 * a * (t-t0) ** 2) * np.exp(-a * (t-t0) ** 2)
+    source_term = factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)
 
     # apply the time evolution scheme
     # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
     # which is of course wrong (or more precisely undefined), but this does not matter because these values
     # will be erased by the Dirichlet conditions set on these edges below
+    # p_0[ny, nx], p_2[ny, nx], kappa_unrelaxed[ny, nx], cp_unrelaxed[ny, nx] e Kronecker_source[ny, nx] devem ser
+    # guardados
     p_0 = 2.0 * p_1 - p_2 + \
           dt ** 2 * ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term * Kronecker_source)
 
@@ -487,16 +484,11 @@ for it in range(1, nstep):
     # Dirichlet condition for pressure on the top boundary
     p_0[ny - 1, :] = 0
 
-    # Store seismograms
-    for irec in range(0, nrec):
-        sispressure[irec, it] = p_0[iy_rec[irec], ix_rec[irec]]
-
     # print maximum of pressure and of norm of velocity
     pressurenorm = np.max(np.abs(p_0))
     print(f"Time step {it} out of {nstep}")
     print(f"Time: {(it - 1) * dt} seconds")
     print(f"Max absolute value of pressure = {pressurenorm}")
-    # print(f"MSE DP = {np.sum((dp - (dp_x + dp_y)) ** 2)}")
 
     # check stability of the code, exit if unstable
     if pressurenorm > STABILITY_THRESHOLD:
@@ -516,7 +508,6 @@ for it in range(1, nstep):
     p_2 = p_1
     p_1 = p_0
 
-
 App.exit()
 end_time = perf_counter()
 total_time = end_time - start_time
@@ -526,8 +517,4 @@ print("Simulation finished.")
 print(f"\n\nTotal Time: {total_time} s")
 print(f"Total Time: {total_time / 60} min")
 
-
 print("END")
-
-
-
