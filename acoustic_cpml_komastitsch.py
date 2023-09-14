@@ -82,12 +82,6 @@ class Window(QMainWindow):
 
 
 ## Simulation Parameters
-# Flags to add PML layers to the edges of the grid
-USE_PML_XMIN = True
-USE_PML_XMAX = True
-USE_PML_YMIN = True
-USE_PML_YMAX = True
-
 # number of points
 nx = 801  # colunas
 ny = 801  # linhas
@@ -97,7 +91,7 @@ dx = 1.5  # [m? km?]
 dy = dx
 
 # Thickness of the PML layer in grid points
-NPOINTS_PML = 10
+npoints_pml = 10
 
 # P-velocity and density
 cp_unrelaxed = 2000.0  # [m/s] ??
@@ -126,9 +120,6 @@ xdeb = 561.0  # First receiver x in meters
 ydeb = 561.0  # First receiver y in meters
 xfin = 561.0  # Last receiver x in meters
 yfin = 561.0  # Last receiver y in meters
-
-# Zero
-ZERO = 0.0
 
 # Large value for maximum
 HUGEVAL = 1.0e30
@@ -243,8 +234,8 @@ print(f"Total number of grid points = {nx * ny}\n")
 
 # define profile of absorption in PML region
 # thickness of PML layers in meters
-thickness_PML_x = NPOINTS_PML * dx
-thickness_PML_y = NPOINTS_PML * dy
+thickness_PML_x = npoints_pml * dx
+thickness_PML_y = npoints_pml * dy
 
 # reflection coefficient (INRIA report section 6.1) http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
 Rcoef = 0.001
@@ -434,17 +425,17 @@ start_time = perf_counter()
 for it in range(1, nstep):
     # Compute the first spatial derivatives divided by density
     vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx  # p_1[ny, nx] deve ser guardado
-    mdp_x = b_x_half * mdp_x + a_x_half * vdp_x  # mdp_x[ny, nx], b_x_half[nx] e a_x_half[nx] devem ser guardados
+    mdp_x = b_x_half * mdp_x + a_x_half * vdp_x  # mdp_x[ny, nx] deve ser guardado, b_x_half[nx] e a_x_half[nx] cte
     vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
-    mdp_y = b_y_half * mdp_y + a_y_half * vdp_y  # mdp_y[ny, nx], b_y_half[ny] e a_y_half[ny] devem ser guardados
-    dp_x = (vdp_x/K_x_half + mdp_x) / rho_half_x  # dp_x[ny, nx], K_x_half[nx] e rho_half_x[ny, nx] devem ser guardados
-    dp_y = (vdp_y/K_y_half + mdp_y) / rho_half_y  # dp_y[ny, nx], K_y_half[ny] e rho_half_y[ny, nx] devem ser guardados
+    mdp_y = b_y_half * mdp_y + a_y_half * vdp_y  # mdp_y[ny, nx] deve ser guardado, b_y_half[ny] e a_y_half[ny] cte
+    dp_x = (vdp_x/K_x_half + mdp_x)/rho_half_x  # dp_x[ny, nx] deve ser guardado, K_x_half[nx] e rho_half_x[ny, nx] cte
+    dp_y = (vdp_y/K_y_half + mdp_y)/rho_half_y  # dp_y[ny, nx] deve ser guardado, K_y_half[ny] e rho_half_y[ny, nx] cte
 
     # Compute the second spatial derivatives
     vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
-    dmdp_x = b_x * dmdp_x + a_x * vdp_xx  # dmdp_x[ny, nx], b_x[nx] e a_x[nx] devem ser guardados
+    dmdp_x = b_x * dmdp_x + a_x * vdp_xx  # dmdp_x[ny, nx] deve ser guardado, b_x[nx] e a_x[nx] cte
     vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
-    dmdp_y = b_y * dmdp_y + a_y * vdp_yy  # dmdp_y[ny, nx], b_y[ny] e a_y[ny] devem ser guardados
+    dmdp_y = b_y * dmdp_y + a_y * vdp_yy  # dmdp_y[ny, nx] deve ser guardado, b_y[ny] e a_y[ny] cte
     v_x = vdp_xx / K_x + dmdp_x  # v_x[ny, nx] deve ser guardado
     v_y = vdp_yy / K_y + dmdp_y  # v_y[ny, nx] deve ser guardado
 
@@ -465,8 +456,7 @@ for it in range(1, nstep):
     # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
     # which is of course wrong (or more precisely undefined), but this does not matter because these values
     # will be erased by the Dirichlet conditions set on these edges below
-    # p_0[ny, nx], p_2[ny, nx], kappa_unrelaxed[ny, nx], cp_unrelaxed[ny, nx] e Kronecker_source[ny, nx] devem ser
-    # guardados
+    # p_0[ny, nx], p_2[ny, nx] devem ser guardados, kappa_unrelaxed[ny, nx], cp_unrelaxed e Kronecker_source[ny, nx] cte
     p_0 = 2.0 * p_1 - p_2 + \
           dt ** 2 * ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term * Kronecker_source)
 
