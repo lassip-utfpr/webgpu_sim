@@ -1,3 +1,4 @@
+import math
 import wgpu.backends.rs  # Select backend
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
@@ -5,14 +6,80 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from time import time
 from datetime import datetime
+from PyQt5.QtWidgets import *
+import pyqtgraph as pg
+from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
+
 
 # ==========================================================
 # Esse arquivo contém as simulações realizadas dentro da GPU.
 # ==========================================================
 
-dtype = np.float32
+# Código para visualização da janela de simulação
+# Image View class
+class ImageView(pg.ImageView):
+    # constructor which inherit original
+    # ImageView
+    def __init__(self, *args, **kwargs):
+        pg.ImageView.__init__(self, *args, **kwargs)
+
+
+# RawImageWidget class
+class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
+    # constructor which inherit original
+    # RawImageWidget
+    def __init__(self):
+        pg.widgets.RawImageWidget.RawImageGLWidget.__init__(self)
+
+
+# Window class
+class Window(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        # setting title
+        self.setWindowTitle(f"{ny}x{nx} Grid x {nstep} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+
+        # setting geometry
+        # self.setGeometry(200, 50, 1600, 800)
+        self.setGeometry(200, 50, 500, 500)
+
+        # setting animation
+        self.isAnimated()
+
+        # setting image
+        self.image = np.random.normal(size=(500, 500))
+
+        # showing all the widgets
+        self.show()
+
+        # creating a widget object
+        self.widget = QWidget()
+
+        # setting configuration options
+        pg.setConfigOptions(antialias=True)
+
+        # creating image view view object
+        self.imv = RawImageWidget()
+
+        # setting image to image view
+        self.imv.setImage(self.image, levels=[-0.1, 0.1])
+
+        # Creating a grid layout
+        self.layout = QGridLayout()
+
+        # setting this layout to the widget
+        self.widget.setLayout(self.layout)
+
+        # plot window goes on right side, spanning 3 rows
+        self.layout.addWidget(self.imv, 0, 0, 4, 1)
+
+        # setting this widget as central widget of the main window
+        self.setCentralWidget(self.widget)
+
 
 # Parametros dos ensaios
+flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
 do_sim_gpu = True
@@ -24,19 +91,55 @@ show_results = True
 save_results = True
 gpu_type = "NVIDIA"
 
-# Field config
-nx = 500  # number of grid points in x-direction
-nz = 500  # number of grid points in z-direction
-nt = 1000  # number of time steps
-c = np.zeros((nz, nx), dtype=dtype)  # wave velocity field
-c[:, :] = .2
-if use_refletors:
-    c[nz // 2 - 10:nz // 2 + 10, nx // 2 - 10:nx // 2 + 10] = 0.0  # add reflector in the center of the grid
+# Parametros da simulacao
+nx = 801  # colunas
+ny = 801  # linhas
+
+# Tamanho do grid (aparentemente em metros)
+dx = 1.5
+dy = dx
+
+# Espessura da PML in pixels
+npoints_pml = 10
+
+# Velocidade do som e densidade do meio
+cp_unrelaxed = 2000.0  # [m/s]
+density = 2000.0  # [kg / m ** 3]
+
+# Numero total de passos de tempo
+nstep = 1500
+
+# Passo de tempo em segundos
+dt = 5.2e-4
+
+# Parametros da fonte
+f0 = 35.0  # frequencia
+t0 = 1.20 / f0  # delay
+factor = 1.0
+
+# Posicao da fonte
+xsource = 600.0
+ysource = 600.0
+isource = int(xsource / dx) + 1
+jsource = int(ysource / dy) + 1
+
+# Receptores
+xdeb = 561.0  # em unidade de distancia
+ydeb = 561.0  # em unidade de distancia
+sens_x = int(xsource / dx) + 1
+sens_y = int(ysource / dy) + 1
+sensor = np.zeros(nstep, dtype=flt32)  # buffer para sinal do sensor
+
+# Valor enorme para o maximo da pressao
+HUGEVAL = 1.0e30
+
+# Limite para considerar que a simulacao esta instavel
+STABILITY_THRESHOLD = 1.0e25
 
 # Escolha do valor de wsx
 wsx = 1
 for n in range(15, 0, -1):
-    if (nz % n) == 0:
+    if (ny % n) == 0:
         wsx = n  # workgroup x size
         break
 
@@ -48,39 +151,21 @@ for n in range(15, 0, -1):
         break
 
 # Source term
-src_x = nx // 2  # source location in x-direction
-src_z = 0  # source location in z-direction
-t = np.arange(nt)
-src = np.exp(-(t - nt / 10) ** 2 / 500, dtype=np.float32)
+t = np.arange(nstep)
+src = np.exp(-(t - nstep / 10) ** 2 / 500, dtype=flt32)
 src[:-1] -= src[1:]
 
-# Sensor signal
-sens_x = nx // 2
-sens_z = nz // 3
-sensor = np.zeros(nt, dtype=np.float32)
+# --------------------------
 
 
-def lap_pipa(u, cl):
-    v = (2.0 * cl[0] * u).astype(dtype)
-    for k in range(1, len(cl)):
-        v[k:, :] += cl[k] * u[:-k, :]  # v[z + k, x] = v[z + k, x] + c[k] * u[z, x]  -- k acima
-        v[:-k, :] += cl[k] * u[k:, :]  # v[z - k, x] = v[z - k, x] + c[k] * u[z, x]  -- k abaixo
-        v[:, k:] += cl[k] * u[:, :-k]  # v[z, x + k] = v[z, x + k] + c[k] * u[z, x]  -- k a esquerda
-        v[:, :-k] += cl[k] * u[:, k:]  # v[z, x - k] = v[z, x - k] + c[k] * u[z, x]  -- k a direita
-    return v
+# for source
+a = 0.0
+t = 0.0
+source_term = 0.0
+Courant_number = 0.0
+pressurenorm = 0.0
 
-
-# Simulação SERIAL
-def sim_full():
-    u = np.zeros((nz, nx, nt), dtype=dtype)
-
-    for k in range(2, nt):
-        u[:, :, k] = -u[:, :, k - 2] + 2.0 * u[:, :, k - 1] + c * c * lap_pipa(u[:, :, k - 1], c8)
-        u[src_z, src_x, k] += src[k]
-
-    return u[:, :, -1]
-
-
+# --------------------------
 # Shader [kernel] para a simulação com Lap FOR
 shader_test = f"""
     struct LapIntValues {{
@@ -236,18 +321,81 @@ shader_test = f"""
 
 # Simulação completa na GPU com LAP FOR
 def sim_webgpu_for(coef):
-    # pressure field
-    PKm2 = np.zeros((nz, nx), dtype=dtype)  # k-2
-    PKm1 = np.zeros((nz, nx), dtype=dtype)  # k-1
-    PK = np.zeros((nz, nx), dtype=dtype)  # k
-    lap = np.zeros((nz, nx), dtype=dtype)  # k
+    # Inicializacao dos parametros da PML
+    # Campo de pressao
+    p_2 = np.zeros((ny, nx), dtype=flt32)  # pressao futura
+    p_1 = np.zeros((ny, nx), dtype=flt32)  # pressao atual
+    p_0 = np.zeros((ny, nx), dtype=flt32)  # pressao passada
+
+    # Campos auxiliares para calculo das derivadas espaciais com CPML
+    mdp_x = np.zeros((ny, nx), dtype=flt32)
+    dp_x = np.zeros((ny, nx), dtype=flt32)
+    mdp_y = np.zeros((ny, nx), dtype=flt32)
+    dp_y = np.zeros((ny, nx), dtype=flt32)
+    dmdp_x = np.zeros((ny, nx), dtype=flt32)
+    dmdp_y = np.zeros((ny, nx), dtype=flt32)
+
+    # Campos de velocidade
+    v_x = np.zeros((ny, nx), dtype=flt32)
+    v_y = np.zeros((ny, nx), dtype=flt32)
+    rho = np.zeros((ny, nx))
+    Kronecker_source = np.zeros((ny, nx))
+
+    # Matrizes para os perfis de amortecimento da PML
+    d_x = np.zeros(nx, dtype=flt32)
+    d_x_half = np.zeros(nx)
+    K_x = np.zeros(nx)
+    K_x_half = np.zeros(nx)
+    alpha_x = np.zeros(nx)
+    alpha_x_half = np.zeros(nx)
+    a_x = np.zeros(nx)
+    a_x_half = np.zeros(nx)
+    b_x = np.zeros(nx)
+    b_x_half = np.zeros(nx)
+
+    d_y = np.zeros(ny)
+    d_y_half = np.zeros(ny)
+    K_y = np.zeros(ny)
+    K_y_half = np.zeros(ny)
+    alpha_y = np.zeros(ny)
+    alpha_y_half = np.zeros(ny)
+    a_y = np.zeros(ny)
+    a_y_half = np.zeros(ny)
+    b_y = np.zeros(ny)
+    b_y_half = np.zeros(ny)
+
+
+    # To interpolate material parameters or velocity at the right location in the staggered grid cell
+    rho_half_x = np.zeros((ny, nx))
+    rho_half_y = np.zeros((ny, nx))
+
+    # Power to compute d0 profile
+    NPOWER = 2.0
+
+    # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
+    K_MAX_PML = 1.0
+    ALPHA_MAX_PML = 2.0 * math.pi * (f0 / 2)  # from Festa and Vilotte
+
+
+    thickness_PML_x = 0.0
+    thickness_PML_y = 0.0
+    xoriginleft = 0.0
+    xoriginright = 0.0
+    xoriginbottom = 0.0
+    xorigintop = 0.0
+    Rcoef = 0.0
+    d0_x = 0.0
+    d0_y = 0.0
+    xval = 0.0
+    yval = 0.0
+
+
 
     # source term
-    src_gpu = src.astype(dtype)
+    src_gpu = src.astype(flt32)
 
     # auxiliar variables
-    info_i32 = np.array([nz, nx, src_z, src_x, sens_z, sens_x, len(coef), 0], dtype=np.int32)
-    info_f32 = coef.astype(dtype)
+    info_i32 = np.array([ny, nx, isource, jsource, sens_y, sens_x, 0], dtype=np.int32)
 
     # =====================
     # webgpu configurations
@@ -260,38 +408,42 @@ def sim_webgpu_for(coef):
     cshader = device.create_shader_module(code=shader_test)
 
     # info integer buffer
-    b0 = device.create_buffer_with_data(data=info_i32, usage=wgpu.BufferUsage.STORAGE |
-                                                             wgpu.BufferUsage.COPY_SRC)
-    # info float buffer
-    b1 = device.create_buffer_with_data(data=info_f32, usage=wgpu.BufferUsage.STORAGE |
-                                                             wgpu.BufferUsage.COPY_SRC)
-    # field pressure at time k-2
-    b2 = device.create_buffer_with_data(data=PKm2, usage=wgpu.BufferUsage.STORAGE |
-                                                         wgpu.BufferUsage.COPY_SRC)
+    b_param_int = device.create_buffer_with_data(data=info_i32, usage=wgpu.BufferUsage.STORAGE |
+                                                                      wgpu.BufferUsage.COPY_SRC)
     # field pressure at time k-1
-    b3 = device.create_buffer_with_data(data=PKm1, usage=wgpu.BufferUsage.STORAGE |
-                                                         wgpu.BufferUsage.COPY_SRC)
+    b_p_0 = device.create_buffer_with_data(data=p_0, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
     # field pressure at time k
-    b4 = device.create_buffer_with_data(data=PK, usage=wgpu.BufferUsage.STORAGE |
-                                                       wgpu.BufferUsage.COPY_DST |
-                                                       wgpu.BufferUsage.COPY_SRC)
-    # source term
-    b5 = device.create_buffer_with_data(data=src_gpu, usage=wgpu.BufferUsage.STORAGE |
-                                                            wgpu.BufferUsage.COPY_SRC)
-
-    # sensor signal
-    b6 = device.create_buffer_with_data(data=sensor, usage=wgpu.BufferUsage.STORAGE |
+    b_p_1 = device.create_buffer_with_data(data=p_1, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    # field pressure at time k+1
+    b_p_2 = device.create_buffer_with_data(data=p_2, usage=wgpu.BufferUsage.STORAGE |
                                                            wgpu.BufferUsage.COPY_DST |
                                                            wgpu.BufferUsage.COPY_SRC)
+    # source term
+    b_src = device.create_buffer_with_data(data=src_gpu, usage=wgpu.BufferUsage.STORAGE |
+                                                               wgpu.BufferUsage.COPY_SRC)
+
+    # sensor signal
+    b_sens = device.create_buffer_with_data(data=sensor, usage=wgpu.BufferUsage.STORAGE |
+                                                               wgpu.BufferUsage.COPY_DST |
+                                                               wgpu.BufferUsage.COPY_SRC)
 
     # velocity map
-    b7 = device.create_buffer_with_data(data=c, usage=wgpu.BufferUsage.STORAGE |
-                                                      wgpu.BufferUsage.COPY_SRC)
+    b_kappa = device.create_buffer_with_data(data=kappa_unrelaxed, usage=wgpu.BufferUsage.STORAGE |
+                                                                         wgpu.BufferUsage.COPY_SRC)
 
     # laplacian matrix
-    b8 = device.create_buffer_with_data(data=lap, usage=wgpu.BufferUsage.STORAGE |
-                                                        wgpu.BufferUsage.COPY_DST |
-                                                        wgpu.BufferUsage.COPY_SRC)
+    b_v_x = device.create_buffer_with_data(data=v_x, usage=wgpu.BufferUsage.STORAGE |
+                                                           wgpu.BufferUsage.COPY_DST |
+                                                           wgpu.BufferUsage.COPY_SRC)
+    b_v_y = device.create_buffer_with_data(data=v_y, usage=wgpu.BufferUsage.STORAGE |
+                                                           wgpu.BufferUsage.COPY_DST |
+                                                           wgpu.BufferUsage.COPY_SRC)
+    b_mdp_x = device.create_buffer_with_data(data=mdp_x, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_mdp_y = device.create_buffer_with_data(data=mdp_y, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_dp_x = device.create_buffer_with_data(data=dp_x, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_dp_y = device.create_buffer_with_data(data=dp_y, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_dmdp_x = device.create_buffer_with_data(data=dmdp_x, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_dmdp_x = device.create_buffer_with_data(data=dmdp_x, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
 
     binding_layouts_params = [
         {
@@ -454,15 +606,6 @@ def sim_webgpu_for(coef):
     return np.asarray(out).reshape((nz, nx)), sens, adapter_info["device"]
 
 
-# --------------------------
-# COEFFICIENTS
-# finite difference coefficient
-c2 = np.array([-2, 1], dtype=dtype)
-c4 = np.array([-5 / 2, 4 / 3, -1 / 12], dtype=dtype)
-c6 = np.array([-49 / 18, 3 / 2, -3 / 20, 1 / 90], dtype=dtype)
-c8 = np.array([-205 / 72, 8 / 5, -1 / 5, 8 / 315, -1 / 560], dtype=dtype)
-
-# --------------------------
 u_for = 0.0
 u_ser = 0.0
 times_for = list()
@@ -532,14 +675,14 @@ if save_results:
     name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}_{nt}_iter'
     if plot_results:
         if do_sim_gpu:
-            gpu_sim_result.savefig(name + '_gpu_' + gpu_type +'.png')
+            gpu_sim_result.savefig(name + '_gpu_' + gpu_type + '.png')
             sensor_gpu_result.savefig(name + '_sensor_' + gpu_type + '.png')
 
         if do_sim_cpu:
             cpu_sim_result.savefig(name + 'cpu.png')
 
         if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-            comp_sim_result.savefig(name + 'comp_cpu_gpu_' + gpu_type +'.png')
+            comp_sim_result.savefig(name + 'comp_cpu_gpu_' + gpu_type + '.png')
 
     np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_for, '%10.3f', delimiter=',')
     np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')
