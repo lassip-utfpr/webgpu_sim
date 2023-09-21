@@ -83,7 +83,7 @@ flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
 do_sim_gpu = True
-do_sim_cpu = True
+do_sim_cpu = False
 do_comp_fig_cpu_gpu = True
 use_refletors = False
 plot_results = True
@@ -1230,24 +1230,27 @@ def sim_webgpu():
                                                        compute={"module": cshader, "entry_point": "space_sim"})
     compute_incr_k = device.create_compute_pipeline(layout=pipeline_layout,
                                                     compute={"module": cshader, "entry_point": "incr_k"})
-    command_encoder = device.create_command_encoder()
-    compute_pass = command_encoder.begin_compute_pass()
 
-    compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
-    compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
-    compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
     for i in range(nstep):
-        compute_pass.set_pipeline(compute_time_sim)
-        compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
+        command_encoder = device.create_command_encoder()
+        compute_pass = command_encoder.begin_compute_pass()
+        compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
 
-        compute_pass.set_pipeline(compute_space_sim)
-        compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
+        # compute_pass.set_pipeline(compute_time_sim)
+        # compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
+
+        # compute_pass.set_pipeline(compute_space_sim)
+        # compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
 
         compute_pass.set_pipeline(compute_incr_k)
         compute_pass.dispatch_workgroups(1)
 
-    compute_pass.end()
-    device.queue.submit([command_encoder.finish()])
+        compute_pass.end()
+        device.queue.submit([command_encoder.finish()])
+        # print(np.array(device.queue.read_buffer(b_param_int32).cast("i"))[6])
+
     out = device.queue.read_buffer(b_p_2).cast("f")  # reads from buffer 3
     sens = np.array(device.queue.read_buffer(b_sens).cast("f"))
     adapter_info = device.adapter.request_adapter_info()
