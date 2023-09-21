@@ -413,6 +413,8 @@ shader_test = f"""
     
     struct SimFltValues {{
         cp_unrelaxed: f32,  // sound speed
+        dx: f32,            // delta x
+        dy: f32,            // delta y
         dt: f32             // delta t
     }};
 
@@ -788,25 +790,40 @@ shader_test = f"""
         }}
     }}
 
-    // function to calculate derivatives
+    // function to calculate first derivatives
     @compute
-    @workgroup_size({wsx}, {wsy})
-    fn space_sim(@builtin(global_invocation_id) index: vec3<u32>) {{
+    @workgroup_size({wsy}, {wsx})
+    fn space_sim1(@builtin(global_invocation_id) index: vec3<u32>) {{
         let y: i32 = i32(index.x);          // y thread index
         let x: i32 = i32(index.y);          // x thread index
-        let idx: i32 = yx(y, x);
-
-        // central
-        //if(idx != -1) {{
-        //    lap[idx] = 2.0 * coef[0] * getPKm1(z, x);
-        //
-        //    for (var i = 1; i < num_coef; i = i + 1) {{
-        //        lap[idx] += coef[i] * (getPKm1(z - i, x) +  // i acima
-        //                               getPKm1(z + i, x) +  // i abaixo
-        //                               getPKm1(z, x - i) +  // i a esquerda
-        //                               getPKm1(z, x + i));  // i a direita
-        //    }}
-        //}}
+        var vdp_x: f32 = 0.0;
+        var vdp_y: f32 = 0.0;
+        
+        // Calcula a primeira derivada espacial dividida pela densidade
+        vdp_x = (get_p_1(y + 1, x) - get_p_1(y, x)) / sim_flt_par.dx;
+        set_mdp_x(y, x, get_b_x_h(y)*get_mdp_x(y, x) + get_a_x_h(y)*vdp_x);
+        vdp_y = (get_p_1(y, x + 1) - get_p_1(y, x)) / sim_flt_par.dy;
+        set_mdp_y(y, x, get_b_y_h(x)*get_mdp_y(y, x) + get_a_y_h(x)*vdp_y);
+        set_dp_x(y, x, (vdp_x / get_k_x_h(y) + get_mdp_x(y, x))/get_rho_h_x(y, x));
+        set_dp_y(y, x, (vdp_y / get_k_y_h(x) + get_mdp_y(y, x))/get_rho_h_y(y, x));      
+    }}
+    
+    // function to calculate second derivatives
+    @compute
+    @workgroup_size({wsy}, {wsx})
+    fn space_sim2(@builtin(global_invocation_id) index: vec3<u32>) {{
+        let y: i32 = i32(index.x);          // y thread index
+        let x: i32 = i32(index.y);          // x thread index
+        var vdp_xx: f32 = 0.0;
+        var vdp_yy: f32 = 0.0;
+            
+        // Calcula a segunda derivada espacial
+        vdp_xx = (get_dp_x(y, x) - get_dp_x(y - 1, x)) / sim_flt_par.dx;
+        set_dmdp_x(y, x, get_b_x(y)*get_dmdp_x(y, x) + get_a_x(y)*vdp_xx);
+        vdp_yy = (get_dp_y(y, x) - get_dp_y(y, x - 1)) / sim_flt_par.dy;
+        set_dmdp_y(y, x, get_b_y(x)*get_dmdp_y(y, x) + get_a_y(x)*vdp_yy);
+        set_v_x(y, x, vdp_xx / get_k_x(y) + get_dmdp_x(y, x));
+        set_v_y(y, x, vdp_yy / get_k_y(x) + get_dmdp_y(y, x));        
     }}
 
     @compute
@@ -816,19 +833,22 @@ shader_test = f"""
     }}
 
     @compute
-    @workgroup_size({wsx}, {wsy})
+    @workgroup_size({wsy}, {wsx})
     fn time_sim(@builtin(global_invocation_id) index: vec3<u32>) {{
         var add_src: f32 = 0.0;             // Source term
         let y: i32 = i32(index.x);          // y thread index
         let x: i32 = i32(index.y);          // x thread index
         let y_src: i32 = sim_int_par.y_src;         // source term y position
         let x_src: i32 = sim_int_par.x_src;         // source term x position
-        let idx: i32 = yx(y, x);
+        let dt: f32 = sim_flt_par.dt;
+        let pi_4: f32 = 12.5663706144;
 
         // --------------------
         // Update pressure field
-        add_src = select(0.0, src[sim_int_par.k], y == y_src && x == x_src);
-        //setPK(y, x, -1.0*getPKm2(z, x) + 2.0*getPKm1(z, x) + c[idx]*c[idx]*lap[idx] + add_src);
+        ////add_src = select(0.0, src[sim_int_par.k], y == y_src && x == x_src);
+        add_src = pi_4*sim_flt_par.cp_unrelaxed*sim_flt_par.cp_unrelaxed*src[sim_int_par.k]*get_kronecker_src(y, x);
+        set_p_0(y, x, -1.0*get_p_2(y, x) + 2.0*get_p_1(y, x) +
+            dt*dt*((get_v_x(y, x) + get_v_y(y, x))*get_kappa(y, x) + add_src));
 
         // --------------------
         // Circular buffer
@@ -836,7 +856,7 @@ shader_test = f"""
         set_p_1(y, x, get_p_0(y, x));
 
         if(y == sim_int_par.y_sens && x == sim_int_par.x_sens) {{
-            sensor[sim_int_par.k] = get_p_2(y, x);
+            sensor[sim_int_par.k] = get_p_0(y, x);
         }}
     }}
     """
@@ -848,7 +868,7 @@ def sim_webgpu():
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     params_i32 = np.array([ny, nx, isource, jsource, sens_y, sens_x, 0], dtype=np.int32)
-    params_f32 = np.array([cp_unrelaxed, dt], dtype=flt32)
+    params_f32 = np.array([cp_unrelaxed, dx, dy, dt], dtype=flt32)
 
     # =====================
     # webgpu configurations
@@ -987,7 +1007,7 @@ def sim_webgpu():
     # Pressao futura (amostra de tempo n+1)
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 19
-    b_p_2 = device.create_buffer_with_data(data=p_2,
+    b_p_0 = device.create_buffer_with_data(data=p_0,
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
                                                  wgpu.BufferUsage.COPY_SRC)
@@ -1000,7 +1020,7 @@ def sim_webgpu():
     # Pressao passada (amostra de tempo n-1)
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 21
-    b_p_0 = device.create_buffer_with_data(data=p_0,
+    b_p_2 = device.create_buffer_with_data(data=p_2,
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_SRC)
     # Matrizes para o calculo das derivadas (primeira e segunda)
@@ -1083,6 +1103,7 @@ def sim_webgpu():
         },
     ]
 
+    # Configuracao das amarracoes (bindings)
     b_params = [
         {
             "binding": 0,
@@ -1164,7 +1185,7 @@ def sim_webgpu():
     b_sim_arrays = [
         {
             "binding": 19,
-            "resource": {"buffer": b_p_2, "offset": 0, "size": b_p_2.size},
+            "resource": {"buffer": b_p_0, "offset": 0, "size": b_p_0.size},
         },
         {
             "binding": 20,
@@ -1172,7 +1193,7 @@ def sim_webgpu():
         },
         {
             "binding": 21,
-            "resource": {"buffer": b_p_0, "offset": 0, "size": b_p_0.size},
+            "resource": {"buffer": b_p_2, "offset": 0, "size": b_p_2.size},
         },
         {
             "binding": 22,
@@ -1214,7 +1235,7 @@ def sim_webgpu():
         },
     ]
 
-    # Put everything together
+    # Coloca tudo junto
     bgl_0 = device.create_bind_group_layout(entries=bl_params)
     bgl_1 = device.create_bind_group_layout(entries=bl_sim_arrays)
     bgl_2 = device.create_bind_group_layout(entries=bl_sensors)
@@ -1223,35 +1244,61 @@ def sim_webgpu():
     bg_1 = device.create_bind_group(layout=bgl_1, entries=b_sim_arrays)
     bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
 
-    # Create and run the pipeline
+    # Cria os pipelines de execucao
+    compute_space_sim1 = device.create_compute_pipeline(layout=pipeline_layout,
+                                                        compute={"module": cshader, "entry_point": "space_sim1"})
+    compute_space_sim2 = device.create_compute_pipeline(layout=pipeline_layout,
+                                                        compute={"module": cshader, "entry_point": "space_sim2"})
     compute_time_sim = device.create_compute_pipeline(layout=pipeline_layout,
                                                       compute={"module": cshader, "entry_point": "time_sim"})
-    compute_space_sim = device.create_compute_pipeline(layout=pipeline_layout,
-                                                       compute={"module": cshader, "entry_point": "space_sim"})
     compute_incr_k = device.create_compute_pipeline(layout=pipeline_layout,
                                                     compute={"module": cshader, "entry_point": "incr_k"})
 
+    # Configuracao e inicializacao da janela de exibicao
+    App = pg.QtWidgets.QApplication([])
+    window = Window()
+
+    # Laco de tempo para execucao da simulacao
     for i in range(nstep):
+        # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
+
+        # Inicia os passos de execucao do decodificador
         compute_pass = command_encoder.begin_compute_pass()
+
+        # Ajusta os grupos de amarracao
         compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
         compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
         compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
 
-        # compute_pass.set_pipeline(compute_time_sim)
-        # compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
+        # Ativa o pipeline de execucao da simulacao no espaco (calculo da primeira derivada espacial)
+        compute_pass.set_pipeline(compute_space_sim1)
+        compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
 
-        # compute_pass.set_pipeline(compute_space_sim)
-        # compute_pass.dispatch_workgroups(ny // wsx, nx // wsy)
+        # Ativa o pipeline de execucao da simulacao no espaco (calculo da segunda derivada espacial)
+        compute_pass.set_pipeline(compute_space_sim2)
+        compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
 
+        # Ativa o pipeline de execucao da simulacao no tempo (calculo das derivadas temporais)
+        compute_pass.set_pipeline(compute_time_sim)
+        compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
+
+        # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_k)
         compute_pass.dispatch_workgroups(1)
 
+        # Termina o passo de execucao
         compute_pass.end()
-        device.queue.submit([command_encoder.finish()])
-        # print(np.array(device.queue.read_buffer(b_param_int32).cast("i"))[6])
 
-    out = device.queue.read_buffer(b_p_2).cast("f")  # reads from buffer 3
+        # Efetua a execucao dos comandos na GPU
+        device.queue.submit([command_encoder.finish()])
+
+        # Pega o resultado do campo de pressao
+        out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
+        window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
+        App.processEvents()
+
+    # Pega o sinal do sensor
     sens = np.array(device.queue.read_buffer(b_sens).cast("f"))
     adapter_info = device.adapter.request_adapter_info()
     return sens, adapter_info["device"]
