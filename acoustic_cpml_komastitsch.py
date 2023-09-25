@@ -16,6 +16,7 @@ from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+# Teste
 
 # use('TkAgg')
 
