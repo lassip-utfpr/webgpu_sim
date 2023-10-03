@@ -334,28 +334,27 @@ def sim_cpu():
     # Inicio do laco de tempo
     for it in range(nstep):
         # Calculo da primeira derivada espacial dividida pela densidade
-        vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx  # p_1[ny, nx] deve ser guardado
-        mdp_x = b_x_half * mdp_x + a_x_half * vdp_x  # mdp_x[ny, nx] deve ser guardado, b_x_half[nx] e a_x_half[nx] cte
+        vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx
+        mdp_x = b_x_half * mdp_x + a_x_half * vdp_x
         vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
-        mdp_y = b_y_half_t * mdp_y + a_y_half_t * vdp_y  # mdp_y[ny, nx] deve ser guardado, b_y_half[ny] e a_y_half[ny] cte
+        mdp_y = b_y_half_t * mdp_y + a_y_half_t * vdp_y
         dp_x = (
-                       vdp_x / k_x_half + mdp_x) / rho_half_x  # dp_x[ny, nx] deve ser guardado, K_x_half[nx] e rho_half_x[ny, nx] cte
+                       vdp_x / k_x_half + mdp_x) / rho_half_x
         dp_y = (
-                       vdp_y / k_y_half_t + mdp_y) / rho_half_y  # dp_y[ny, nx] deve ser guardado, K_y_half[ny] e rho_half_y[ny, nx] cte
+                       vdp_y / k_y_half_t + mdp_y) / rho_half_y
 
         # Compute the second spatial derivatives
         vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
-        dmdp_x = b_x * dmdp_x + a_x * vdp_xx  # dmdp_x[ny, nx] deve ser guardado, b_x[nx] e a_x[nx] cte
+        dmdp_x = b_x * dmdp_x + a_x * vdp_xx
         vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
-        dmdp_y = b_y_t * dmdp_y + a_y_t * vdp_yy  # dmdp_y[ny, nx] deve ser guardado, b_y[ny] e a_y[ny] cte
-        v_x = vdp_xx / k_x + dmdp_x  # v_x[ny, nx] deve ser guardado
-        v_y = vdp_yy / k_y_t + dmdp_y  # v_y[ny, nx] deve ser guardado
+        dmdp_y = b_y_t * dmdp_y + a_y_t * vdp_yy
+        v_x = vdp_xx / k_x + dmdp_x
+        v_y = vdp_yy / k_y_t + dmdp_y
 
         # apply the time evolution scheme
         # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
         # which is of course wrong (or more precisely undefined), but this does not matter because these values
         # will be erased by the Dirichlet conditions set on these edges below
-        # p_0[ny, nx], p_2[ny, nx] devem ser guardados, kappa_unrelaxed[ny, nx], cp_unrelaxed e Kronecker_source[ny, nx] cte
         p_0 = 2.0 * p_1 - p_2 + \
               dt ** 2 * \
               ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
@@ -438,41 +437,20 @@ shader_test = f"""
     var<storage,read_write> sim_int_par: SimIntValues;
 
     // Group 1 - simulation arrays
-    @group(1) @binding(6) // pressure field k+1
-    var<storage,read_write> p_2: array<f32>;
+    @group(1) @binding(6) // pressure future (p_2)
+    var<storage,read_write> pr_future: array<f32>;
 
-    @group(1) @binding(7) // pressure field k
-    var<storage,read_write> p_1: array<f32>;
+    @group(1) @binding(7) // pressure fields p_1, p_0
+    var<storage,read_write> pr_fields: array<f32>;
 
-    @group(1) @binding(8) // pressure field k-1
-    var<storage,read_write> p_0: array<f32>;
+    @group(1) @binding(8) // derivative fields x (v_x, mdp_x, dp_x, dmdp_x)
+    var<storage,read_write> der_x: array<f32>;
 
-    @group(1) @binding(9) // v_x
-    var<storage,read_write> v_x: array<f32>;
+    @group(1) @binding(9) // derivative fields y (v_y, mdp_y, dp_y, dmdp_y)
+    var<storage,read_write> der_y: array<f32>;
 
-    @group(1) @binding(10) // v_y
-    var<storage,read_write> v_y: array<f32>;
-    
-    @group(1) @binding(11) // mdp_x
-    var<storage,read_write> mdp_x: array<f32>;
-
-    @group(1) @binding(12) // mdp_y
-    var<storage,read_write> mdp_y: array<f32>;
-    
-    @group(1) @binding(13) // dp_x
-    var<storage,read_write> dp_x: array<f32>;
-
-    @group(1) @binding(14) // dp_y
-    var<storage,read_write> dp_y: array<f32>;
-    
-    @group(1) @binding(15) // dmdp_x
-    var<storage,read_write> dmdp_x: array<f32>;
-
-    @group(1) @binding(16) // dmdp_y
-    var<storage,read_write> dmdp_y: array<f32>;
-    
     // Group 2 - sensors arrays
-    @group(2) @binding(17) // sensor signal
+    @group(2) @binding(10) // sensor signal
     var<storage,read_write> sensor: array<f32>;
 
     // function to convert 2D [y,x] index into 1D [yx] index
@@ -491,35 +469,35 @@ shader_test = f"""
     
     // function to convert 3D [i,j,k] index into 1D [] index
     fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {{
-        let index = k + j * i_max + i * i_max * j_max;
+        let index = j + i * j_max + k * j_max * i_max;
 
         return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
     }}
     
     // function to get a kappa array value
     fn get_kappa(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 3, sim_int_par.y_sz, sim_int_par.x_sz, 3);
+        let index: i32 = ijk(i, j, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
     
     // function to get a kronecker_src array value
     fn get_kronecker_src(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 0, sim_int_par.y_sz, sim_int_par.x_sz, 3);
+        let index: i32 = ijk(i, j, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
     
     // function to get a rho_h_x array value
     fn get_rho_h_x(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 1, sim_int_par.y_sz, sim_int_par.x_sz, 3);
+        let index: i32 = ijk(i, j, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
     
     // function to get a rho_h_y array value
     fn get_rho_h_y(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 2, sim_int_par.y_sz, sim_int_par.x_sz, 3);
+        let index: i32 = ijk(i, j, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
@@ -613,43 +591,11 @@ shader_test = f"""
         return select(0.0, coef_y[index], index != -1);
     }}
 
-    // function to get an p_2 array value
-    fn get_p_2(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
-
-        return select(0.0, p_2[index], index != -1);
-    }}
-
-    // function to set a p_2 array value
-    fn set_p_2(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
-
-        if(index != -1) {{
-            p_2[index] = val;
-        }}
-    }}
-
-    // function to get an p_1 array value
-    fn get_p_1(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
-
-        return select(0.0, p_1[index], index != -1);
-    }}
-
-    // function to set a p_1 array value
-    fn set_p_1(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
-
-        if(index != -1) {{
-            p_1[index] = val;
-        }}
-    }}
-
-    // function to get an p_0 array value
+    // function to get an p_0 (pr_future) array value
     fn get_p_0(y: i32, x: i32) -> f32 {{
         let index: i32 = yx(y, x);
 
-        return select(0.0, p_0[index], index != -1);
+        return select(0.0, pr_future[index], index != -1);
     }}
 
     // function to set a p_0 array value
@@ -657,135 +603,167 @@ shader_test = f"""
         let index: i32 = yx(y, x);
 
         if(index != -1) {{
-            p_0[index] = val;
+            pr_future[index] = val;
+        }}
+    }}
+
+    // function to get an p_1 array value
+    fn get_p_1(y: i32, x: i32) -> f32 {{
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 2);
+
+        return select(0.0, pr_fields[index], index != -1);
+    }}
+
+    // function to set a p_1 array value
+    fn set_p_1(y: i32, x: i32, val : f32) {{
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 2);
+
+        if(index != -1) {{
+            pr_fields[index] = val;
+        }}
+    }}
+
+    // function to get an p_2 array value
+    fn get_p_2(y: i32, x: i32) -> f32 {{
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 2);
+
+        return select(0.0, pr_fields[index], index != -1);
+    }}
+
+    // function to set a p_2 array value
+    fn set_p_2(y: i32, x: i32, val : f32) {{
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 2);
+
+        if(index != -1) {{
+            pr_fields[index] = val;
         }}
     }}
     
     // function to get an v_x array value
     fn get_v_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, v_x[index], index != -1);
+        return select(0.0, der_x[index], index != -1);
     }}
 
     // function to set a v_x array value
     fn set_v_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            v_x[index] = val;
+            der_x[index] = val;
         }}
     }}
     
     // function to get an v_y array value
     fn get_v_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, v_y[index], index != -1);
+        return select(0.0, der_y[index], index != -1);
     }}
 
     // function to set a v_y array value
     fn set_v_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            v_y[index] = val;
+            der_y[index] = val;
         }}
     }}
     
     // function to get an mdp_x array value
     fn get_mdp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, mdp_x[index], index != -1);
+        return select(0.0, der_x[index], index != -1);
     }}
 
     // function to set a mdp_x array value
     fn set_mdp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            mdp_x[index] = val;
+            der_x[index] = val;
         }}
     }}
     
     // function to get an mdp_y array value
     fn get_mdp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, mdp_y[index], index != -1);
+        return select(0.0, der_y[index], index != -1);
     }}
 
     // function to set a mdp_y array value
     fn set_mdp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            mdp_y[index] = val;
+            der_y[index] = val;
         }}
     }}
     
     // function to get an dp_x array value
     fn get_dp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, dp_x[index], index != -1);
+        return select(0.0, der_x[index], index != -1);
     }}
 
     // function to set a dp_x array value
     fn set_dp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            dp_x[index] = val;
+            der_x[index] = val;
         }}
     }}
     
     // function to get an dp_y array value
     fn get_dp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, dp_y[index], index != -1);
+        return select(0.0, der_y[index], index != -1);
     }}
 
     // function to set a dp_y array value
     fn set_dp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            dp_y[index] = val;
+            der_y[index] = val;
         }}
     }}
     
     // function to get an dmdp_x array value
     fn get_dmdp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, dmdp_x[index], index != -1);
+        return select(0.0, der_x[index], index != -1);
     }}
 
     // function to set a dmdp_x array value
     fn set_dmdp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            dmdp_x[index] = val;
+            der_x[index] = val;
         }}
     }}
     
     // function to get an dmdp_y array value
     fn get_dmdp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
-        return select(0.0, dmdp_y[index], index != -1);
+        return select(0.0, der_y[index], index != -1);
     }}
 
     // function to set a dmdp_y array value
     fn set_dmdp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
+        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
 
         if(index != -1) {{
-            dmdp_y[index] = val;
+            der_y[index] = val;
         }}
     }}
 
@@ -844,7 +822,6 @@ shader_test = f"""
 
         // --------------------
         // Update pressure field
-        ////add_src = select(0.0, src[sim_int_par.k], y == y_src && x == x_src);
         add_src = pi_4*sim_flt_par.cp_unrelaxed*sim_flt_par.cp_unrelaxed*src[sim_int_par.k]*get_kronecker_src(y, x);
         set_p_0(y, x, -1.0*get_p_2(y, x) + 2.0*get_p_1(y, x) +
             dt*dt*((get_v_x(y, x) + get_v_y(y, x))*get_kappa(y, x) + add_src));
@@ -898,7 +875,7 @@ def sim_webgpu():
     # Mapa da posicao das fontes
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 2
-    b_img_params = device.create_buffer_with_data(data=np.dstack((kronecker_source,
+    b_img_params = device.create_buffer_with_data(data=np.vstack((kronecker_source,
                                                                   rho_half_x,
                                                                   rho_half_y,
                                                                   kappa_unrelaxed)),
@@ -933,55 +910,25 @@ def sim_webgpu():
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
                                                  wgpu.BufferUsage.COPY_SRC)
-    # Pressao atual (amostra de tempo n)
+    # Campos de pressao atual
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 7
-    b_p_1 = device.create_buffer_with_data(data=p_1,
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_SRC)
-    # Pressao passada (amostra de tempo n-1)
-    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 8
-    b_p_2 = device.create_buffer_with_data(data=p_2,
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_SRC)
+    b_pr_fields = device.create_buffer_with_data(data=np.vstack((p_1, p_2)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
     # Matrizes para o calculo das derivadas (primeira e segunda)
-    # Binding 9
-    b_v_x = device.create_buffer_with_data(data=v_x,
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_SRC)
-    # Binding 10
-    b_v_y = device.create_buffer_with_data(data=v_y,
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_SRC)
-    # Binding 11
-    b_mdp_x = device.create_buffer_with_data(data=mdp_x,
+    # Binding 8 - matrizes para o eixo x
+    b_der_x = device.create_buffer_with_data(data=np.vstack((v_x, mdp_x, dp_x, dmdp_x)),
                                              usage=wgpu.BufferUsage.STORAGE |
                                                    wgpu.BufferUsage.COPY_SRC)
-    # Binding 12
-    b_mdp_y = device.create_buffer_with_data(data=mdp_y,
+    # Binding 9 - matrizes para o eixo y
+    b_der_y = device.create_buffer_with_data(data=np.vstack((v_y, mdp_y, dp_y, dmdp_y)),
                                              usage=wgpu.BufferUsage.STORAGE |
                                                    wgpu.BufferUsage.COPY_SRC)
-    # Binding 13
-    b_dp_x = device.create_buffer_with_data(data=dp_x,
-                                            usage=wgpu.BufferUsage.STORAGE |
-                                                  wgpu.BufferUsage.COPY_SRC)
-    # Binding 14
-    b_dp_y = device.create_buffer_with_data(data=dp_y,
-                                            usage=wgpu.BufferUsage.STORAGE |
-                                                  wgpu.BufferUsage.COPY_SRC)
-    # Binding 15
-    b_dmdp_x = device.create_buffer_with_data(data=dmdp_x,
-                                              usage=wgpu.BufferUsage.STORAGE |
-                                                    wgpu.BufferUsage.COPY_SRC)
-    # Binding 16
-    b_dmdp_y = device.create_buffer_with_data(data=dmdp_y,
-                                              usage=wgpu.BufferUsage.STORAGE |
-                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Sinal do sensor
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 17
+    # Binding 10
     b_sens = device.create_buffer_with_data(data=sensor,
                                             usage=wgpu.BufferUsage.STORAGE |
                                                   wgpu.BufferUsage.COPY_DST |
@@ -1011,13 +958,13 @@ def sim_webgpu():
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for i in range(6, 17)
+         } for i in range(6, 10)
     ]
 
     # Sensores
     bl_sensors = [
         {
-            "binding": 17,
+            "binding": 10,
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
                 "type": wgpu.BufferBindingType.storage,
@@ -1059,48 +1006,20 @@ def sim_webgpu():
         },
         {
             "binding": 7,
-            "resource": {"buffer": b_p_1, "offset": 0, "size": b_p_1.size},
+            "resource": {"buffer": b_pr_fields, "offset": 0, "size": b_pr_fields.size},
         },
         {
             "binding": 8,
-            "resource": {"buffer": b_p_2, "offset": 0, "size": b_p_2.size},
+            "resource": {"buffer": b_der_x, "offset": 0, "size": b_der_x.size},
         },
         {
             "binding": 9,
-            "resource": {"buffer": b_v_x, "offset": 0, "size": b_v_x.size},
-        },
-        {
-            "binding": 10,
-            "resource": {"buffer": b_v_y, "offset": 0, "size": b_v_y.size},
-        },
-        {
-            "binding": 11,
-            "resource": {"buffer": b_mdp_x, "offset": 0, "size": b_mdp_x.size},
-        },
-        {
-            "binding": 12,
-            "resource": {"buffer": b_mdp_y, "offset": 0, "size": b_mdp_y.size},
-        },
-        {
-            "binding": 13,
-            "resource": {"buffer": b_dp_x, "offset": 0, "size": b_dp_x.size},
-        },
-        {
-            "binding": 14,
-            "resource": {"buffer": b_dp_y, "offset": 0, "size": b_dp_y.size},
-        },
-        {
-            "binding": 15,
-            "resource": {"buffer": b_dmdp_x, "offset": 0, "size": b_dmdp_x.size},
-        },
-        {
-            "binding": 16,
-            "resource": {"buffer": b_dmdp_y, "offset": 0, "size": b_dmdp_y.size},
+            "resource": {"buffer": b_der_y, "offset": 0, "size": b_der_y.size},
         },
     ]
     b_sensors = [
         {
-            "binding": 17,
+            "binding": 10,
             "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
         },
     ]
