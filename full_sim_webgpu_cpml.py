@@ -6,7 +6,7 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from time import time
 from datetime import datetime
-from PyQt5.QtWidgets import *
+from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
 
@@ -92,8 +92,8 @@ save_results = True
 gpu_type = "NVIDIA"
 
 # Parametros da simulacao
-nx = 801  # colunas
-ny = 801  # linhas
+nx = 1001  # colunas
+ny = 1001  # linhas
 
 # Tamanho do grid (aparentemente em metros)
 dx = 1.5
@@ -119,10 +119,11 @@ rho_half_y[ny - 1, :] = rho_half_y[ny - 2, :]
 kappa_unrelaxed = (density * cp_unrelaxed ** 2 * np.ones((ny, nx))).astype(flt32)
 
 # Numero total de passos de tempo
-nstep = 1500
+nstep = 15000
 
 # Passo de tempo em segundos
 dt = 5.2e-4
+# dt = 5.2e-3
 
 # Parametros da fonte
 f0 = 35.0  # frequencia
@@ -135,8 +136,10 @@ t = np.arange(nstep) * dt
 source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
 
 # Posicao da fonte
-xsource = 600.0
-ysource = 600.0
+# xsource = 600.0
+# ysource = 600.0
+xsource = nx/dx/2
+ysource = ny/dy/2
 isource = int(xsource / dx) + 1
 jsource = int(ysource / dy) + 1
 kronecker_source = np.zeros((ny, nx), dtype=flt32)  # Posicoes das fontes
