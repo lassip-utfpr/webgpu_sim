@@ -2,10 +2,10 @@ import math
 import wgpu.backends.rs  # Select backend
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
-from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
+# from sklearn.metrics import mean_squared_error
+# import matplotlib.pyplot as plt
 from time import time
-from datetime import datetime
+# from datetime import datetime
 from PyQt5.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
@@ -80,10 +80,10 @@ class Window(QMainWindow):
 
 # Parametros dos ensaios
 flt32 = np.float32
-n_iter_gpu = 1
-n_iter_cpu = 1
+n_iter_gpu = 5
+n_iter_cpu = 5
 do_sim_gpu = True
-do_sim_cpu = False
+do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
 plot_results = True
@@ -310,19 +310,19 @@ def sim_cpu():
     k_y_half_t = k_y_half[:, np.newaxis]
 
     # source position
-    print(f"Posição da fonte: ")
-    print(f"x = {xsource}")
-    print(f"y = {ysource}\n")
+    # print(f"Posição da fonte: ")
+    # print(f"x = {xsource}")
+    # print(f"y = {ysource}\n")
 
     # Localizacao dos sensores (receptores)
-    print(f"Sensor:")
-    print(f"x_target, y_target = {xdeb}, {ydeb}")
-    print(f"i, j = {sens_y}, {sens_x}")
+    # print(f"Sensor:")
+    # print(f"x_target, y_target = {xdeb}, {ydeb}")
+    # print(f"i, j = {sens_y}, {sens_x}")
 
     # Verifica a condicao de estabilidade de Courant
     # R. Courant et K. O. Friedrichs et H. Lewy (1928)
     courant_number = cp_unrelaxed * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2)
-    print(f"Número de Courant é {courant_number}")
+    # print(f"Número de Courant é {courant_number}")
     if courant_number > 1:
         print("O passo de tempo é muito longo, a simulação será instável")
         exit(1)
@@ -359,8 +359,8 @@ def sim_cpu():
               dt ** 2 * \
               ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
 
-        ## apply Dirichlet conditions at the bottom of the C-PML layers
-        ## which is the right condition to implement in order for C-PML to remain stable at long times
+        # apply Dirichlet conditions at the bottom of the C-PML layers
+        # which is the right condition to implement in order for C-PML to remain stable at long times
         # Dirichlet condition for pressure on the left boundary
         p_0[:, 0] = 0
 
@@ -375,17 +375,18 @@ def sim_cpu():
 
         # print maximum of pressure and of norm of velocity
         pressurenorm = np.max(np.abs(p_0))
-        print(f"Passo de tempo {it} de {nstep} passos")
-        print(f"Tempo: {it * dt} seconds")
-        print(f"Valor máximo absoluto da pressão = {pressurenorm}")
+        # print(f"Passo de tempo {it} de {nstep} passos")
+        # print(f"Tempo: {it * dt} seconds")
+        # print(f"Valor máximo absoluto da pressão = {pressurenorm}")
 
         # Verifica a estabilidade da simulacao
         if pressurenorm > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
-        window.imv.setImage(p_0.T, levels=[-1.0, 1.0])
-        App.processEvents()
+        if (it % 10) == 0:
+            window.imv.setImage(p_0.T, levels=[-1.0, 1.0])
+            App.processEvents()
 
         # move new values to old values (the present becomes the past, the future becomes the present)
         p_2 = p_1
@@ -394,7 +395,7 @@ def sim_cpu():
     App.exit()
 
     # End of the main loop
-    print("Simulacao terminada.")
+    # print("Simulacao terminada.")
 
 
 # --------------------------
@@ -403,8 +404,6 @@ shader_test = f"""
     struct SimIntValues {{
         y_sz: i32,          // Y field size
         x_sz: i32,          // X field size
-        y_src: i32,         // Y source
-        x_src: i32,         // X source
         y_sens: i32,        // Y sensor
         x_sens: i32,        // X sensor
         k: i32              // iteraction
@@ -437,10 +436,10 @@ shader_test = f"""
     var<storage,read_write> sim_int_par: SimIntValues;
 
     // Group 1 - simulation arrays
-    @group(1) @binding(6) // pressure future (p_2)
+    @group(1) @binding(6) // pressure future (p_0)
     var<storage,read_write> pr_future: array<f32>;
 
-    @group(1) @binding(7) // pressure fields p_1, p_0
+    @group(1) @binding(7) // pressure fields p_1, p_2
     var<storage,read_write> pr_fields: array<f32>;
 
     @group(1) @binding(8) // derivative fields x (v_x, mdp_x, dp_x, dmdp_x)
@@ -815,8 +814,6 @@ shader_test = f"""
         var add_src: f32 = 0.0;             // Source term
         let y: i32 = i32(index.x);          // y thread index
         let x: i32 = i32(index.y);          // x thread index
-        let y_src: i32 = sim_int_par.y_src;         // source term y position
-        let x_src: i32 = sim_int_par.x_src;         // source term x position
         let dt: f32 = sim_flt_par.dt;
         let pi_4: f32 = 12.5663706144;
 
@@ -826,6 +823,11 @@ shader_test = f"""
         set_p_0(y, x, -1.0*get_p_2(y, x) + 2.0*get_p_1(y, x) +
             dt*dt*((get_v_x(y, x) + get_v_y(y, x))*get_kappa(y, x) + add_src));
 
+        // Aplly Dirichlet conditions
+        if(y == 0 || y == (sim_int_par.y_sz - 1) || x == 0 || x == (sim_int_par.x_sz - 1)) {{
+            set_p_0(y, x, 0.0);
+        }}
+            
         // --------------------
         // Circular buffer
         set_p_2(y, x, get_p_1(y, x));
@@ -843,7 +845,7 @@ def sim_webgpu():
     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y, a_x, nstep
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
-    params_i32 = np.array([ny, nx, isource, jsource, sens_y, sens_x, 0], dtype=np.int32)
+    params_i32 = np.array([ny, nx, sens_y, sens_x, 0], dtype=np.int32)
     params_f32 = np.array([cp_unrelaxed, dx, dy, dt], dtype=flt32)
 
     # =====================
@@ -854,6 +856,7 @@ def sim_webgpu():
         adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
         device = adapter.request_device()
 
+    # Cria o shader para calculo contido na string ``shader_test''
     cshader = device.create_shader_module(code=shader_test)
 
     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
@@ -937,11 +940,11 @@ def sim_webgpu():
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
     bl_params = [
-        {"binding": i,
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         } for i in range(5)
+         } for ii in range(5)
     ]
     # b_param_i32
     bl_params.append({
@@ -954,11 +957,11 @@ def sim_webgpu():
 
     # Arrays da simulacao
     bl_sim_arrays = [
-        {"binding": i,
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for i in range(6, 10)
+         } for ii in range(6, 10)
     ]
 
     # Sensores
@@ -1048,7 +1051,7 @@ def sim_webgpu():
     window = Window()
 
     # Laco de tempo para execucao da simulacao
-    for i in range(nstep):
+    for it in range(nstep):
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -1083,9 +1086,12 @@ def sim_webgpu():
         device.queue.submit([command_encoder.finish()])
 
         # Pega o resultado do campo de pressao
-        out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
-        window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
-        App.processEvents()
+        if (it % 10) == 0:
+            out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
+            window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
+            App.processEvents()
+
+    App.exit()
 
     # Pega o sinal do sensor
     sens = np.array(device.queue.read_buffer(b_sens).cast("f"))
