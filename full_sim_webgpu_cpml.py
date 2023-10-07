@@ -2,8 +2,8 @@ import math
 import wgpu.backends.rs  # Select backend
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
-from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
+# from sklearn.metrics import mean_squared_error
+# import matplotlib.pyplot as plt
 from time import time
 # from datetime import datetime
 from PyQt6.QtWidgets import *
@@ -814,8 +814,6 @@ shader_test = f"""
         var add_src: f32 = 0.0;             // Source term
         let y: i32 = i32(index.x);          // y thread index
         let x: i32 = i32(index.y);          // x thread index
-        let y_src: i32 = sim_int_par.y_src;         // source term y position
-        let x_src: i32 = sim_int_par.x_src;         // source term x position
         let dt: f32 = sim_flt_par.dt;
         let pi_4: f32 = 12.5663706144;
 
@@ -825,6 +823,11 @@ shader_test = f"""
         set_p_0(y, x, -1.0*get_p_2(y, x) + 2.0*get_p_1(y, x) +
             dt*dt*((get_v_x(y, x) + get_v_y(y, x))*get_kappa(y, x) + add_src));
 
+        // Aplly Dirichlet conditions
+        if(y == 0 || y == (sim_int_par.y_sz - 1) || x == 0 || x == (sim_int_par.x_sz - 1)) {{
+            set_p_0(y, x, 0.0);
+        }}
+            
         // --------------------
         // Circular buffer
         set_p_2(y, x, get_p_1(y, x));
@@ -842,7 +845,7 @@ def sim_webgpu():
     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y, a_x, nstep
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
-    params_i32 = np.array([ny, nx, isource, jsource, sens_y, sens_x, 0], dtype=np.int32)
+    params_i32 = np.array([ny, nx, sens_y, sens_x, 0], dtype=np.int32)
     params_f32 = np.array([cp_unrelaxed, dx, dy, dt], dtype=flt32)
 
     # =====================
@@ -853,6 +856,7 @@ def sim_webgpu():
         adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
         device = adapter.request_device()
 
+    # Cria o shader para calculo contido na string ``shader_test''
     cshader = device.create_shader_module(code=shader_test)
 
     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
@@ -936,11 +940,11 @@ def sim_webgpu():
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
     bl_params = [
-        {"binding": i,
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         } for i in range(5)
+         } for ii in range(5)
     ]
     # b_param_i32
     bl_params.append({
@@ -953,11 +957,11 @@ def sim_webgpu():
 
     # Arrays da simulacao
     bl_sim_arrays = [
-        {"binding": i,
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for i in range(6, 10)
+         } for ii in range(6, 10)
     ]
 
     # Sensores
@@ -1047,7 +1051,7 @@ def sim_webgpu():
     window = Window()
 
     # Laco de tempo para execucao da simulacao
-    for i in range(nstep):
+    for it in range(nstep):
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -1082,9 +1086,12 @@ def sim_webgpu():
         device.queue.submit([command_encoder.finish()])
 
         # Pega o resultado do campo de pressao
-        out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
-        window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
-        App.processEvents()
+        if (it % 10) == 0:
+            out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
+            window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
+            App.processEvents()
+
+    App.exit()
 
     # Pega o sinal do sensor
     sens = np.array(device.queue.read_buffer(b_sens).cast("f"))
