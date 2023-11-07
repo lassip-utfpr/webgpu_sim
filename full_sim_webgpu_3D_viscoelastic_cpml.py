@@ -81,11 +81,11 @@ class Window(QMainWindow):
 # TODO: portar essa funcao
 def compute_attenuation_coeffs(is_kappa):  #  n, q_kappa, f0, f_min,f_max):
     if is_kappa:
-        return (np.array([0.0325305, 0.0032530], dtype=flt32),
-                np.array([0.0311465, 0.0031146], dtype=flt32))
+        return (np.array([3.4331474384407847E-002, 3.6311125270723529E-003], dtype=flt32),
+                np.array([2.9287653312114702E-002, 3.0503144159812171E-003], dtype=flt32))
 
-    return (np.array([0.0332577, 0.0033257], dtype=flt32),
-            np.array([0.0304655, 0.0030465], dtype=flt32))
+    return (np.array([3.7739400980721378E-002, 4.1548430957513323E-003], dtype=flt32),
+            np.array([2.7848924623855534E-002, 2.8973181158942259E-003], dtype=flt32))
 
 
 # Parametros dos ensaios
@@ -195,8 +195,6 @@ STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta inst
 
 # Valor da potencia para calcular "d0"
 NPOWER = 2.0
-if NPOWER < 1:
-    raise ValueError('NPOWER deve ser maior que 1')
 
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
 K_MAX_PML = 7.0
@@ -301,47 +299,13 @@ duzdy = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 duzdz = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 div = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 
-# Arrays 1D para os perfis de amortecimento (damping)
-d_x = np.zeros(nx, dtype=flt32)
-k_x = np.zeros(nx, dtype=flt32)
-alpha_x = np.zeros(nx, dtype=flt32)
-a_x = np.zeros(nx, dtype=flt32)
-b_x = np.zeros(nx, dtype=flt32)
-d_x_half = np.zeros(nx, dtype=flt32)
-k_x_half = np.zeros(nx, dtype=flt32)
-alpha_x_half = np.zeros(nx, dtype=flt32)
-a_x_half = np.zeros(nx, dtype=flt32)
-b_x_half = np.zeros(nx, dtype=flt32)
-
-d_y = np.zeros(ny, dtype=flt32)
-k_y = np.zeros(ny, dtype=flt32)
-alpha_y = np.zeros(ny, dtype=flt32)
-a_y = np.zeros(ny, dtype=flt32)
-b_y = np.zeros(ny, dtype=flt32)
-d_y_half = np.zeros(ny, dtype=flt32)
-k_y_half = np.zeros(ny, dtype=flt32)
-alpha_y_half = np.zeros(ny, dtype=flt32)
-a_y_half = np.zeros(ny, dtype=flt32)
-b_y_half = np.zeros(ny, dtype=flt32)
-
-d_z = np.zeros(nz, dtype=flt32)
-k_z = np.zeros(nz, dtype=flt32)
-alpha_z = np.zeros(nz, dtype=flt32)
-a_z = np.zeros(nz, dtype=flt32)
-b_z = np.zeros(nz, dtype=flt32)
-d_z_half = np.zeros(nz, dtype=flt32)
-k_z_half = np.zeros(nz, dtype=flt32)
-alpha_z_half = np.zeros(nz, dtype=flt32)
-a_z_half = np.zeros(nz, dtype=flt32)
-b_z_half = np.zeros(nz, dtype=flt32)
-
 # Inicializacao dos parametros da PML (definicao dos perfis de absorcao na regiao da PML)
 thickness_pml_x = npoints_pml * dx
 thickness_pml_y = npoints_pml * dy
 thickness_pml_z = npoints_pml * dz
 
 # Coeficiente de reflexao (INRIA report section 6.1) http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-rcoef = 0.001
+rcoef = 0.0001
 
 # Calculo da faixa de atenuacao em frequencia: f_max/f_min=12 and (log(f_min)+log(f_max))/2 = log(f0)
 f_min_attenuation = np.exp(np.log(f0_attenuation) - np.log(12.0)/2.0)
@@ -363,7 +327,7 @@ tau_epsilon_nu2, tau_sigma_nu2 = compute_attenuation_coeffs(is_kappa=False)
 
 print(f'\nAtenuacao calculada pela nova rotina SolvOpt:')
 print(f'NSLs = {N_SLS}, QKappa_att = {q_kappa_att}, QMu_att = {q_mu_att}')
-print(f'f0_attenuation = {f0_attenuation}, f_min_attenuation = {f_min_attenuation},'
+print(f'f0_attenuation = {f0_attenuation}, f_min_attenuation = {f_min_attenuation}, '
       f'f_max_attenuation = {f_max_attenuation}')
 print(f'tau_epsilon_nu1 = {tau_epsilon_nu1}')
 print(f'tau_sigma_nu1 = {tau_sigma_nu1}')
@@ -398,97 +362,146 @@ print(f'Total de pontos no grid = {(nx+2) * (ny+2) * (nz+2)}')
 print(f'Number of points of all the arrays = {(nx+2)*(ny+2)*(nz+2)*N_ARRAYS}')
 print(f'Size in GB of all the arrays = {(nx+2)*(ny+2)*(nz+2)*N_ARRAYS*4/(1024*1024*1024)}\n')
 
+if NPOWER < 1:
+    raise ValueError('NPOWER deve ser maior que 1')
 
 # Calculo de d0 do relatorio da INRIA section 6.1 http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-# d0_x = -(NPOWER + 1) * cp_unrelaxed * math.log(rcoef) / (2.0 * thickness_pml_x)
-# d0_y = -(NPOWER + 1) * cp_unrelaxed * math.log(rcoef) / (2.0 * thickness_pml_y)
-#
-# # Amortecimento na direcao "x" (horizontal)
-# # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
-# x_orig_left = thickness_pml_x
-# x_orig_right = (nx - 1) * dx - thickness_pml_x
-#
-# # Perfil de amortecimento na direcao "x" dentro do grid de pressao
-# i = np.arange(nx)
-# xval = dx * i
-# xval_pml_left = x_orig_left - xval
-# xval_pml_right = xval - x_orig_right
-# x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
-# x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
-# x_mask = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-# x_pml = np.zeros(nx)
-# x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
-# x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
-# x_norm = x_pml / thickness_pml_x
-# d_x = (d0_x * x_norm ** NPOWER).astype(flt32)
-# k_x = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
-# alpha_x = (ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32)
-# b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-# i = np.where(d_x > 1e-6)
-# a_x = np.zeros(nx, dtype=flt32)
-# a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
-#
-# # Perfil de amortecimento na direcao "x" dentro do meio grid de pressao (staggered grid)
-# xval_pml_left = x_orig_left - (xval + dx / 2.0)
-# xval_pml_right = (xval + dx / 2.0) - x_orig_right
-# x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
-# x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
-# x_mask_half = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-# x_pml = np.zeros(nx)
-# x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
-# x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
-# x_norm = x_pml / thickness_pml_x
-# d_x_half = (d0_x * x_norm ** NPOWER).astype(flt32)
-# k_x_half = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
-# alpha_x_half = (ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32)
-# b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt)
-# a_x_half = np.zeros(nx, dtype=flt32)
-# i = np.where(d_x_half > 1e-6)
-# a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
-#
-# # Amortecimento na direcao "y" (vertical)
-# # Origem da PML (posicao das bordas superior e inferior menos a espessura, em unidades de distancia)
-# y_orig_top = thickness_pml_y
-# y_orig_bottom = (ny - 1) * dy - thickness_pml_y
-#
-# # Perfil de amortecimento na direcao "y" dentro do grid de pressao
-# j = np.arange(ny)
-# yval = dy * j
-# y_pml_top = y_orig_top - yval
-# y_pml_bottom = yval - y_orig_bottom
-# y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
-# y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
-# y_mask = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
-# y_pml = np.zeros(ny)
-# y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
-# y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
-# y_norm = y_pml / thickness_pml_y
-# d_y = (d0_y * y_norm ** NPOWER).astype(flt32)
-# k_y = (1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32)
-# alpha_y = (ALPHA_MAX_PML * (1.0 - np.where(y_mask, y_norm, 1.0))).astype(flt32)
-# b_y = np.exp(-(d_y / k_y + alpha_y) * dt).astype(flt32)
-# a_y = np.zeros(ny, dtype=flt32)
-# j = np.where(d_y > 1e-6)
-# a_y[j] = d_y[j] * (b_y[j] - 1.0) / (k_y[j] * (d_y[j] + k_y[j] * alpha_y[j]))
-#
-# # Perfil de amortecimento na direcao "x" dentro do meio grid de pressao (staggered grid)
-# y_pml_top = y_orig_top - (yval + dy / 2.0)
-# y_pml_bottom = (yval + dy / 2.0) - y_orig_bottom
-# y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
-# y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
-# y_mask_half = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
-# y_pml = np.zeros(ny)
-# y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
-# y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
-# y_norm = y_pml / thickness_pml_y
-# d_y_half = (d0_y * y_norm ** NPOWER).astype(flt32)
-# k_y_half = (1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32)
-# alpha_y_half = (ALPHA_MAX_PML * (1.0 - np.where(y_mask_half, y_norm, 1.0))).astype(flt32)
-# b_y_half = np.exp(-(d_y_half / k_y_half + alpha_y_half) * dt).astype(flt32)
-# a_y_half = np.zeros(ny, dtype=flt32)
-# j = np.where(d_y_half > 1e-6)
-# a_y_half[j] = d_y_half[j] * (b_y_half[j] - 1.0) / (k_y_half[j] * (d_y_half[j] + k_y_half[j] * alpha_y_half[j]))
+d0_x = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_x)
+d0_y = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_y)
+d0_z = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_z)
 
+print(f'd0_x = {d0_x}')
+print(f'd0_y = {d0_y}')
+print(f'd0_z = {d0_z}')
+
+# Amortecimento na direcao "x" (horizontal)
+# Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
+x_orig_left = thickness_pml_x
+x_orig_right = (nx - 1) * dx - thickness_pml_x
+
+# Perfil de amortecimento na direcao "x" dentro do grid
+i = np.arange(nx)
+xval = dx * i
+xval_pml_left = x_orig_left - xval
+xval_pml_right = xval - x_orig_right
+x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
+x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
+x_mask = np.logical_or(x_pml_mask_left, x_pml_mask_right)
+x_pml = np.zeros(nx)
+x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
+x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
+x_norm = x_pml / thickness_pml_x
+d_x = (d0_x * x_norm ** NPOWER).astype(flt32)
+k_x = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
+alpha_x = (ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32)
+b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
+i = np.where(d_x > 1e-6)
+a_x = np.zeros(nx, dtype=flt32)
+a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
+
+# Perfil de amortecimento na direcao "x" dentro do meio grid (staggered grid)
+xval_pml_left = x_orig_left - (xval + dx / 2.0)
+xval_pml_right = (xval + dx / 2.0) - x_orig_right
+x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
+x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
+x_mask_half = np.logical_or(x_pml_mask_left, x_pml_mask_right)
+x_pml = np.zeros(nx)
+x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
+x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
+x_norm = x_pml / thickness_pml_x
+d_x_half = (d0_x * x_norm ** NPOWER).astype(flt32)
+k_x_half = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
+alpha_x_half = (ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32)
+b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
+i = np.where(d_x_half > 1e-6)
+a_x_half = np.zeros(nx, dtype=flt32)
+a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
+
+# Amortecimento na direcao "y" (vertical)
+# Origem da PML (posicao das bordas superior e inferior menos a espessura, em unidades de distancia)
+y_orig_top = thickness_pml_y
+y_orig_bottom = (ny - 1) * dy - thickness_pml_y
+
+# Perfil de amortecimento na direcao "y" dentro do grid
+j = np.arange(ny)
+yval = dy * j
+y_pml_top = y_orig_top - yval
+y_pml_bottom = yval - y_orig_bottom
+y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
+y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
+y_mask = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
+y_pml = np.zeros(ny)
+y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
+y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
+y_norm = y_pml / thickness_pml_y
+d_y = (d0_y * y_norm ** NPOWER).astype(flt32)
+k_y = (1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32)
+alpha_y = (ALPHA_MAX_PML * (1.0 - np.where(y_mask, y_norm, 1.0))).astype(flt32)
+b_y = np.exp(-(d_y / k_y + alpha_y) * dt).astype(flt32)
+j = np.where(d_y > 1e-6)
+a_y = np.zeros(ny, dtype=flt32)
+a_y[j] = d_y[j] * (b_y[j] - 1.0) / (k_y[j] * (d_y[j] + k_y[j] * alpha_y[j]))
+
+# Perfil de amortecimento na direcao "y" dentro do meio grid (staggered grid)
+y_pml_top = y_orig_top - (yval + dy / 2.0)
+y_pml_bottom = (yval + dy / 2.0) - y_orig_bottom
+y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
+y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
+y_mask_half = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
+y_pml = np.zeros(ny)
+y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
+y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
+y_norm = y_pml / thickness_pml_y
+d_y_half = (d0_y * y_norm ** NPOWER).astype(flt32)
+k_y_half = (1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32)
+alpha_y_half = (ALPHA_MAX_PML * (1.0 - np.where(y_mask_half, y_norm, 1.0))).astype(flt32)
+b_y_half = np.exp(-(d_y_half / k_y_half + alpha_y_half) * dt).astype(flt32)
+j = np.where(d_y_half > 1e-6)
+a_y_half = np.zeros(ny, dtype=flt32)
+a_y_half[j] = d_y_half[j] * (b_y_half[j] - 1.0) / (k_y_half[j] * (d_y_half[j] + k_y_half[j] * alpha_y_half[j]))
+
+# Amortecimento na direcao "z" (profundidade)
+# Origem da PML (posicao das bordas frontal e fundos menos a espessura, em unidades de distancia)
+z_orig_front = thickness_pml_z
+z_orig_back = (nz - 1) * dz - thickness_pml_z
+
+# Perfil de amortecimento na direcao "z" dentro do grid
+k = np.arange(nz)
+zval = dz * k
+z_pml_front = z_orig_front - zval
+z_pml_back = zval - z_orig_back
+z_pml_mask_front = np.where(z_pml_front < 0.0, False, True)
+z_pml_mask_back = np.where(z_pml_back < 0.0, False, True)
+z_mask = np.logical_or(z_pml_mask_front, z_pml_mask_back)
+z_pml = np.zeros(nz)
+z_pml[z_pml_mask_front] = z_pml_front[z_pml_mask_front]
+z_pml[z_pml_mask_back] = z_pml_back[z_pml_mask_back]
+z_norm = z_pml / thickness_pml_z
+d_z = (d0_z * z_norm ** NPOWER).astype(flt32)
+k_z = (1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32)
+alpha_z = (ALPHA_MAX_PML * (1.0 - np.where(z_mask, z_norm, 1.0))).astype(flt32)
+b_z = np.exp(-(d_z / k_z + alpha_z) * dt).astype(flt32)
+k = np.where(d_z > 1e-6)
+a_z = np.zeros(nz, dtype=flt32)
+a_z[k] = d_z[k] * (b_z[k] - 1.0) / (k_z[k] * (d_z[k] + k_z[k] * alpha_z[k]))
+
+# Perfil de amortecimento na direcao "z" dentro do meio grid (staggered grid)
+z_pml_front = z_orig_front - (zval + dz / 2.0)
+z_pml_back = (zval + dz / 2.0) - z_orig_back
+z_pml_mask_front = np.where(z_pml_front < 0.0, False, True)
+z_pml_mask_back = np.where(z_pml_back < 0.0, False, True)
+z_mask_half = np.logical_or(z_pml_mask_front, z_pml_mask_back)
+z_pml = np.zeros(nz)
+z_pml[z_pml_mask_front] = z_pml_front[z_pml_mask_front]
+z_pml[z_pml_mask_back] = z_pml_back[z_pml_mask_back]
+z_norm = z_pml / thickness_pml_z
+d_z_half = (d0_z * z_norm ** NPOWER).astype(flt32)
+k_z_half = (1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32)
+alpha_z_half = (ALPHA_MAX_PML * (1.0 - np.where(z_mask_half, z_norm, 1.0))).astype(flt32)
+b_z_half = np.exp(-(d_z_half / k_z_half + alpha_z_half) * dt).astype(flt32)
+k = np.where(d_z_half > 1e-6)
+a_z_half = np.zeros(nz, dtype=flt32)
+a_z_half[k] = d_z_half[k] * (b_z_half[k] - 1.0) / (k_z_half[k] * (d_z_half[k] + k_z_half[k] * alpha_z_half[k]))
 
 # def sim_cpu():
 #     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y
