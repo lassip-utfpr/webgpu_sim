@@ -38,7 +38,7 @@ class Window(QMainWindow):
         super().__init__()
 
         # setting title
-        self.setWindowTitle(f"{ny}x{nx} Grid x {nstep} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+        self.setWindowTitle(f"{ny}x{nx} Grid x {NSTEP} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
 
         # setting geometry
         # self.setGeometry(200, 50, 1600, 800)
@@ -142,7 +142,7 @@ lambdaplus2mu = rho * cp * cp
 # kappa_unrelaxed = (density * cp_unrelaxed ** 2 * np.ones((ny, nx))).astype(flt32)
 
 # Numero total de passos de tempo
-nstep = 1000
+NSTEP = 1000
 
 # Passo de tempo em segundos
 dt = 4.0e-4
@@ -155,7 +155,7 @@ f0 = 18.0  # frequencia
 t0 = 1.20 / f0  # delay
 factor = 1.0e7
 # a = math.pi ** 2 * f0 ** 2
-# t = np.arange(nstep) * dt
+# t = np.arange(NSTEP) * dt
 
 # Parametro de atenuacao
 N_SLS = 2
@@ -174,6 +174,7 @@ jsource = ny / 5 + 1
 ksource = nz / 4
 xsource = isource * dx
 ysource = jsource * dy
+zsource = ksource * dz
 angle_force = 0.0
 
 # Receptores
@@ -182,9 +183,20 @@ xdeb = xsource - 100.0  # em unidade de distancia
 ydeb = 2300.0  # em unidade de distancia
 xfin = xsource
 yfin = 300.0
+xrec = xsource + np.array([500.0, 0.0, 500.0])
+yrec = ysource + np.array([500.0, 2260.0, 2260.0])
 # sens_x = int(xdeb / dx) + 1
 # sens_y = int(ydeb / dy) + 1
-# sensor = np.zeros(nstep, dtype=flt32)  # buffer para sinal do sensor
+# sensor = np.zeros(NSTEP, dtype=flt32)  # buffer para sinal do sensor
+sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
+sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
+
+# for evolution of total energy in the medium
+epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = np.float32(0.0)
+total_energy = np.zeros(NSTEP, dtype=flt32)
+total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
+total_energy_potential = np.zeros(NSTEP, dtype=flt32)
+local_energy_kinetic = local_energy_potential = np.float32(0.0)
 
 # Constantes
 PI = np.pi
@@ -372,7 +384,7 @@ d0_z = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickne
 
 print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')
-print(f'd0_z = {d0_z}')
+print(f'd0_z = {d0_z}\n')
 
 # Amortecimento na direcao "x" (horizontal)
 # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
@@ -503,110 +515,154 @@ k = np.where(d_z_half > 1e-6)
 a_z_half = np.zeros(nz, dtype=flt32)
 a_z_half[k] = d_z_half[k] * (b_z_half[k] - 1.0) / (k_z_half[k] * (d_z_half[k] + k_z_half[k] * alpha_z_half[k]))
 
-# def sim_cpu():
-#     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y
-#
-#     # Definicao das matrizes auxiliares
-#     vdp_x = np.zeros((ny, nx), dtype=flt32)
-#     vdp_y = np.zeros((ny, nx), dtype=flt32)
-#     vdp_xx = np.zeros((ny, nx), dtype=flt32)
-#     vdp_yy = np.zeros((ny, nx), dtype=flt32)
-#
-#     # Acerta as dimensões dos vetores no sentido "y"
-#     a_y_t = a_y[:, np.newaxis]
-#     a_y_half_t = a_y_half[:, np.newaxis]
-#     b_y_t = b_y[:, np.newaxis]
-#     b_y_half_t = b_y_half[:, np.newaxis]
-#     k_y_t = k_y[:, np.newaxis]
-#     k_y_half_t = k_y_half[:, np.newaxis]
-#
-#     # source position
-#     # print(f"Posição da fonte: ")
-#     # print(f"x = {xsource}")
-#     # print(f"y = {ysource}\n")
-#
-#     # Localizacao dos sensores (receptores)
-#     # print(f"Sensor:")
-#     # print(f"x_target, y_target = {xdeb}, {ydeb}")
-#     # print(f"i, j = {sens_y}, {sens_x}")
-#
-#     # Verifica a condicao de estabilidade de Courant
-#     # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-#     courant_number = cp_unrelaxed * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2)
-#     # print(f"Número de Courant é {courant_number}")
-#     if courant_number > 1:
-#         print("O passo de tempo é muito longo, a simulação será instável")
-#         exit(1)
-#
-#     # Configuracao e inicializacao da janela de exibicao
-#     App = pg.QtWidgets.QApplication([])
-#     window = Window()
-#
-#     # Inicio do laco de tempo
-#     for it in range(nstep):
-#         # Calculo da primeira derivada espacial dividida pela densidade
-#         vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx
-#         mdp_x = b_x_half * mdp_x + a_x_half * vdp_x
-#         vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
-#         mdp_y = b_y_half_t * mdp_y + a_y_half_t * vdp_y
-#         dp_x = (
-#                        vdp_x / k_x_half + mdp_x) / rho_half_x
-#         dp_y = (
-#                        vdp_y / k_y_half_t + mdp_y) / rho_half_y
-#
-#         # Compute the second spatial derivatives
-#         vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
-#         dmdp_x = b_x * dmdp_x + a_x * vdp_xx
-#         vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
-#         dmdp_y = b_y_t * dmdp_y + a_y_t * vdp_yy
-#         v_x = vdp_xx / k_x + dmdp_x
-#         v_y = vdp_yy / k_y_t + dmdp_y
-#
-#         # apply the time evolution scheme
-#         # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
-#         # which is of course wrong (or more precisely undefined), but this does not matter because these values
-#         # will be erased by the Dirichlet conditions set on these edges below
-#         p_0 = 2.0 * p_1 - p_2 + \
-#               dt ** 2 * \
-#               ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
-#
-#         # apply Dirichlet conditions at the bottom of the C-PML layers
-#         # which is the right condition to implement in order for C-PML to remain stable at long times
-#         # Dirichlet condition for pressure on the left boundary
-#         p_0[:, 0] = 0
-#
-#         # Dirichlet condition for pressure on the right boundary
-#         p_0[:, nx - 1] = 0
-#
-#         # Dirichlet condition for pressure on the bottom boundary
-#         p_0[0, :] = 0
-#
-#         # Dirichlet condition for pressure on the top boundary
-#         p_0[ny - 1, :] = 0
-#
-#         # print maximum of pressure and of norm of velocity
-#         pressurenorm = np.max(np.abs(p_0))
-#         # print(f"Passo de tempo {it} de {nstep} passos")
-#         # print(f"Tempo: {it * dt} seconds")
-#         # print(f"Valor máximo absoluto da pressão = {pressurenorm}")
-#
-#         # Verifica a estabilidade da simulacao
-#         if pressurenorm > STABILITY_THRESHOLD:
-#             print("Simulacao tornando-se instável")
-#             exit(2)
-#
-#         if (it % 10) == 0:
-#             window.imv.setImage(p_0.T, levels=[-1.0, 1.0])
-#             App.processEvents()
-#
-#         # move new values to old values (the present becomes the past, the future becomes the present)
-#         p_2 = p_1
-#         p_1 = p_0
-#
-#     App.exit()
+# Imprime a posicao da fonte
+print(f'Posicao da fonte:')
+print(f'x = {xsource}')
+print(f'y = {ysource}')
+print(f'z = {zsource}\n')
+
+# Define a localizacao dos receptores
+print(f'Existem {NREC} receptores')
+
+# Find closest grid point for each receiver
+ix_rec = np.zeros(NREC, dtype=int)
+iy_rec = np.zeros(NREC, dtype=int)
+for irec in range(NREC):
+    dist = HUGEVAL
+    for j in range(ny):
+        for i in range(nx):
+            distval = math.sqrt((dx * i - xrec[irec])**2 + (dx * j - yrec[irec])**2)
+            if distval < dist:
+                dist = distval
+                ix_rec[irec] = i
+                iy_rec[irec] = j
+
+    print(f'receiver {irec}: x_target = {xrec[irec]}, y_target = {yrec[irec]}')
+    print(f'Ponto mais perto do grid encontrado na distancia {dist}, em i = {ix_rec[irec]}, j = {iy_rec[irec]}\n')
+
+# Verifica a condicao de estabilidade de Courant
+# R. Courant et K. O. Friedrichs et H. Lewy (1928)
+courant_number = cp * math.sqrt(taumax) * dt * math.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
+print(f'Numero de Courant é {courant_number}')
+print(f'Vpmax = {cp * math.sqrt(taumax)}')
+if courant_number > 1:
+    print("O passo de tempo é muito longo, a simulação será instável")
+    exit(1)
+print(f'Number of points per wavelength = {cs * math.sqrt(taumin)/(2.5 * f0)/dx}, Vsmin = {cs * math.sqrt(taumin)}')
+
+
+def sim_cpu():
+    global vx, vy, vz, sigmaxx, sigmayy, sigmazz, sigmaxy, sigmaxz, sigmayz
+    global e1, e11, e12, e13, e23, e22
+    global memory_dvx_dx, memory_dvx_dy, memory_dvx_dz
+    global memory_dvy_dx, memory_dvy_dy, memory_dvy_dz
+    global memory_dvz_dx, memory_dvz_dy, memory_dvz_dz
+    global memory_dsigmaxx_dx, memory_dsigmayy_dy, memory_dsigmazz_dz
+    global memory_dsigmaxy_dx, memory_dsigmaxy_dy
+    global memory_dsigmaxz_dx, memory_dsigmaxz_dz
+    global memory_dsigmayz_dy, memory_dsigmayz_dz
+    global sisvx, sisvy
+    global total_energy, total_energy_kinetic, total_energy_potential
+    global value_dvx_dx, value_dvy_dy, value_dvz_dz
+
+    # TODO: verificar se precisa fazer o acerto das dimensões dos vetores no sentido "y" e "z"
+    # a_y_t = a_y[:, np.newaxis]
+    # a_y_half_t = a_y_half[:, np.newaxis]
+    # b_y_t = b_y[:, np.newaxis]
+    # b_y_half_t = b_y_half[:, np.newaxis]
+    # k_y_t = k_y[:, np.newaxis]
+    # k_y_half_t = k_y_half[:, np.newaxis]
+
+    # Configuracao e inicializacao da janela de exibicao
+    App = pg.QtWidgets.QApplication([])
+    window = Window()
+
+    # Inicio do laco de tempo
+    for it in range(NSTEP):
+        print(f'it = {it}')
+
+        # Calculo do stress sigma
+        mul_relaxed = np.float32(mu)
+        lambdal_relaxed = np.float32(lambda_)
+        lambdalplus2mul_relaxed = np.float32(lambdal_relaxed + 2.0 * mul_relaxed)
+        lambdal_unrelaxed = np.float32((lambdal_relaxed + 2.0/3.0 * mul_relaxed) * Mu_nu1 -
+                                       2.0/3.0 * mul_relaxed * Mu_nu2)
+        mul_unrelaxed = np.float32(mul_relaxed * Mu_nu2)
+        lambdalplus2mul_unrelaxed = np.float32(lambdal_unrelaxed + 2.0 * mul_unrelaxed)
+
+        value_dvx_dx[1:-2, 2:-1, 2:-1] = (np.float32(27.0)*(vx[2:-1, 2:-1, 2:-1] - vx[1:-2, 2:-1, 2:-1]) -
+                                          vx[3:, 2:-1, 2:-1] + vx[:-3, 2:-1, 2:-1]) * one_dx/np.float32(24.0)
+        value_dvy_dy[1:-2, 2:-1, 2:-1] = (np.float32(27.0) * (vy[1:-2, 2:-1, 2:-1] - vy[1:-2, 1:-2, 2:-1]) -
+                                          vy[1:-2, 3:0, 2:-1] + vy[1:-2, :-3, 2:-1]) * one_dy / np.float32(24.0)
+        value_dvz_dz[1:-2, 2:-1, 2:-1] = (np.float32(27.0) * (vz[1:-2, 2:-1, 2:-1] - vz[1:-2, 2:-1, 1:-2]) -
+                                          vz[1:-2, 2:-1, 3:] + vz[1:-2, 2:-1, :-3]) * one_dz / np.float32(24.0)
+
+
+
+
+        # Calculo da primeira derivada espacial dividida pela densidade
+        # vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx
+        # mdp_x = b_x_half * mdp_x + a_x_half * vdp_x
+        # vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
+        # mdp_y = b_y_half_t * mdp_y + a_y_half_t * vdp_y
+        # dp_x = (
+        #                vdp_x / k_x_half + mdp_x) / rho_half_x
+        # dp_y = (
+        #                vdp_y / k_y_half_t + mdp_y) / rho_half_y
+
+        # Compute the second spatial derivatives
+        # vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
+        # dmdp_x = b_x * dmdp_x + a_x * vdp_xx
+        # vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
+        # dmdp_y = b_y_t * dmdp_y + a_y_t * vdp_yy
+        # v_x = vdp_xx / k_x + dmdp_x
+        # v_y = vdp_yy / k_y_t + dmdp_y
+
+        # apply the time evolution scheme
+        # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
+        # which is of course wrong (or more precisely undefined), but this does not matter because these values
+        # will be erased by the Dirichlet conditions set on these edges below
+        # p_0 = 2.0 * p_1 - p_2 + \
+        #       dt ** 2 * \
+        #       ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
+
+        # apply Dirichlet conditions at the bottom of the C-PML layers
+        # which is the right condition to implement in order for C-PML to remain stable at long times
+        # Dirichlet condition for pressure on the left boundary
+        # p_0[:, 0] = 0
+
+        # Dirichlet condition for pressure on the right boundary
+        # p_0[:, nx - 1] = 0
+
+        # Dirichlet condition for pressure on the bottom boundary
+        # p_0[0, :] = 0
+
+        # Dirichlet condition for pressure on the top boundary
+        # p_0[ny - 1, :] = 0
+
+        # print maximum of pressure and of norm of velocity
+        pressurenorm = np.max(np.abs(p_0))
+        # print(f"Passo de tempo {it} de {NSTEP} passos")
+        # print(f"Tempo: {it * dt} seconds")
+        # print(f"Valor máximo absoluto da pressão = {pressurenorm}")
+
+        # Verifica a estabilidade da simulacao
+        # if pressurenorm > STABILITY_THRESHOLD:
+        #     print("Simulacao tornando-se instável")
+        #     exit(2)
+
+        # if (it % 10) == 0:
+        #     window.imv.setImage(p_0.T, levels=[-1.0, 1.0])
+        #     App.processEvents()
+
+        # move new values to old values (the present becomes the past, the future becomes the present)
+        # p_2 = p_1
+        # p_1 = p_0
+
+    App.exit()
 
     # End of the main loop
-    # print("Simulacao terminada.")
+    print("Simulacao terminada.")
 
 
 # --------------------------
@@ -1053,7 +1109,7 @@ shader_test = f"""
 
 # Simulação completa em WEB GPU
 # def sim_webgpu():
-#     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y, a_x, nstep
+#     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y, a_x, NSTEP
 #
 #     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
 #     params_i32 = np.array([ny, nx, sens_y, sens_x, 0], dtype=np.int32)
@@ -1262,7 +1318,7 @@ shader_test = f"""
 #     window = Window()
 #
 #     # Laco de tempo para execucao da simulacao
-#     for it in range(nstep):
+#     for it in range(NSTEP):
 #         # Cria o codificador de comandos
 #         command_encoder = device.create_command_encoder()
 #
