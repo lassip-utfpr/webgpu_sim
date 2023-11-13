@@ -34,11 +34,14 @@ class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
 
 # Window class
 class Window(QMainWindow):
-    def __init__(self):
+    def __init__(self, title=None):
         super().__init__()
 
         # setting title
-        self.setWindowTitle(f"{ny}x{nx} Grid x {NSTEP} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+        if title is None:
+            self.setWindowTitle(f"{ny}x{nx} Grid x {NSTEP} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+        else:
+            self.setWindowTitle(title)
 
         # setting geometry
         # self.setGeometry(200, 50, 1600, 800)
@@ -102,14 +105,21 @@ save_results = True
 gpu_type = "NVIDIA"
 
 # Parametros da simulacao
-nx = 210  # colunas
-ny = 800  # linhas
-nz = 60   # altura
+nx = 100  # colunas
+ny = 100  # linhas
+nz = 25   # altura
 
 # Tamanho do grid (aparentemente em metros)
 dx = 4.0
 dz = dy = dx
 one_dx = one_dy = one_dz = 1.0/dx
+
+# Constantes
+PI = np.pi
+DEGREES_TO_RADIANS = PI / 180.0
+ZERO = 0.0
+HUGEVAL = 1.0e30  # Valor enorme para o maximo da pressao
+STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
 
 # flags to add PML layers to the edges of the grid
 USE_PML_XMIN = True
@@ -127,19 +137,8 @@ cp = 3000.0  # [m/s]
 cs = 2000.0  # [m/s]
 rho = 2000.0
 mu = rho * cs * cs
-lambda_ = rho * (cp * cp - 2.0 * cs *cs)
+lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
-
-# Interpolacao da densidade nos pontos intermediarios do grid (staggered grid)
-# rho_half_x = np.zeros((ny, nx), dtype=flt32)
-# rho_half_y = np.zeros((ny, nx), dtype=flt32)
-# rho_half_x[:, :-1] = 0.5 * (rho[:, 1:] + rho[:, :-1])
-# rho_half_x[:, nx - 1] = rho_half_x[:, nx - 2]
-# rho_half_y[:-1, :] = 0.5 * (rho[1:, :] + rho[:-1, :])
-# rho_half_y[ny - 1, :] = rho_half_y[ny - 2, :]
-
-# Calculo da rigidez (stiffness - Lame parameter)
-# kappa_unrelaxed = (density * cp_unrelaxed ** 2 * np.ones((ny, nx))).astype(flt32)
 
 # Numero total de passos de tempo
 NSTEP = 1000
@@ -148,14 +147,24 @@ NSTEP = 1000
 dt = 4.0e-4
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
-IT_DISPLAY = 100
+IT_DISPLAY = 10
 
 # Parametros da fonte
 f0 = 18.0  # frequencia
 t0 = 1.20 / f0  # delay
 factor = 1.0e7
-# a = math.pi ** 2 * f0 ** 2
-# t = np.arange(NSTEP) * dt
+a = PI**2 * f0**2
+t = np.arange(NSTEP) * dt
+ANGLE_FORCE = 0.0
+
+# First derivative of a Gaussian
+source_term = -(factor * 2.0 * a * (t - t0) * np.exp(-a * (t - t0)**2)).astype(flt32)
+
+# Funcao de Ricker (segunda derivada de uma gaussiana)
+# source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
+
+force_x = np.sin(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
+force_y = np.cos(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
 
 # Parametro de atenuacao
 N_SLS = 2
@@ -165,17 +174,13 @@ q_kappa_att = 20.0
 q_mu_att = 10.0
 f0_attenuation = 16  # in Hz
 
-# Funcao de Ricker (segunda derivada de uma gaussiana)
-# source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
-
 # Posicao da fonte
-isource = npoints_pml + 20
-jsource = ny / 5 + 1
-ksource = nz / 4
+isource = int(nx / 4)
+jsource = int(ny / 2)
+ksource = int(nz / 2)
 xsource = isource * dx
 ysource = jsource * dy
 zsource = ksource * dz
-angle_force = 0.0
 
 # Receptores
 NREC = 3
@@ -192,18 +197,10 @@ sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # for evolution of total energy in the medium
-epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = np.float32(0.0)
+epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 total_energy = np.zeros(NSTEP, dtype=flt32)
 total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
 total_energy_potential = np.zeros(NSTEP, dtype=flt32)
-local_energy_kinetic = local_energy_potential = np.float32(0.0)
-
-# Constantes
-PI = np.pi
-DEGREES_TO_RADIANS = PI / 180.0
-ZERO = 0.0
-HUGEVAL = 1.0e30  # Valor enorme para o maximo da pressao
-STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
 
 # Valor da potencia para calcular "d0"
 NPOWER = 2.0
@@ -565,10 +562,14 @@ def sim_cpu():
     global value_dsigmaxx_dx, value_dsigmaxy_dy, value_dsigmaxz_dz
     global memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxz_dz
     global value_dsigmaxy_dx, value_dsigmayy_dy, value_dsigmayz_dz
+    global source_term, force_x, force_y, total_energy
+    global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
 
     # Configuracao e inicializacao da janela de exibicao
-    # App = pg.QtWidgets.QApplication([])
-    # window = Window()
+    App = pg.QtWidgets.QApplication([])
+    windowVx = Window('Vx')
+    windowVy = Window('Vy')
+    windowVz = Window('Vz')
 
     DELTAT_over_rho = dt / rho
 
@@ -857,67 +858,104 @@ def sim_cpu():
 
         vz = DELTAT_over_rho * (value_dsigmaxz_dx + value_dsigmayz_dy + value_dsigmazz_dz) + vz
 
+        # add the source (force vector located at a given grid point)
+        vx[isource, jsource, ksource] += force_x[it] * dt/rho
+        vy[isource, jsource, ksource] += force_y[it] * dt/rho
 
-        # Calculo da primeira derivada espacial dividida pela densidade
-        # vdp_x[:, :-1] = (p_1[:, 1:] - p_1[:, :-1]) / dx
-        # mdp_x = b_x_half * mdp_x + a_x_half * vdp_x
-        # vdp_y[:-1, :] = (p_1[1:, :] - p_1[:-1, :]) / dy
-        # mdp_y = b_y_half_t * mdp_y + a_y_half_t * vdp_y
-        # dp_x = (
-        #                vdp_x / k_x_half + mdp_x) / rho_half_x
-        # dp_y = (
-        #                vdp_y / k_y_half_t + mdp_y) / rho_half_y
-
-        # Compute the second spatial derivatives
-        # vdp_xx[:, 1:] = (dp_x[:, 1:] - dp_x[:, :-1]) / dx
-        # dmdp_x = b_x * dmdp_x + a_x * vdp_xx
-        # vdp_yy[1:, :] = (dp_y[1:, :] - dp_y[:-1, :]) / dy
-        # dmdp_y = b_y_t * dmdp_y + a_y_t * vdp_yy
-        # v_x = vdp_xx / k_x + dmdp_x
-        # v_y = vdp_yy / k_y_t + dmdp_y
-
-        # apply the time evolution scheme
-        # we apply it everywhere, including at some points on the edges of the domain that have not be calculated above,
-        # which is of course wrong (or more precisely undefined), but this does not matter because these values
-        # will be erased by the Dirichlet conditions set on these edges below
-        # p_0 = 2.0 * p_1 - p_2 + \
-        #       dt ** 2 * \
-        #       ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
-
-        # apply Dirichlet conditions at the bottom of the C-PML layers
+        # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
-        # Dirichlet condition for pressure on the left boundary
-        # p_0[:, 0] = 0
+        # xmin
+        vx[0:1, :, :] = ZERO
+        vy[0:1, :, :] = ZERO
+        vz[0:1, :, :] = ZERO
 
-        # Dirichlet condition for pressure on the right boundary
-        # p_0[:, nx - 1] = 0
+        # xmax
+        vx[-2:-1, :, :] = ZERO
+        vy[-2:-1, :, :] = ZERO
+        vz[-2:-1, :, :] = ZERO
 
-        # Dirichlet condition for pressure on the bottom boundary
-        # p_0[0, :] = 0
+        # ymin
+        vx[:, 0:1, :] = ZERO
+        vy[:, 0:1, :] = ZERO
+        vz[:, 0:1, :] = ZERO
 
-        # Dirichlet condition for pressure on the top boundary
-        # p_0[ny - 1, :] = 0
+        # ymax
+        vx[:, -2:-1, :] = ZERO
+        vy[:, -2:-1, :] = ZERO
+        vz[:, -2:-1, :] = ZERO
 
-        # print maximum of pressure and of norm of velocity
-        # pressurenorm = np.max(np.abs(p_0))
-        # print(f"Passo de tempo {it} de {NSTEP} passos")
-        # print(f"Tempo: {it * dt} seconds")
-        # print(f"Valor máximo absoluto da pressão = {pressurenorm}")
+        # zmin
+        vx[:, :, 0:1] = ZERO
+        vy[:, :, 0:1] = ZERO
+        vz[:, :, 0:1] = ZERO
+
+        # zmax
+        vx[:, :, -2:-1] = ZERO
+        vy[:, :, -2:-1] = ZERO
+        vz[:, :, -2:-1] = ZERO
+
+        # Store seismograms
+        for _irec in range(NREC):
+            sisvx[it, _irec] = vx[ix_rec[_irec], iy_rec[_irec], ksource]
+            sisvy[it, _irec] = vy[ix_rec[_irec], iy_rec[_irec], ksource]
+
+        # Compute total energy in the medium (without the PML layers)
+        imin = npoints_pml
+        imax = nx - npoints_pml + 1
+        jmin = npoints_pml
+        jmax = ny - npoints_pml + 1
+        kmin = npoints_pml
+        kmax = nz - npoints_pml + 1
+
+        v_solid_norm_2 = (np.sum(vx[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+                          np.sum(vy[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+                          np.sum(vz[imin: imax, jmin: jmax, kmin: kmax] ** 2))
+        local_energy_kinetic = 0.5 * rho * v_solid_norm_2
+
+        # compute total field from split components
+        epsilon_xx[imin: imax, jmin: jmax, kmin: kmax] =(
+                (2.0 * (lambda_ + mu) * sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmazz[imin: imax, jmin: jmax, kmin: kmax])/(2.0 * mu * (3.0 * lambda_ + 2.0 * mu)))
+        epsilon_yy[imin: imax, jmin: jmax, kmin: kmax] =(
+                (2.0 * (lambda_ + mu) * sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmazz[imin: imax, jmin: jmax, kmin: kmax])/(2.0 * mu * (3.0 * lambda_ + 2.0 * mu)))
+        epsilon_zz[imin: imax, jmin: jmax, kmin: kmax] =(
+                (2.0 * (lambda_ + mu) * sigmazz[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+                 lambda_ * sigmayy[imin: imax, jmin: jmax, kmin: kmax])/(2.0 * mu * (3.0 * lambda_ + 2.0 * mu)))
+        epsilon_xy[imin: imax, jmin: jmax, kmin: kmax] = sigmaxy_r[imin: imax, jmin: jmax, kmin: kmax]/(2.0 * mu)
+        epsilon_xz[imin: imax, jmin: jmax, kmin: kmax] = sigmaxz_r[imin: imax, jmin: jmax, kmin: kmax]/(2.0 * mu)
+        epsilon_yz[imin: imax, jmin: jmax, kmin: kmax] = sigmayz_r[imin: imax, jmin: jmax, kmin: kmax]/(2.0 * mu)
+
+        local_energy_potential = 0.5 * np.sum(epsilon_xx * sigmaxx_r +
+                                              epsilon_yy * sigmayy_r +
+                                              epsilon_zz * sigmazz_r +
+                                              2.0 * epsilon_xy * sigmaxy_r +
+                                              2.0 * epsilon_xz * sigmaxz_r +
+                                              2.0 * epsilon_yz * sigmayz_r)
+
+        total_energy[it] = local_energy_kinetic + local_energy_potential
+
+        if (it % IT_DISPLAY) == 0 or it == 5:
+            print(f'Time step # {it} out of {NSTEP}')
+            print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
+            print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
+            print(f'Max norm velocity vector V (m/s) = {np.sqrt(v_solid_norm_2)}')
+            print(f'Total energy = {total_energy[it]}')
+
+        windowVx.imv.setImage(vx[:, :, ksource].T, levels=[-1.0, 1.0])
+        windowVy.imv.setImage(vy[:, :, ksource].T, levels=[-1.0, 1.0])
+        windowVz.imv.setImage(vz[:, :, ksource].T, levels=[-1.0, 1.0])
+        App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        # if pressurenorm > STABILITY_THRESHOLD:
-        #     print("Simulacao tornando-se instável")
-        #     exit(2)
+        if np.sqrt(v_solid_norm_2) > STABILITY_THRESHOLD:
+            print("Simulacao tornando-se instável")
+            exit(2)
 
-        # if (it % 10) == 0:
-        #     window.imv.setImage(p_0.T, levels=[-1.0, 1.0])
-        #     App.processEvents()
-
-        # move new values to old values (the present becomes the past, the future becomes the present)
-        # p_2 = p_1
-        # p_1 = p_0
-
-    # App.exit()
+    App.exit()
 
     # End of the main loop
     print("Simulacao terminada.")
