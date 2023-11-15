@@ -105,9 +105,9 @@ save_results = True
 gpu_type = "NVIDIA"
 
 # Parametros da simulacao
-nx = 100  # colunas
-ny = 100  # linhas
-nz = 25   # altura
+nx = 70  # colunas
+ny = 70  # linhas
+nz = 24   # altura
 
 # Tamanho do grid (aparentemente em metros)
 dx = 4.0
@@ -184,12 +184,12 @@ zsource = ksource * dz
 
 # Receptores
 NREC = 3
-xdeb = xsource - 100.0  # em unidade de distancia
-ydeb = 2300.0  # em unidade de distancia
-xfin = xsource
-yfin = 300.0
-xrec = xsource + np.array([500.0, 0.0, 500.0])
-yrec = ysource + np.array([500.0, 2260.0, 2260.0])
+# xdeb = xsource - 100.0  # em unidade de distancia
+# ydeb = 2300.0  # em unidade de distancia
+# xfin = xsource
+# yfin = 300.0
+xrec = xsource + np.array([40.0, 0.0, 40.0])
+yrec = ysource + np.array([40.0, 100.0, 100.0])
 # sens_x = int(xdeb / dx) + 1
 # sens_y = int(ydeb / dy) + 1
 # sensor = np.zeros(NSTEP, dtype=flt32)  # buffer para sinal do sensor
@@ -569,12 +569,12 @@ def sim_cpu():
     App = pg.QtWidgets.QApplication([])
     windowVx = Window('Vx')
     windowVy = Window('Vy')
-    windowVz = Window('Vz')
+    # windowVz = Window('Vz')
 
     DELTAT_over_rho = dt / rho
 
     # Inicio do laco de tempo
-    for it in range(NSTEP):
+    for it in range(1, NSTEP+1):
         print(f'it = {it}')
 
         # Calculo do stress sigma
@@ -859,8 +859,8 @@ def sim_cpu():
         vz = DELTAT_over_rho * (value_dsigmaxz_dx + value_dsigmayz_dy + value_dsigmazz_dz) + vz
 
         # add the source (force vector located at a given grid point)
-        vx[isource, jsource, ksource] += force_x[it] * dt/rho
-        vy[isource, jsource, ksource] += force_y[it] * dt/rho
+        vx[isource, jsource, ksource] += force_x[it - 1] * dt/rho
+        vy[isource, jsource, ksource] += force_y[it - 1] * dt/rho
 
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
@@ -896,8 +896,8 @@ def sim_cpu():
 
         # Store seismograms
         for _irec in range(NREC):
-            sisvx[it, _irec] = vx[ix_rec[_irec], iy_rec[_irec], ksource]
-            sisvy[it, _irec] = vy[ix_rec[_irec], iy_rec[_irec], ksource]
+            sisvx[it - 1, _irec] = vx[ix_rec[_irec], iy_rec[_irec], ksource]
+            sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], ksource]
 
         # Compute total energy in the medium (without the PML layers)
         imin = npoints_pml
@@ -907,10 +907,9 @@ def sim_cpu():
         kmin = npoints_pml
         kmax = nz - npoints_pml + 1
 
-        v_solid_norm_2 = (np.sum(vx[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
-                          np.sum(vy[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
-                          np.sum(vz[imin: imax, jmin: jmax, kmin: kmax] ** 2))
-        local_energy_kinetic = 0.5 * rho * v_solid_norm_2
+        local_energy_kinetic = 0.5 * rho * (np.sum(vx[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+                                            np.sum(vy[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+                                            np.sum(vz[imin: imax, jmin: jmax, kmin: kmax] ** 2))
 
         # compute total field from split components
         epsilon_xx[imin: imax, jmin: jmax, kmin: kmax] =(
@@ -936,22 +935,25 @@ def sim_cpu():
                                               2.0 * epsilon_xz * sigmaxz_r +
                                               2.0 * epsilon_yz * sigmayz_r)
 
-        total_energy[it] = local_energy_kinetic + local_energy_potential
+        total_energy[it - 1] = local_energy_kinetic + local_energy_potential
 
+        v_solid_norm = np.max(np.sqrt(vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             print(f'Time step # {it} out of {NSTEP}')
             print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
             print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
-            print(f'Max norm velocity vector V (m/s) = {np.sqrt(v_solid_norm_2)}')
-            print(f'Total energy = {total_energy[it]}')
+            print(f'Max norm velocity vector V (m/s) = {v_solid_norm}')
+            print(f'Total energy = {total_energy[it - 1]}')
 
-        windowVx.imv.setImage(vx[:, :, ksource].T, levels=[-1.0, 1.0])
-        windowVy.imv.setImage(vy[:, :, ksource].T, levels=[-1.0, 1.0])
-        windowVz.imv.setImage(vz[:, :, ksource].T, levels=[-1.0, 1.0])
+        windowVx.imv.setImage(vx[:, :, ksource], levels=[-0.5, 0.5])
+        # windowVx.imv.setImage(vx[:, :, ksource], levels=[np.min(vx), np.max(vx)])
+        windowVy.imv.setImage(vy[:, :, ksource], levels=[-6.0, 6.0])
+        # windowVy.imv.setImage(vy[:, :, ksource], levels=[np.min(vy), np.max(vy)])
+        # windowVz.imv.setImage(vz[:, :, ksource], levels=[-1.0, 1.0])
         App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if np.sqrt(v_solid_norm_2) > STABILITY_THRESHOLD:
+        if v_solid_norm > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
