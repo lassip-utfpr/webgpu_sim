@@ -533,10 +533,10 @@ for irec in range(NREC):
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
 courant_number = cp * math.sqrt(taumax) * dt * math.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
-print(f'Numero de Courant é {courant_number}')
+print(f'Numero de Courant e {courant_number}')
 print(f'Vpmax = {cp * math.sqrt(taumax)}')
 if courant_number > 1:
-    print("O passo de tempo é muito longo, a simulação será instável")
+    print("O passo de tempo e muito longo, a simulação sera instavel")
     exit(1)
 print(f'Number of points per wavelength = {cs * math.sqrt(taumin)/(2.5 * f0)/dx}, Vsmin = {cs * math.sqrt(taumin)}')
 
@@ -577,7 +577,8 @@ def sim_cpu():
     for it in range(1, NSTEP+1):
         print(f'it = {it}')
 
-        # Calculo do stress sigma
+        # Calculo da tensao [stress] - {sigma} (equivalente a pressao nos gases-liquidos)
+        # sigma_ii -> tensoes normais; sigma_ij -> tensoes cisalhantes
         # Primeiro "laco" i: 1,NX-1; j: 2,NY; k: 2,NZ -> [1:-2, 2:-1, 2:-1]
         mul_relaxed = np.float32(mu)
         lambdal_relaxed = np.float32(lambda_)
@@ -655,7 +656,7 @@ def sim_cpu():
         Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv)
         e22[1] = Unp1
 
-        # add the memory variables using the relaxed parameters(Carcione page 111)
+        # add the memory variables using the relaxed parameters (Carcione page 111)
         # : there is a bug in Carcione's equation for sigma_zz
         sigmaxx = sigmaxx + dt * ((lambdal_relaxed + 2.0/3.0 * mul_relaxed) * (e1[0] + e1[1]) +
                                   2.0 * mul_relaxed * (e11[0] + e11[1]))
