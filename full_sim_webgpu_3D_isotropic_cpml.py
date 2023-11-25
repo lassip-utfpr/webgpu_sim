@@ -47,13 +47,13 @@ class Window(QMainWindow):
 
         # setting geometry
         # self.setGeometry(200, 50, 1600, 800)
-        self.setGeometry(200, 50, 500, 500)
+        self.setGeometry(200, 50, 300, 300)
 
         # setting animation
         self.isAnimated()
 
         # setting image
-        self.image = np.random.normal(size=(500, 500))
+        self.image = np.random.normal(size=(300, 300))
 
         # showing all the widgets
         self.show()
@@ -97,9 +97,9 @@ save_results = True
 gpu_type = "NVIDIA"
 
 # Parametros da simulacao
-nx = 70  # colunas
-ny = 70  # linhas
-nz = 24  # altura
+nx = 100  # colunas
+ny = 100  # linhas
+nz = 100  # altura
 
 # Tamanho do grid (aparentemente em metros)
 dx = 4.0
@@ -139,7 +139,7 @@ NSTEP = 1000
 dt = 4.0e-4
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
-IT_DISPLAY = 10
+IT_DISPLAY = 50
 
 # Parametros da fonte
 f0 = 18.0  # frequencia
@@ -162,6 +162,7 @@ force_y = np.cos(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
 isource = int(nx / 2)
 jsource = int(ny / 2)
 ksource = int(nz / 2)
+# ksource = npoints_pml + 1
 xsource = isource * dx
 ysource = jsource * dy
 zsource = ksource * dz
@@ -172,13 +173,15 @@ NREC = 3
 # ydeb = 2300.0  # em unidade de distancia
 # xfin = xsource
 # yfin = 300.0
-xrec = xsource + np.array([40.0, 0.0, 40.0])
-yrec = ysource + np.array([40.0, 100.0, 100.0])
+xrec = xsource + np.array([-10, 0, 10]) * dx
+yrec = ysource + np.array([10, 25, 25]) * dy
+krec = int(nz / 2)
 # sens_x = int(xdeb / dx) + 1
 # sens_y = int(ydeb / dy) + 1
 # sensor = np.zeros(NSTEP, dtype=flt32)  # buffer para sinal do sensor
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
+sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # for evolution of total energy in the medium
 epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = np.zeros((nx + 2, ny + 2, nz + 2),
@@ -470,7 +473,7 @@ def sim_cpu():
     global memory_dsigmaxy_dx, memory_dsigmaxy_dy
     global memory_dsigmaxz_dx, memory_dsigmaxz_dz
     global memory_dsigmayz_dy, memory_dsigmayz_dz
-    global sisvx, sisvy
+    global sisvx, sisvy, sisvz
     global total_energy, total_energy_kinetic, total_energy_potential
     global value_dvx_dx, value_dvy_dy, value_dvz_dz
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
@@ -484,14 +487,23 @@ def sim_cpu():
 
     # Configuracao e inicializacao da janela de exibicao
     App = pg.QtWidgets.QApplication([])
-    windowVx = Window('Vx')
-    windowVy = Window('Vy')
-    # windowVz = Window('Vz')
+    windowVx_XY = Window('Vx - Plano XY')
+    windowVy_XY = Window('Vy - Plano XY')
+    windowVz_XY = Window('Vz - Plano XY')
+    windowVx_XZ = Window('Vx - Plano XZ')
+    windowVy_XZ = Window('Vy - Plano XZ')
+    windowVz_XZ = Window('Vz - Plano XZ')
+    windowVx_YZ = Window('Vx - Plano YZ')
+    windowVy_YZ = Window('Vy - Plano YZ')
+    windowVz_YZ = Window('Vz - Plano YZ')
+    # windowVxVy = Window('Vx + Vy')
 
     DELTAT_over_rho = dt / rho
     two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
     denom = np.float32(2.0 * mu * (3.0 * lambda_ + 2.0 * mu))
 
+    v_min = -0.01
+    v_max = - v_min
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
         print(f'it = {it}')
@@ -658,8 +670,11 @@ def sim_cpu():
         vz = DELTAT_over_rho * (value_dsigmaxz_dx + value_dsigmayz_dy + value_dsigmazz_dz) + vz
 
         # add the source (force vector located at a given grid point)
-        vx[isource, jsource, ksource] += force_x[it - 1] * dt / rho
-        vy[isource, jsource, ksource] += force_y[it - 1] * dt / rho
+        # vx[isource, jsource, ksource] += force_x[it - 1] * dt / rho
+        # vy[isource, jsource, ksource] += force_y[it - 1] * dt / rho
+        # vx[isource, jsource, ksource] += source_term[it - 1] * dt / rho
+        # vy[isource, jsource, ksource] += source_term[it - 1] * dt / rho
+        vz[isource, jsource, ksource] += source_term[it - 1] * dt / rho
 
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
@@ -695,8 +710,9 @@ def sim_cpu():
 
         # Store seismograms
         for _irec in range(NREC):
-            sisvx[it - 1, _irec] = vx[ix_rec[_irec], iy_rec[_irec], ksource]
-            sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], ksource]
+            sisvx[it - 1, _irec] = vx[ix_rec[_irec], iy_rec[_irec], krec]
+            sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], krec]
+            sisvz[it - 1, _irec] = vz[ix_rec[_irec], iy_rec[_irec], krec]
 
         # Compute total energy in the medium (without the PML layers)
         imin = npoints_pml
@@ -745,11 +761,16 @@ def sim_cpu():
             print(f'Max norm velocity vector V (m/s) = {v_solid_norm}')
             print(f'Total energy = {total_energy[it - 1]}')
 
-        windowVx.imv.setImage(vx[:, :, ksource], levels=[-0.5, 0.5])
-        # windowVx.imv.setImage(vx[:, :, ksource], levels=[np.min(vx), np.max(vx)])
-        windowVy.imv.setImage(vy[:, :, ksource], levels=[-6.0, 6.0])
-        # windowVy.imv.setImage(vy[:, :, ksource], levels=[np.min(vy), np.max(vy)])
-        # windowVz.imv.setImage(vz[:, :, ksource], levels=[-1.0, 1.0])
+        windowVx_XY.imv.setImage(vx[:, :, krec], levels=[v_min/10.0, v_max/10.0])
+        windowVy_XY.imv.setImage(vy[:, :, krec], levels=[v_min/10.0, v_max/10.0])
+        windowVz_XY.imv.setImage(vz[:, :, krec], levels=[v_min, v_max])
+        windowVx_XZ.imv.setImage(vx[:, jsource, :], levels=[v_min, v_max])
+        windowVy_XZ.imv.setImage(vy[:, jsource, :], levels=[v_min/10.0, v_max/10.0])
+        windowVz_XZ.imv.setImage(vz[:, jsource, :], levels=[v_min, v_max])
+        windowVx_YZ.imv.setImage(vx[isource, :, :], levels=[v_min/10.0, v_max/10.0])
+        windowVy_YZ.imv.setImage(vy[isource, :, :], levels=[v_min, v_max])
+        windowVz_YZ.imv.setImage(vz[isource, :, :], levels=[v_min, v_max])
+        # windowVxVy.imv.setImage(vx[:, :, krec] + vy[:, :, krec], levels=[-2.0, 2.0])
         App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -1488,12 +1509,15 @@ if do_sim_cpu:
         print(f'{times_cpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        for _irec in range(NREC):
-            fig, ax = plt.subplots(3)
-            fig.suptitle(f'Receptor {_irec + 1}')
-            ax[0].plot(sisvx[:, _irec])
-            ax[1].plot(sisvy[:, _irec])
-            ax[2].plot(sisvx[:, _irec] + sisvy[:, _irec])
+        for irec in range(NREC):
+            fig, ax = plt.subplots(3, sharex=True, sharey=True)
+            fig.suptitle(f'Receptor {irec + 1}')
+            ax[0].plot(sisvx[:, irec])
+            ax[0].set_title(r'$V_x$')
+            ax[1].plot(sisvy[:, irec])
+            ax[1].set_title(r'$V_y$')
+            ax[2].plot(sisvx[:, irec] + sisvy[:, irec], 'tab:orange')
+            ax[2].set_title(r'$V_x + V_y$')
 
         plt.show()
 
