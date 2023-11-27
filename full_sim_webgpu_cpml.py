@@ -80,7 +80,7 @@ class Window(QMainWindow):
 
 # Parametros dos ensaios
 flt32 = np.float32
-n_iter_gpu = 1
+n_iter_gpu = 0
 n_iter_cpu = 1
 do_sim_gpu = True
 do_sim_cpu = True
