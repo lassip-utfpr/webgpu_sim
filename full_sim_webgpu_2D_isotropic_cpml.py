@@ -97,8 +97,8 @@ save_results = True
 gpu_type = "NVIDIA"
 
 # Parametros da simulacao
-nx = 300  # colunas
-ny = 300  # linhas
+nx = 301  # colunas
+ny = 301  # linhas
 
 # Tamanho do grid (aparentemente em metros)
 dx = 10.0
@@ -130,7 +130,7 @@ lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
 
 # Numero total de passos de tempo
-NSTEP = 2000
+NSTEP = 1200
 
 # Passo de tempo em segundos
 dt = 1.0e-3
@@ -191,14 +191,14 @@ ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
 # Escolha do valor de wsx (GPU)
 wsx = 1
 for n in range(15, 0, -1):
-    if (ny % n) == 0:
+    if (nx % n) == 0:
         wsx = n  # workgroup x size
         break
 
 # Escolha do valor de wsy (GPU)
 wsy = 1
 for n in range(15, 0, -1):
-    if (nx % n) == 0:
+    if (ny % n) == 0:
         wsy = n  # workgroup x size
         break
 
@@ -261,7 +261,7 @@ print(f'd0_y = {d0_y}')
 x_orig_left = thickness_pml_x
 x_orig_right = (nx - 1) * dx - thickness_pml_x
 
-# Perfil de amortecimento na direcao "x" dentro do grid
+# Perfil de amortecimento na direcao "x" dentro do grid de pressao
 i = np.arange(nx)
 xval = dx * i
 xval_pml_left = x_orig_left - xval
@@ -295,8 +295,8 @@ d_x_half = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=1)
 k_x_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=1)
 alpha_x_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32), axis=1)
 b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
-i = np.where(d_x_half > 1e-6)
 a_x_half = np.zeros((nx, 1), dtype=flt32)
+i = np.where(d_x_half > 1e-6)
 a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
 
 # Amortecimento na direcao "y" (vertical)
@@ -320,8 +320,8 @@ d_y = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=0)
 k_y = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=0)
 alpha_y = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask, y_norm, 1.0))).astype(flt32), axis=0)
 b_y = np.exp(-(d_y / k_y + alpha_y) * dt).astype(flt32)
-j = np.where(d_y > 1e-6)
 a_y = np.zeros((1, ny), dtype=flt32)
+j = np.where(d_y > 1e-6)
 a_y[j] = d_y[j] * (b_y[j] - 1.0) / (k_y[j] * (d_y[j] + k_y[j] * alpha_y[j]))
 
 # Perfil de amortecimento na direcao "y" dentro do meio grid (staggered grid)
@@ -338,8 +338,8 @@ d_y_half = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=0)
 k_y_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=0)
 alpha_y_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask_half, y_norm, 1.0))).astype(flt32), axis=0)
 b_y_half = np.exp(-(d_y_half / k_y_half + alpha_y_half) * dt).astype(flt32)
-j = np.where(d_y_half > 1e-6)
 a_y_half = np.zeros((1, ny), dtype=flt32)
+j = np.where(d_y_half > 1e-6)
 a_y_half[j] = d_y_half[j] * (b_y_half[j] - 1.0) / (k_y_half[j] * (d_y_half[j] + k_y_half[j] * alpha_y_half[j]))
 
 # Imprime a posicao da fonte
@@ -395,7 +395,9 @@ def sim_cpu():
     # Configuracao e inicializacao da janela de exibicao
     App = pg.QtWidgets.QApplication([])
     windowVx = Window('Vx')
+    windowVx.setGeometry(200, 50, vx.shape[0], vx.shape[1])
     windowVy = Window('Vy')
+    windowVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
 
     DELTAT_over_rho = dt / rho
     two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
@@ -417,11 +419,11 @@ def sim_cpu():
 
         memory_dvx_dx[1:-2, 2:-1] = (b_x_half[:-1, :] * memory_dvx_dx[1:-2, 2:-1] +
                                      a_x_half[:-1, :] * value_dvx_dx[1:-2, 2:-1])
-        memory_dvy_dy[1:-2, 2:-1] = (b_y[:, -1] * memory_dvy_dy[1:-2, 2:-1] +
-                                     a_y[:, -1] * value_dvy_dy[1:-2, 2:-1])
+        memory_dvy_dy[1:-2, 2:-1] = (b_y[:, 1:] * memory_dvy_dy[1:-2, 2:-1] +
+                                     a_y[:, 1:] * value_dvy_dy[1:-2, 2:-1])
 
         value_dvx_dx[1:-2, 2:-1] = value_dvx_dx[1:-2, 2:-1] / k_x_half[:-1, :] + memory_dvx_dx[1:-2, 2:-1]
-        value_dvy_dy[1:-2, 2:-1] = value_dvy_dy[1:-2, 2:-1] / k_y[:, :-1] + memory_dvy_dy[1:-2, 2:-1]
+        value_dvy_dy[1:-2, 2:-1] = value_dvy_dy[1:-2, 2:-1] / k_y[:, 1:] + memory_dvy_dy[1:-2, 2:-1]
 
         # compute the stress using the Lame parameters
         sigmaxx = sigmaxx + (lambdaplus2mu * value_dvx_dx + lambda_ * value_dvy_dy) * dt
@@ -433,12 +435,12 @@ def sim_cpu():
         value_dvx_dy[2:-1, 1:-2] = ((27.0 * (vx[2:-1, 2:-1] - vx[2:-1, 1:-2]) - vx[2:-1, 3:] + vx[2:-1, :-3]) *
                                     one_dy / 24.0)
 
-        memory_dvy_dx[2:-1, 1:-2] = (b_x[:-1, :] * memory_dvy_dx[2:-1, 1:-2] +
-                                     a_x[:-1, :] * value_dvy_dx[2:-1, 1:-2])
+        memory_dvy_dx[2:-1, 1:-2] = (b_x[1:, :] * memory_dvy_dx[2:-1, 1:-2] +
+                                     a_x[1:, :] * value_dvy_dx[2:-1, 1:-2])
         memory_dvx_dy[2:-1, 1:-2] = (b_y_half[:, :-1] * memory_dvx_dy[2:-1, 1:-2] +
                                      a_y_half[:, :-1] * value_dvx_dy[2:-1, 1:-2])
 
-        value_dvy_dx[2:-1, 1:-2] = value_dvy_dx[2:-1, 1:-2] / k_x[:-1, :] + memory_dvy_dx[2:-1, 1:-2]
+        value_dvy_dx[2:-1, 1:-2] = value_dvy_dx[2:-1, 1:-2] / k_x[1:, :] + memory_dvy_dx[2:-1, 1:-2]
         value_dvx_dy[2:-1, 1:-2] = value_dvx_dy[2:-1, 1:-2] / k_y_half[:, :-1] + memory_dvx_dy[2:-1, 1:-2]
 
         # compute the stress using the Lame parameters
@@ -451,13 +453,13 @@ def sim_cpu():
         value_dsigmaxy_dy[2:-1, 2:-1] = (27.0 * (sigmaxy[2:-1, 2:-1] - sigmaxy[2:-1, 1:-2]) -
                                          sigmaxy[2:-1, 3:] + sigmaxy[2:-1, :-3]) * one_dy / 24.0
 
-        memory_dsigmaxx_dx[2:-1, 2:-1] = (b_x[:-1, :] * memory_dsigmaxx_dx[2:-1, 2:-1] +
-                                          a_x[:-1, :] * value_dsigmaxx_dx[2:-1, 2:-1])
-        memory_dsigmaxy_dy[2:-1, 2:-1] = (b_y[:, :-1] * memory_dsigmaxy_dy[2:-1, 2:-1] +
-                                          a_y[:, :-1] * value_dsigmaxy_dy[2:-1, 2:-1])
+        memory_dsigmaxx_dx[2:-1, 2:-1] = (b_x[1:, :] * memory_dsigmaxx_dx[2:-1, 2:-1] +
+                                          a_x[1:, :] * value_dsigmaxx_dx[2:-1, 2:-1])
+        memory_dsigmaxy_dy[2:-1, 2:-1] = (b_y[:, 1:] * memory_dsigmaxy_dy[2:-1, 2:-1] +
+                                          a_y[:, 1:] * value_dsigmaxy_dy[2:-1, 2:-1])
 
-        value_dsigmaxx_dx[2:-1, 2:-1] = value_dsigmaxx_dx[2:-1, 2:-1] / k_x[:-1, :] + memory_dsigmaxx_dx[2:-1, 2:-1]
-        value_dsigmaxy_dy[2:-1, 2:-1] = value_dsigmaxy_dy[2:-1, 2:-1] / k_y[:, :-1] + memory_dsigmaxy_dy[2:-1, 2:-1]
+        value_dsigmaxx_dx[2:-1, 2:-1] = value_dsigmaxx_dx[2:-1, 2:-1] / k_x[1:, :] + memory_dsigmaxx_dx[2:-1, 2:-1]
+        value_dsigmaxy_dy[2:-1, 2:-1] = value_dsigmaxy_dy[2:-1, 2:-1] / k_y[:, 1:] + memory_dsigmaxy_dy[2:-1, 2:-1]
 
         vx = DELTAT_over_rho * (value_dsigmaxx_dx + value_dsigmaxy_dy) + vx
 
@@ -486,20 +488,20 @@ def sim_cpu():
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[0:1, :] = ZERO
-        vy[0:1, :] = ZERO
+        vx[:2, :] = ZERO
+        vy[:2, :] = ZERO
 
         # xmax
-        vx[-2:-1, :] = ZERO
-        vy[-2:-1, :] = ZERO
+        vx[-2:, :] = ZERO
+        vy[-2:, :] = ZERO
 
         # ymin
-        vx[:, 0:1] = ZERO
-        vy[:, 0:1] = ZERO
+        vx[:, :2] = ZERO
+        vy[:, :2] = ZERO
 
         # ymax
-        vx[:, -2:-1] = ZERO
-        vy[:, -2:-1] = ZERO
+        vx[:, -2:] = ZERO
+        vy[:, -2:] = ZERO
 
         # Store seismograms
         for _irec in range(NREC):
@@ -535,7 +537,7 @@ def sim_cpu():
 
         windowVx.imv.setImage(vx[:, :], levels=[v_min/1.0, v_max/1.0])
         windowVy.imv.setImage(vy[:, :], levels=[v_min/1.0, v_max/1.0])
-        # windowVxVy.imv.setImage(vx[:, :, krec] + vy[:, :, krec], levels=[-2.0, 2.0])
+        # windowVxVy.imv.setImage(vx[:, :] + vy[:, :], levels=[2.0 * v_min / 1.0, 2.0 * v_max / 1.0])
         App.processEvents()
 
         # Verifica a estabilidade da simulacao

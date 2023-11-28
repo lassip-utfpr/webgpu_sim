@@ -34,11 +34,14 @@ class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
 
 # Window class
 class Window(QMainWindow):
-    def __init__(self):
+    def __init__(self, title=None):
         super().__init__()
 
         # setting title
-        self.setWindowTitle(f"{ny}x{nx} Grid x {nstep} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+        if title is None:
+            self.setWindowTitle(f"{ny}x{nx} Grid x {nstep} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+        else:
+            self.setWindowTitle(title)
 
         # setting geometry
         # self.setGeometry(200, 50, 1600, 800)
