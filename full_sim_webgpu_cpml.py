@@ -1,4 +1,6 @@
 import math
+
+import matplotlib.pyplot as plt
 import wgpu.backends.rs  # Select backend
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
@@ -229,8 +231,8 @@ d_x = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=1)
 k_x = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=1)
 alpha_x = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32), axis=1)
 b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-i = np.where(d_x > 1e-6)
 a_x = np.zeros((nx, 1), dtype=flt32)
+i = np.where(d_x > 1e-6)
 a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
 
 # Perfil de amortecimento na direcao "x" dentro do meio grid de pressao (staggered grid)
@@ -246,7 +248,7 @@ x_norm = x_pml / thickness_pml_x
 d_x_half = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=1)
 k_x_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=1)
 alpha_x_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32), axis=1)
-b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt)
+b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
 a_x_half = np.zeros((nx, 1), dtype=flt32)
 i = np.where(d_x_half > 1e-6)
 a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
@@ -402,7 +404,7 @@ shader_test = f"""
         y_sens: i32,        // y sensor
         k: i32              // iteraction
     }};
-    
+
     struct SimFltValues {{
         cp_unrelaxed: f32,  // sound speed
         dx: f32,            // delta x
@@ -416,16 +418,16 @@ shader_test = f"""
 
     @group(0) @binding(1) // source term
     var<storage,read> src: array<f32>;
-    
+
     @group(0) @binding(2) // kronecker_src, rho_half_x, rho_half_y, kappa
     var<storage,read> img_params: array<f32>;
 
     @group(0) @binding(3) // a_x, b_x, k_x, a_x_h, b_x_h, k_x_h
     var<storage,read> coef_x: array<f32>;
-    
+
     @group(0) @binding(4) // a_y, b_y, k_y, a_y_h, b_y_h, k_y_h
     var<storage,read> coef_y: array<f32>;
-    
+
     @group(0) @binding(5) // param_int32
     var<storage,read_write> sim_int_par: SimIntValues;
 
@@ -452,135 +454,135 @@ shader_test = f"""
 
         return select(-1, index, x >= 0 && x < sim_int_par.x_sz && y >= 0 && y < sim_int_par.y_sz);
     }}
-    
+
     // function to convert 2D [i,j] index into 1D [] index
     fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {{
         let index = j + i * j_max;
 
         return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
     }}
-    
+
     // function to convert 3D [i,j,k] index into 1D [] index
     fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {{
         let index = j + i * j_max + k * j_max * i_max;
 
         return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
     }}
-    
+
     // function to get a kappa array value
     fn get_kappa(i: i32, j: i32) -> f32 {{
         let index: i32 = ijk(i, j, 3, sim_int_par.x_sz, sim_int_par.y_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
-    
+
     // function to get a kronecker_src array value
     fn get_kronecker_src(i: i32, j: i32) -> f32 {{
         let index: i32 = ijk(i, j, 0, sim_int_par.x_sz, sim_int_par.y_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
-    
+
     // function to get a rho_h_x array value
     fn get_rho_h_x(i: i32, j: i32) -> f32 {{
         let index: i32 = ijk(i, j, 1, sim_int_par.x_sz, sim_int_par.y_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
-    
+
     // function to get a rho_h_y array value
     fn get_rho_h_y(i: i32, j: i32) -> f32 {{
         let index: i32 = ijk(i, j, 2, sim_int_par.x_sz, sim_int_par.y_sz, 4);
 
         return select(0.0, img_params[index], index != -1);
     }}
-    
+
     // function to get a src array value
     fn get_src(n: i32) -> f32 {{
         return select(0.0, src[n], n >= 0);
     }}
-    
+
     // function to get a a_x array value
     fn get_a_x(n: i32) -> f32 {{
         let index: i32 = ij(n, 0, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a b_x array value
     fn get_b_x(n: i32) -> f32 {{
         let index: i32 = ij(n, 1, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a k_x array value
     fn get_k_x(n: i32) -> f32 {{
         let index: i32 = ij(n, 2, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a a_y array value
     fn get_a_y(n: i32) -> f32 {{
         let index: i32 = ij(0, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
-    
+
     // function to get a b_y array value
     fn get_b_y(n: i32) -> f32 {{
         let index: i32 = ij(1, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
-    
+
     // function to get a k_y array value
     fn get_k_y(n: i32) -> f32 {{
         let index: i32 = ij(2, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
-    
+
     // function to get a a_x_h array value
     fn get_a_x_h(n: i32) -> f32 {{
         let index: i32 = ij(n, 3, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a b_x_h array value
     fn get_b_x_h(n: i32) -> f32 {{
         let index: i32 = ij(n, 4, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a k_x_h array value
     fn get_k_x_h(n: i32) -> f32 {{
         let index: i32 = ij(n, 5, sim_int_par.x_sz, 6);
-        
+
         return select(0.0, coef_x[index], index != -1);
     }}
-    
+
     // function to get a a_y_h array value
     fn get_a_y_h(n: i32) -> f32 {{
         let index: i32 = ij(3, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
-    
+
     // function to get a b_y_h array value
     fn get_b_y_h(n: i32) -> f32 {{
         let index: i32 = ij(4, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
-    
+
     // function to get a k_y_h array value
     fn get_k_y_h(n: i32) -> f32 {{
         let index: i32 = ij(5, n, 6, sim_int_par.y_sz);
-        
+
         return select(0.0, coef_y[index], index != -1);
     }}
 
@@ -631,7 +633,7 @@ shader_test = f"""
             pr_fields[index] = val;
         }}
     }}
-    
+
     // function to get an v_x array value
     fn get_v_x(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -647,7 +649,7 @@ shader_test = f"""
             der_x[index] = val;
         }}
     }}
-    
+
     // function to get an v_y array value
     fn get_v_y(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -663,7 +665,7 @@ shader_test = f"""
             der_y[index] = val;
         }}
     }}
-    
+
     // function to get an mdp_x array value
     fn get_mdp_x(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -679,7 +681,7 @@ shader_test = f"""
             der_x[index] = val;
         }}
     }}
-    
+
     // function to get an mdp_y array value
     fn get_mdp_y(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -695,7 +697,7 @@ shader_test = f"""
             der_y[index] = val;
         }}
     }}
-    
+
     // function to get an dp_x array value
     fn get_dp_x(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -711,7 +713,7 @@ shader_test = f"""
             der_x[index] = val;
         }}
     }}
-    
+
     // function to get an dp_y array value
     fn get_dp_y(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -727,7 +729,7 @@ shader_test = f"""
             der_y[index] = val;
         }}
     }}
-    
+
     // function to get an dmdp_x array value
     fn get_dmdp_x(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -743,7 +745,7 @@ shader_test = f"""
             der_x[index] = val;
         }}
     }}
-    
+
     // function to get an dmdp_y array value
     fn get_dmdp_y(x: i32, y: i32) -> f32 {{
         let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 4);
@@ -768,7 +770,7 @@ shader_test = f"""
         let y: i32 = i32(index.y);          // y thread index
         var vdp_x: f32 = 0.0;
         var vdp_y: f32 = 0.0;
-        
+
         // Calcula a primeira derivada espacial dividida pela densidade
         vdp_x = (get_p_1(x + 1, y) - get_p_1(x, y)) / sim_flt_par.dx;
         set_mdp_x(x, y, get_b_x_h(x)*get_mdp_x(x, y) + get_a_x_h(x)*vdp_x);
@@ -777,7 +779,7 @@ shader_test = f"""
         set_dp_x(x, y, (vdp_x / get_k_x_h(x) + get_mdp_x(x, y))/get_rho_h_x(x, y));
         set_dp_y(x, y, (vdp_y / get_k_y_h(y) + get_mdp_y(x, y))/get_rho_h_y(x, y));      
     }}
-    
+
     // function to calculate second derivatives
     @compute
     @workgroup_size({wsx}, {wsy})
@@ -786,7 +788,7 @@ shader_test = f"""
         let y: i32 = i32(index.y);          // y thread index
         var vdp_xx: f32 = 0.0;
         var vdp_yy: f32 = 0.0;
-            
+
         // Calcula a segunda derivada espacial
         vdp_xx = (get_dp_x(x, y) - get_dp_x(x - 1, y)) / sim_flt_par.dx;
         set_dmdp_x(x, y, get_b_x(x)*get_dmdp_x(x, y) + get_a_x(x)*vdp_xx);
@@ -821,7 +823,7 @@ shader_test = f"""
         if(x == 0 || x == (sim_int_par.x_sz - 1) || y == 0 || y == (sim_int_par.y_sz - 1)) {{
             set_p_0(x, y, 0.0);
         }}
-            
+
         // --------------------
         // Circular buffer
         set_p_2(x, y, get_p_1(x, y));
@@ -876,8 +878,8 @@ def sim_webgpu():
                                                                   rho_half_x,
                                                                   rho_half_y,
                                                                   kappa_unrelaxed)),
-                                                   usage=wgpu.BufferUsage.STORAGE |
-                                                         wgpu.BufferUsage.COPY_SRC)
+                                                  usage=wgpu.BufferUsage.STORAGE |
+                                                        wgpu.BufferUsage.COPY_SRC)
 
     # Coeficientes de absorcao
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -942,12 +944,12 @@ def sim_webgpu():
     ]
     # b_param_i32
     bl_params.append({
-                         "binding": 5,
-                         "visibility": wgpu.ShaderStage.COMPUTE,
-                         "buffer": {
-                             "type": wgpu.BufferBindingType.storage,
-                         },
-                     })
+        "binding": 5,
+        "visibility": wgpu.ShaderStage.COMPUTE,
+        "buffer": {
+            "type": wgpu.BufferBindingType.storage,
+        },
+    })
 
     # Arrays da simulacao
     bl_sim_arrays = [
