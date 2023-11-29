@@ -87,7 +87,7 @@ class Window(QMainWindow):
 flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
-do_sim_gpu = True
+do_sim_gpu = False
 do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
@@ -200,14 +200,14 @@ ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
 # Escolha do valor de wsx (GPU)
 wsx = 1
 for n in range(15, 0, -1):
-    if (ny % n) == 0:
+    if (nx % n) == 0:
         wsx = n  # workgroup x size
         break
 
 # Escolha do valor de wsy (GPU)
 wsy = 1
 for n in range(15, 0, -1):
-    if (nx % n) == 0:
+    if (ny % n) == 0:
         wsy = n  # workgroup x size
         break
 
@@ -322,8 +322,8 @@ d_x = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 k_x = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 alpha_x = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32), axis=(1, 2))
 b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-i = np.where(d_x > 1e-6)
 a_x = np.zeros((nx, 1, 1), dtype=flt32)
+i = np.where(d_x > 1e-6)
 a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
 
 # Perfil de amortecimento na direcao "x" dentro do meio grid (staggered grid)
@@ -340,8 +340,8 @@ d_x_half = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 k_x_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 alpha_x_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32), axis=(1, 2))
 b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
-i = np.where(d_x_half > 1e-6)
 a_x_half = np.zeros((nx, 1, 1), dtype=flt32)
+i = np.where(d_x_half > 1e-6)
 a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
 
 # Amortecimento na direcao "y" (vertical)
@@ -365,8 +365,8 @@ d_y = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 k_y = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 alpha_y = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask, y_norm, 1.0))).astype(flt32), axis=(0, 2))
 b_y = np.exp(-(d_y / k_y + alpha_y) * dt).astype(flt32)
-j = np.where(d_y > 1e-6)
 a_y = np.zeros((1, ny, 1), dtype=flt32)
+j = np.where(d_y > 1e-6)
 a_y[j] = d_y[j] * (b_y[j] - 1.0) / (k_y[j] * (d_y[j] + k_y[j] * alpha_y[j]))
 
 # Perfil de amortecimento na direcao "y" dentro do meio grid (staggered grid)
@@ -383,8 +383,8 @@ d_y_half = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 k_y_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 alpha_y_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask_half, y_norm, 1.0))).astype(flt32), axis=(0, 2))
 b_y_half = np.exp(-(d_y_half / k_y_half + alpha_y_half) * dt).astype(flt32)
-j = np.where(d_y_half > 1e-6)
 a_y_half = np.zeros((1, ny, 1), dtype=flt32)
+j = np.where(d_y_half > 1e-6)
 a_y_half[j] = d_y_half[j] * (b_y_half[j] - 1.0) / (k_y_half[j] * (d_y_half[j] + k_y_half[j] * alpha_y_half[j]))
 
 # Amortecimento na direcao "z" (profundidade)
@@ -408,8 +408,8 @@ d_z = np.expand_dims((d0_z * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 k_z = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 alpha_z = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(z_mask, z_norm, 1.0))).astype(flt32), axis=(0, 1))
 b_z = np.exp(-(d_z / k_z + alpha_z) * dt).astype(flt32)
-k = np.where(d_z > 1e-6)
 a_z = np.zeros((1, 1, nz), dtype=flt32)
+k = np.where(d_z > 1e-6)
 a_z[k] = d_z[k] * (b_z[k] - 1.0) / (k_z[k] * (d_z[k] + k_z[k] * alpha_z[k]))
 
 # Perfil de amortecimento na direcao "z" dentro do meio grid (staggered grid)
@@ -426,8 +426,8 @@ d_z_half = np.expand_dims((d0_z * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 k_z_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 alpha_z_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(z_mask_half, z_norm, 1.0))).astype(flt32), axis=(0, 1))
 b_z_half = np.exp(-(d_z_half / k_z_half + alpha_z_half) * dt).astype(flt32)
-k = np.where(d_z_half > 1e-6)
 a_z_half = np.zeros((1, 1, nz), dtype=flt32)
+k = np.where(d_z_half > 1e-6)
 a_z_half[k] = d_z_half[k] * (b_z_half[k] - 1.0) / (k_z_half[k] * (d_z_half[k] + k_z_half[k] * alpha_z_half[k]))
 
 # Imprime a posicao da fonte
@@ -502,7 +502,7 @@ def sim_cpu():
     two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
     denom = np.float32(2.0 * mu * (3.0 * lambda_ + 2.0 * mu))
 
-    v_min = -0.01
+    v_min = -1.0
     v_max = - v_min
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
@@ -520,16 +520,16 @@ def sim_cpu():
 
         memory_dvx_dx[1:-2, 2:-1, 2:-1] = (b_x_half[:-1, :, :] * memory_dvx_dx[1:-2, 2:-1, 2:-1] +
                                            a_x_half[:-1, :, :] * value_dvx_dx[1:-2, 2:-1, 2:-1])
-        memory_dvy_dy[1:-2, 2:-1, 2:-1] = (b_y[:, -1, :] * memory_dvy_dy[1:-2, 2:-1, 2:-1] +
-                                           a_y[:, -1, :] * value_dvy_dy[1:-2, 2:-1, 2:-1])
-        memory_dvz_dz[1:-2, 2:-1, 2:-1] = (b_z[:, :, -1] * memory_dvz_dz[1:-2, 2:-1, 2:-1] +
-                                           a_z[:, :, -1] * value_dvz_dz[1:-2, 2:-1, 2:-1])
+        memory_dvy_dy[1:-2, 2:-1, 2:-1] = (b_y[:, 1:, :] * memory_dvy_dy[1:-2, 2:-1, 2:-1] +
+                                           a_y[:, 1:, :] * value_dvy_dy[1:-2, 2:-1, 2:-1])
+        memory_dvz_dz[1:-2, 2:-1, 2:-1] = (b_z[:, :, 1:] * memory_dvz_dz[1:-2, 2:-1, 2:-1] +
+                                           a_z[:, :, 1:] * value_dvz_dz[1:-2, 2:-1, 2:-1])
 
         value_dvx_dx[1:-2, 2:-1, 2:-1] = (value_dvx_dx[1:-2, 2:-1, 2:-1] / k_x_half[:-1, :, :] +
                                           memory_dvx_dx[1:-2, 2:-1, 2:-1])
-        value_dvy_dy[1:-2, 2:-1, 2:-1] = (value_dvy_dy[1:-2, 2:-1, 2:-1] / k_y[:, :-1, :] +
+        value_dvy_dy[1:-2, 2:-1, 2:-1] = (value_dvy_dy[1:-2, 2:-1, 2:-1] / k_y[:, 1:, :] +
                                           memory_dvy_dy[1:-2, 2:-1, 2:-1])
-        value_dvz_dz[1:-2, 2:-1, 2:-1] = (value_dvz_dz[1:-2, 2:-1, 2:-1] / k_z[:, :, :-1] +
+        value_dvz_dz[1:-2, 2:-1, 2:-1] = (value_dvz_dz[1:-2, 2:-1, 2:-1] / k_z[:, :, 1:] +
                                           memory_dvz_dz[1:-2, 2:-1, 2:-1])
 
         # compute the stress using the Lame parameters
@@ -543,12 +543,12 @@ def sim_cpu():
         value_dvx_dy[2:-1, 1:-2, 1:-1] = (27.0 * (vx[2:-1, 2:-1, 1:-1] - vx[2:-1, 1:-2, 1:-1]) -
                                           vx[2:-1, 3:, 1:-1] + vx[2:-1, :-3, 1:-1]) * one_dy / 24.0
 
-        memory_dvy_dx[2:-1, 1:-2, 1:-1] = (b_x[:-1, :, :] * memory_dvy_dx[2:-1, 1:-2, 1:-1] +
-                                           a_x[:-1, :, :] * value_dvy_dx[2:-1, 1:-2, 1:-1])
+        memory_dvy_dx[2:-1, 1:-2, 1:-1] = (b_x[1:, :, :] * memory_dvy_dx[2:-1, 1:-2, 1:-1] +
+                                           a_x[1:, :, :] * value_dvy_dx[2:-1, 1:-2, 1:-1])
         memory_dvx_dy[2:-1, 1:-2, 1:-1] = (b_y_half[:, :-1, :] * memory_dvx_dy[2:-1, 1:-2, 1:-1] +
                                            a_y_half[:, :-1, :] * value_dvx_dy[2:-1, 1:-2, 1:-1])
 
-        value_dvy_dx[2:-1, 1:-2, 1:-1] = (value_dvy_dx[2:-1, 1:-2, 1:-1] / k_x[:-1, :, :] +
+        value_dvy_dx[2:-1, 1:-2, 1:-1] = (value_dvy_dx[2:-1, 1:-2, 1:-1] / k_x[1:, :, :] +
                                           memory_dvy_dx[2:-1, 1:-2, 1:-1])
         value_dvx_dy[2:-1, 1:-2, 1:-1] = (value_dvx_dy[2:-1, 1:-2, 1:-1] / k_y_half[:, :-1, :] +
                                           memory_dvx_dy[2:-1, 1:-2, 1:-1])
@@ -563,12 +563,12 @@ def sim_cpu():
         value_dvx_dz[2:-1, 1:-1, 1:-2] = (27.0 * (vx[2:-1, 1:-1, 2:-1] - vx[2:-1, 1:-1, 1:-2]) -
                                           vx[2:-1, 1:-1, 3:] + vx[2:-1, 1:-1, :-3]) * one_dz / 24.0
 
-        memory_dvz_dx[2:-1, 1:-1, 1:-2] = (b_x[:-1, :, :] * memory_dvz_dx[2:-1, 1:-1, 1:-2] +
-                                           a_x[:-1, :, :] * value_dvz_dx[2:-1, 1:-1, 1:-2])
+        memory_dvz_dx[2:-1, 1:-1, 1:-2] = (b_x[1:, :, :] * memory_dvz_dx[2:-1, 1:-1, 1:-2] +
+                                           a_x[1:, :, :] * value_dvz_dx[2:-1, 1:-1, 1:-2])
         memory_dvx_dz[2:-1, 1:-1, 1:-2] = (b_z_half[:, :, :-1] * memory_dvx_dz[2:-1, 1:-1, 1:-2] +
                                            a_z_half[:, :, :-1] * value_dvx_dz[2:-1, 1:-1, 1:-2])
 
-        value_dvz_dx[2:-1, 1:-1, 1:-2] = (value_dvz_dx[2:-1, 1:-1, 1:-2] / k_x[:-1, :, :] +
+        value_dvz_dx[2:-1, 1:-1, 1:-2] = (value_dvz_dx[2:-1, 1:-1, 1:-2] / k_x[1:, :, :] +
                                           memory_dvz_dx[2:-1, 1:-1, 1:-2])
         value_dvx_dz[2:-1, 1:-1, 1:-2] = (value_dvx_dz[2:-1, 1:-1, 1:-2] / k_z_half[:, :, :-1] +
                                           memory_dvx_dz[2:-1, 1:-1, 1:-2])
@@ -605,18 +605,18 @@ def sim_cpu():
         value_dsigmaxz_dz[2:-1, 2:-1, 2:-1] = (27.0 * (sigmaxz[2:-1, 2:-1, 2:-1] - sigmaxz[2:-1, 2:-1, 1:-2]) -
                                                sigmaxz[2:-1, 2:-1, 3:] + sigmaxz[2:-1, 2:-1, :-3]) * one_dz / 24.0
 
-        memory_dsigmaxx_dx[2:-1, 2:-1, 2:-1] = (b_x[:-1, :, :] * memory_dsigmaxx_dx[2:-1, 2:-1, 2:-1] +
-                                                a_x[:-1, :, :] * value_dsigmaxx_dx[2:-1, 2:-1, 2:-1])
-        memory_dsigmaxy_dy[2:-1, 2:-1, 2:-1] = (b_y[:, :-1, :] * memory_dsigmaxy_dy[2:-1, 2:-1, 2:-1] +
-                                                a_y[:, :-1, :] * value_dsigmaxy_dy[2:-1, 2:-1, 2:-1])
-        memory_dsigmaxz_dz[2:-1, 2:-1, 2:-1] = (b_z[:, :, :-1] * memory_dsigmaxz_dz[2:-1, 2:-1, 2:-1] +
-                                                a_z[:, :, :-1] * value_dsigmaxz_dz[2:-1, 2:-1, 2:-1])
+        memory_dsigmaxx_dx[2:-1, 2:-1, 2:-1] = (b_x[1:, :, :] * memory_dsigmaxx_dx[2:-1, 2:-1, 2:-1] +
+                                                a_x[1:, :, :] * value_dsigmaxx_dx[2:-1, 2:-1, 2:-1])
+        memory_dsigmaxy_dy[2:-1, 2:-1, 2:-1] = (b_y[:, 1:, :] * memory_dsigmaxy_dy[2:-1, 2:-1, 2:-1] +
+                                                a_y[:, 1:, :] * value_dsigmaxy_dy[2:-1, 2:-1, 2:-1])
+        memory_dsigmaxz_dz[2:-1, 2:-1, 2:-1] = (b_z[:, :, 1:] * memory_dsigmaxz_dz[2:-1, 2:-1, 2:-1] +
+                                                a_z[:, :, 1:] * value_dsigmaxz_dz[2:-1, 2:-1, 2:-1])
 
-        value_dsigmaxx_dx[2:-1, 2:-1, 2:-1] = (value_dsigmaxx_dx[2:-1, 2:-1, 2:-1] / k_x[:-1, :, :] +
+        value_dsigmaxx_dx[2:-1, 2:-1, 2:-1] = (value_dsigmaxx_dx[2:-1, 2:-1, 2:-1] / k_x[1:, :, :] +
                                                memory_dsigmaxx_dx[2:-1, 2:-1, 2:-1])
-        value_dsigmaxy_dy[2:-1, 2:-1, 2:-1] = (value_dsigmaxy_dy[2:-1, 2:-1, 2:-1] / k_y[:, :-1, :] +
+        value_dsigmaxy_dy[2:-1, 2:-1, 2:-1] = (value_dsigmaxy_dy[2:-1, 2:-1, 2:-1] / k_y[:, 1:, :] +
                                                memory_dsigmaxy_dy[2:-1, 2:-1, 2:-1])
-        value_dsigmaxz_dz[2:-1, 2:-1, 2:-1] = (value_dsigmaxz_dz[2:-1, 2:-1, 2:-1] / k_z[:, :, :-1] +
+        value_dsigmaxz_dz[2:-1, 2:-1, 2:-1] = (value_dsigmaxz_dz[2:-1, 2:-1, 2:-1] / k_z[:, :, 1:] +
                                                memory_dsigmaxz_dz[2:-1, 2:-1, 2:-1])
 
         vx = DELTAT_over_rho * (value_dsigmaxx_dx + value_dsigmaxy_dy + value_dsigmaxz_dz) + vx
@@ -633,14 +633,14 @@ def sim_cpu():
                                                 a_x_half[:-1, :, :] * value_dsigmaxy_dx[1:-2, 1:-2, 2:-1])
         memory_dsigmayy_dy[1:-2, 1:-2, 2:-1] = (b_y_half[:, :-1, :] * memory_dsigmayy_dy[1:-2, 1:-2, 2:-1] +
                                                 a_y_half[:, :-1, :] * value_dsigmayy_dy[1:-2, 1:-2, 2:-1])
-        memory_dsigmayz_dz[1:-2, 1:-2, 2:-1] = (b_z[:, :, :-1] * memory_dsigmayz_dz[1:-2, 1:-2, 2:-1] +
-                                                a_z[:, :, :-1] * value_dsigmayz_dz[1:-2, 1:-2, 2:-1])
+        memory_dsigmayz_dz[1:-2, 1:-2, 2:-1] = (b_z[:, :, 1:] * memory_dsigmayz_dz[1:-2, 1:-2, 2:-1] +
+                                                a_z[:, :, 1:] * value_dsigmayz_dz[1:-2, 1:-2, 2:-1])
 
         value_dsigmaxy_dx[1:-2, 1:-2, 2:-1] = (value_dsigmaxy_dx[1:-2, 1:-2, 2:-1] / k_x_half[:-1, :, :] +
                                                memory_dsigmaxy_dx[1:-2, 1:-2, 2:-1])
         value_dsigmayy_dy[1:-2, 1:-2, 2:-1] = (value_dsigmayy_dy[1:-2, 1:-2, 2:-1] / k_y_half[:, :-1, :] +
                                                memory_dsigmayy_dy[1:-2, 1:-2, 2:-1])
-        value_dsigmayz_dz[1:-2, 1:-2, 2:-1] = (value_dsigmayz_dz[1:-2, 1:-2, 2:-1] / k_z[:, :, :-1] +
+        value_dsigmayz_dz[1:-2, 1:-2, 2:-1] = (value_dsigmayz_dz[1:-2, 1:-2, 2:-1] / k_z[:, :, 1:] +
                                                memory_dsigmayz_dz[1:-2, 1:-2, 2:-1])
 
         vy = DELTAT_over_rho * (value_dsigmaxy_dx + value_dsigmayy_dy + value_dsigmayz_dz) + vy
@@ -655,14 +655,14 @@ def sim_cpu():
 
         memory_dsigmaxz_dx[1:-2, 2:-1, 1:-2] = (b_x_half[:-1, :, :] * memory_dsigmaxz_dx[1:-2, 2:-1, 1:-2] +
                                                 a_x_half[:-1, :, :] * value_dsigmaxz_dx[1:-2, 2:-1, 1:-2])
-        memory_dsigmayz_dy[1:-2, 2:-1, 1:-2] = (b_y[:, :-1, :] * memory_dsigmayz_dy[1:-2, 2:-1, 1:-2] +
-                                                a_y[:, :-1, :] * value_dsigmayz_dy[1:-2, 2:-1, 1:-2])
+        memory_dsigmayz_dy[1:-2, 2:-1, 1:-2] = (b_y[:, 1:, :] * memory_dsigmayz_dy[1:-2, 2:-1, 1:-2] +
+                                                a_y[:, 1:, :] * value_dsigmayz_dy[1:-2, 2:-1, 1:-2])
         memory_dsigmazz_dz[1:-2, 2:-1, 1:-2] = (b_z_half[:, :, :-1] * memory_dsigmazz_dz[1:-2, 2:-1, 1:-2] +
                                                 a_z_half[:, :, :-1] * value_dsigmazz_dz[1:-2, 2:-1, 1:-2])
 
         value_dsigmaxz_dx[1:-2, 2:-1, 1:-2] = (value_dsigmaxz_dx[1:-2, 2:-1, 1:-2] / k_x_half[:-1, :, :] +
                                                memory_dsigmaxz_dx[1:-2, 2:-1, 1:-2])
-        value_dsigmayz_dy[1:-2, 2:-1, 1:-2] = (value_dsigmayz_dy[1:-2, 2:-1, 1:-2] / k_y[:, :-1, :] +
+        value_dsigmayz_dy[1:-2, 2:-1, 1:-2] = (value_dsigmayz_dy[1:-2, 2:-1, 1:-2] / k_y[:, 1:, :] +
                                                memory_dsigmayz_dy[1:-2, 2:-1, 1:-2])
         value_dsigmazz_dz[1:-2, 2:-1, 1:-2] = (value_dsigmazz_dz[1:-2, 2:-1, 1:-2] / k_z_half[:, :, :-1] +
                                                memory_dsigmazz_dz[1:-2, 2:-1, 1:-2])
@@ -679,34 +679,34 @@ def sim_cpu():
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[0:1, :, :] = ZERO
-        vy[0:1, :, :] = ZERO
-        vz[0:1, :, :] = ZERO
+        vx[:2, :, :] = ZERO
+        vy[:2, :, :] = ZERO
+        vz[:2, :, :] = ZERO
 
         # xmax
-        vx[-2:-1, :, :] = ZERO
-        vy[-2:-1, :, :] = ZERO
-        vz[-2:-1, :, :] = ZERO
+        vx[-2:, :, :] = ZERO
+        vy[-2:, :, :] = ZERO
+        vz[-2:, :, :] = ZERO
 
         # ymin
-        vx[:, 0:1, :] = ZERO
-        vy[:, 0:1, :] = ZERO
-        vz[:, 0:1, :] = ZERO
+        vx[:, :2, :] = ZERO
+        vy[:, :2, :] = ZERO
+        vz[:, :2, :] = ZERO
 
         # ymax
-        vx[:, -2:-1, :] = ZERO
-        vy[:, -2:-1, :] = ZERO
-        vz[:, -2:-1, :] = ZERO
+        vx[:, -2:, :] = ZERO
+        vy[:, -2:, :] = ZERO
+        vz[:, -2:, :] = ZERO
 
         # zmin
-        vx[:, :, 0:1] = ZERO
-        vy[:, :, 0:1] = ZERO
-        vz[:, :, 0:1] = ZERO
+        vx[:, :, :2] = ZERO
+        vy[:, :, :2] = ZERO
+        vz[:, :, :2] = ZERO
 
         # zmax
-        vx[:, :, -2:-1] = ZERO
-        vy[:, :, -2:-1] = ZERO
-        vz[:, :, -2:-1] = ZERO
+        vx[:, :, -2:] = ZERO
+        vy[:, :, -2:] = ZERO
+        vz[:, :, -2:] = ZERO
 
         # Store seismograms
         for _irec in range(NREC):

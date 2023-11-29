@@ -87,7 +87,7 @@ class Window(QMainWindow):
 flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
-do_sim_gpu = True
+do_sim_gpu = False
 do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
@@ -123,14 +123,14 @@ npoints_pml = 10
 
 # Velocidades do som e densidade do meio
 cp = 3300.0  # [m/s]
-cs = 2000.0e-5  # [m/s]
+cs = 2000.0  # [m/s]
 rho = 2800.0
 mu = rho * cs * cs
 lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
 
 # Numero total de passos de tempo
-NSTEP = 1200
+NSTEP = 2000
 
 # Passo de tempo em segundos
 dt = 1.0e-3
@@ -277,8 +277,8 @@ d_x = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=1)
 k_x = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=1)
 alpha_x = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32), axis=1)
 b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-i = np.where(d_x > 1e-6)
 a_x = np.zeros((nx, 1), dtype=flt32)
+i = np.where(d_x > 1e-6)
 a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
 
 # Perfil de amortecimento na direcao "x" dentro do meio grid (staggered grid)
@@ -398,9 +398,10 @@ def sim_cpu():
     windowVx.setGeometry(200, 50, vx.shape[0], vx.shape[1])
     windowVy = Window('Vy')
     windowVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+    windowVxVy = Window('Vx + Vy')
+    windowVxVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
 
     DELTAT_over_rho = dt / rho
-    two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
     denom = np.float32(4.0 * mu * (lambda_ + mu))
 
     v_min = -1.0
@@ -537,7 +538,7 @@ def sim_cpu():
 
         windowVx.imv.setImage(vx[:, :], levels=[v_min/1.0, v_max/1.0])
         windowVy.imv.setImage(vy[:, :], levels=[v_min/1.0, v_max/1.0])
-        # windowVxVy.imv.setImage(vx[:, :] + vy[:, :], levels=[2.0 * v_min / 1.0, 2.0 * v_max / 1.0])
+        windowVxVy.imv.setImage(vx[:, :] + vy[:, :], levels=[2.0 * v_min / 1.0, 2.0 * v_max / 1.0])
         App.processEvents()
 
         # Verifica a estabilidade da simulacao
