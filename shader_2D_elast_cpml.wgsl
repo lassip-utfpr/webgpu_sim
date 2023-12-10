@@ -584,79 +584,37 @@
 
         // Normal stresses
         if(x >= 1 && x < (sim_int_par.x_sz - 2) && y >= 2 && y < (sim_int_par.y_sz - 1)) {
-            let vx_x1_y: f32 = get_vx(x + 1, y);
-            let vx_x_y: f32 = get_vx(x, y);
-            let vx_x2_y: f32 = get_vx(x + 2, y);
-            let vx_1x_y: f32 = get_vx(x - 1, y);
-            var vdvx_dx: f32 = (27.0*(vx_x1_y - vx_x_y) - vx_x2_y + vx_1x_y)/(24.0 * dx);
+            var vdvx_dx: f32 = (27.0*(get_vx(x + 1, y) - get_vx(x, y)) - get_vx(x + 2, y) + get_vx(x - 1, y))/(24.0 * dx);
+            var vdvy_dy: f32 = (27.0*(get_vy(x, y) - get_vy(x, y - 1)) - get_vy(x, y + 1) + get_vy(x, y - 2))/(24.0 * dy);
 
-            let vy_x_y: f32 = get_vy(x, y);
-            let vy_x_1y: f32 = get_vy(x, y - 1);
-            let vy_x_y1: f32 = get_vy(x, y + 1);
-            let vy_x_2y: f32 = get_vy(x, y - 2);
-            var vdvy_dy: f32 = (27.0*(vy_x_y - vy_x_1y) - vy_x_y1 + vy_x_2y)/(24.0 * dy);
+            var mdvx_dx_new: f32 = get_b_x_h(x - 1) * get_mdvx_dx(x, y) + get_a_x_h(x - 1) * vdvx_dx;
+            var mdvy_dy_new: f32 = get_b_y(y - 1) * get_mdvy_dy(x, y) + get_a_y(y - 1) * vdvy_dy;
 
-            let mdvx_dx: f32 = get_mdvx_dx(x, y);
-            let a_x_h = get_a_x_h(x - 1);
-            let b_x_h = get_b_x_h(x - 1);
-            var mdvx_dx_new: f32 = b_x_h * mdvx_dx + a_x_h * vdvx_dx;
-
-            let mdvy_dy: f32 = get_mdvy_dy(x, y);
-            let a_y = get_a_y(y - 1);
-            let b_y = get_b_y(y - 1);
-            var mdvy_dy_new: f32 = b_y * mdvy_dy + a_y * vdvy_dy;
-
-            let k_x_h = get_k_x_h(x - 1);
-            vdvx_dx = vdvx_dx/k_x_h + mdvx_dx_new;
-
-            let k_y = get_k_y(y - 1);
-            vdvy_dy = vdvy_dy/k_y  + mdvy_dy_new;
+            vdvx_dx = vdvx_dx/get_k_x_h(x - 1) + mdvx_dx_new;
+            vdvy_dy = vdvy_dy/get_k_y(y - 1)  + mdvy_dy_new;
 
             set_mdvx_dx(x, y, mdvx_dx_new);
             set_mdvy_dy(x, y, mdvy_dy_new);
 
-            let sigmaxx: f32 = get_sigmaxx(x, y);
-            set_sigmaxx(x, y, sigmaxx + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy) * dt);
-
-            let sigmayy: f32 = get_sigmayy(x, y);
-            set_sigmayy(x, y, sigmayy + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy) * dt);
+            set_sigmaxx(x, y, get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy) * dt);
+            set_sigmayy(x, y, get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy) * dt);
         }
 
         // Shear stress
         if(x >= 2 && x < (sim_int_par.x_sz - 1) && y >= 1 && y < (sim_int_par.y_sz - 2)) {
-            let vy_x_y: f32 = get_vy(x, y);
-            let vy_1x_y: f32 = get_vy(x - 1, y);
-            let vy_x1_y: f32 = get_vy(x + 1, y);
-            let vy_2x_y: f32 = get_vy(x - 2, y);
-            var vdvy_dx: f32 = (27.0*(vy_x_y - vy_1x_y) - vy_x1_y + vy_2x_y)/(24.0 * dx);
+            var vdvy_dx: f32 = (27.0*(get_vy(x, y) - get_vy(x - 1, y)) - get_vy(x + 1, y) + get_vy(x - 2, y))/(24.0 * dx);
+            var vdvx_dy: f32 = (27.0*(get_vx(x, y + 1) - get_vx(x, y)) - get_vx(x, y + 2) + get_vx(x, y - 1))/(24.0 * dy);
 
-            let vx_x_y1: f32 = get_vx(x, y + 1);
-            let vx_x_y: f32 = get_vx(x, y);
-            let vx_x_y2: f32 = get_vx(x, y + 2);
-            let vx_x_1y: f32 = get_vx(x, y - 1);
-            var vdvx_dy: f32 = (27.0*(vx_x_y1 - vx_x_y) - vx_x_y2 + vx_x_1y)/(24.0 * dy);
+            var mdvy_dx_new: f32 = get_b_x(x - 1) * get_mdvy_dx(x, y) + get_a_x(x - 1) * vdvy_dx;
+            var mdvx_dy_new: f32 = get_b_y_h(y - 1) * get_mdvx_dy(x, y) + get_a_y_h(y - 1) * vdvx_dy;
 
-            let mdvy_dx: f32 = get_mdvy_dx(x, y);
-            let a_x = get_a_x(x - 1);
-            let b_x = get_b_x(x - 1);
-            var mdvy_dx_new: f32 = b_x * mdvy_dx + a_x * vdvy_dx;
-
-            let mdvx_dy: f32 = get_mdvx_dy(x, y);
-            let a_y_h = get_a_y_h(y - 1);
-            let b_y_h = get_b_y_h(y - 1);
-            var mdvx_dy_new: f32 = b_y_h * mdvx_dy + a_y_h * vdvx_dy;
-
-            let k_x = get_k_x(x - 1);
-            vdvy_dx = vdvy_dx/k_x   + mdvy_dx_new;
-
-            let k_y_h = get_k_y_h(y - 1);
-            vdvx_dy = vdvx_dy/k_y_h + mdvx_dy_new;
+            vdvy_dx = vdvy_dx/get_k_x(x - 1)   + mdvy_dx_new;
+            vdvx_dy = vdvx_dy/get_k_y_h(y - 1) + mdvx_dy_new;
 
             set_mdvy_dx(x, y, mdvy_dx_new);
             set_mdvx_dy(x, y, mdvx_dy_new);
 
-            let sigmaxy: f32 = get_sigmaxy(x, y);
-            set_sigmaxy(x, y, sigmaxy + (vdvx_dy + vdvy_dx) * mu * dt);
+            set_sigmaxy(x, y, get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt);
         }
     }
 
@@ -672,76 +630,36 @@
 
         // first step
         if(x >= 2 && x < (sim_int_par.x_sz - 1) && y >= 2 && y < (sim_int_par.y_sz - 1)) {
-            let sigmaxx_x_y: f32 = get_sigmaxx(x, y);
-            let sigmaxx_1x_y: f32 = get_sigmaxx(x - 1, y);
-            let sigmaxx_x1_y: f32 = get_sigmaxx(x + 1, y);
-            let sigmaxx_2x_y: f32 = get_sigmaxx(x - 2, y);
-            var vdsigmaxx_dx: f32 = (27.0*(sigmaxx_x_y - sigmaxx_1x_y) - sigmaxx_x1_y + sigmaxx_2x_y)/(24.0 * dx);
+            var vdsigmaxx_dx: f32 = (27.0*(get_sigmaxx(x, y) - get_sigmaxx(x - 1, y)) - get_sigmaxx(x + 1, y) + get_sigmaxx(x - 2, y))/(24.0 * dx);
+            var vdsigmaxy_dy: f32 = (27.0*(get_sigmaxy(x, y) - get_sigmaxy(x, y - 1)) - get_sigmaxy(x, y + 1) + get_sigmaxy(x, y - 2))/(24.0 * dy);
 
-            let sigmaxy_x_y: f32 = get_sigmaxy(x, y);
-            let sigmaxy_x_1y: f32 = get_sigmaxy(x, y - 1);
-            let sigmaxy_x_y1: f32 = get_sigmaxy(x, y + 1);
-            let sigmaxy_x_2y: f32 = get_sigmaxy(x, y - 2);
-            var vdsigmaxy_dy: f32 = (27.0*(sigmaxy_x_y - sigmaxy_x_1y) - sigmaxy_x_y1 + sigmaxy_x_2y)/(24.0 * dy);
+            var mdsxx_dx_new: f32 = get_b_x(x - 1) * get_mdsxx_dx(x, y) + get_a_x(x - 1) * vdsigmaxx_dx;
+            var mdsxy_dy_new: f32 = get_b_y(y - 1) * get_mdsxy_dy(x, y) + get_a_y(y - 1) * vdsigmaxy_dy;
 
-            let mdsxx_dx: f32 = get_mdsxx_dx(x, y);
-            let a_x = get_a_x(x - 1);
-            let b_x = get_b_x(x - 1);
-            var mdsxx_dx_new: f32 = b_x * mdsxx_dx + a_x * vdsigmaxx_dx;
-
-            let mdsxy_dy: f32 = get_mdsxy_dy(x, y);
-            let a_y = get_a_y(y - 1);
-            let b_y = get_b_y(y - 1);
-            var mdsxy_dy_new: f32 = b_y * mdsxy_dy + a_y * vdsigmaxy_dy;
-
-            let k_x = get_k_x(x - 1);
-            vdsigmaxx_dx = vdsigmaxx_dx/k_x + mdsxx_dx_new;
-
-            let k_y = get_k_y(y - 1);
-            vdsigmaxy_dy = vdsigmaxy_dy/k_y + mdsxy_dy_new;
+            vdsigmaxx_dx = vdsigmaxx_dx/get_k_x(x - 1) + mdsxx_dx_new;
+            vdsigmaxy_dy = vdsigmaxy_dy/get_k_y(y - 1) + mdsxy_dy_new;
 
             set_mdsxx_dx(x, y, mdsxx_dx_new);
             set_mdsxy_dy(x, y, mdsxy_dy_new);
 
-            let vx: f32 = get_vx(x, y);
-            set_vx(x, y, dt_over_rho * (vdsigmaxx_dx + vdsigmaxy_dy) + vx);
+            set_vx(x, y, dt_over_rho * (vdsigmaxx_dx + vdsigmaxy_dy) + get_vx(x, y));
         }
 
         // second step
         if(x >= 1 && x < (sim_int_par.x_sz - 2) && y >= 1 && y < (sim_int_par.y_sz - 2)) {
-            let sigmaxy_x1_y: f32 = get_sigmaxy(x + 1, y);
-            let sigmaxy_x_y: f32 = get_sigmaxy(x, y);
-            let sigmaxy_x2_y: f32 = get_sigmaxy(x + 2, y);
-            let sigmaxy_1x_y: f32 = get_sigmaxy(x - 1, y);
-            var vdsigmaxy_dx: f32 = (27.0*(sigmaxy_x1_y - sigmaxy_x_y) - sigmaxy_x2_y + sigmaxy_1x_y)/(24.0 * dx);
+            var vdsigmaxy_dx: f32 = (27.0*(get_sigmaxy(x + 1, y) - get_sigmaxy(x, y)) - get_sigmaxy(x + 2, y) + get_sigmaxy(x - 1, y))/(24.0 * dx);
+            var vdsigmayy_dy: f32 = (27.0*(get_sigmayy(x, y + 1) - get_sigmayy(x, y)) - get_sigmayy(x, y + 2) + get_sigmayy(x, y - 1))/(24.0 * dy);
 
-            let sigmayy_x_y1: f32 = get_sigmayy(x, y + 1);
-            let sigmayy_x_y: f32 = get_sigmayy(x, y);
-            let sigmayy_x_y2: f32 = get_sigmayy(x, y + 2);
-            let sigmayy_x_1y: f32 = get_sigmayy(x, y - 1);
-            var vdsigmayy_dy: f32 = (27.0*(sigmayy_x_y1 - sigmayy_x_y) - sigmayy_x_y2 + sigmayy_x_1y)/(24.0 * dy);
+            var mdsxy_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxy_dx(x, y) + get_a_x_h(x - 1) * vdsigmaxy_dx;
+            var mdsyy_dy_new: f32 = get_b_y_h(y - 1) * get_mdsyy_dy(x, y) + get_a_y_h(y - 1) * vdsigmayy_dy;
 
-            let mdsxy_dx: f32 = get_mdsxy_dx(x, y);
-            let a_x_h = get_a_x_h(x - 1);
-            let b_x_h = get_b_x_h(x - 1);
-            var mdsxy_dx_new: f32 = b_x_h * mdsxy_dx + a_x_h * vdsigmaxy_dx;
-
-            let mdsyy_dy: f32 = get_mdsyy_dy(x, y);
-            let a_y_h = get_a_y_h(y - 1);
-            let b_y_h = get_b_y_h(y - 1);
-            var mdsyy_dy_new: f32 = b_y_h * mdsyy_dy + a_y_h * vdsigmayy_dy;
-
-            let k_x_h = get_k_x_h(x - 1);
-            vdsigmaxy_dx = vdsigmaxy_dx/k_x_h + mdsxy_dx_new;
-
-            let k_y_h = get_k_y_h(y - 1);
-            vdsigmayy_dy = vdsigmayy_dy/k_y_h + mdsyy_dy_new;
+            vdsigmaxy_dx = vdsigmaxy_dx/get_k_x_h(x - 1) + mdsxy_dx_new;
+            vdsigmayy_dy = vdsigmayy_dy/get_k_y_h(y - 1) + mdsyy_dy_new;
 
             set_mdsxy_dx(x, y, mdsxy_dx_new);
             set_mdsyy_dy(x, y, mdsyy_dy_new);
 
-            let vy: f32 = get_vy(x, y);
-            set_vy(x, y, dt_over_rho * (vdsigmaxy_dx + vdsigmayy_dy) + vy);
+            set_vy(x, y, dt_over_rho * (vdsigmaxy_dx + vdsigmayy_dy) + get_vy(x, y));
         }
     }
 
@@ -767,13 +685,11 @@
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
         let denom: f32 = 4.0 * mu * (lambda + mu);
         let mu2: f32 = 2.0 * mu;
-        let vx: f32 = get_vx(x, y);
-        let vy: f32 = get_vy(x, y);
 
         // Add the source force
         if(x == x_source && y == y_source) {
-            set_vx(x, y, vx + get_force_x(it) * dt_over_rho);
-            set_vy(x, y, vy + get_force_y(it) * dt_over_rho);
+            set_vx(x, y, get_vx(x, y) + get_force_x(it) * dt_over_rho);
+            set_vy(x, y, get_vy(x, y) + get_force_y(it) * dt_over_rho);
         }
 
         // Apply Dirichlet conditions

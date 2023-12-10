@@ -1,7 +1,8 @@
 import math
 
 import matplotlib.pyplot as plt
-import wgpu.backends.auto  # Select backend
+# import wgpu.backends.wgpu_native  # Select backend 0.13.X
+import wgpu.backends.rs  # Select backend 0.9.5
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
 # from sklearn.metrics import mean_squared_error
@@ -85,13 +86,15 @@ class Window(QMainWindow):
 
 # Parametros dos ensaios
 flt32 = np.float32
-n_iter_gpu = 1
-n_iter_cpu = 1
+n_iter_gpu = 15
+n_iter_cpu = 15
 do_sim_gpu = True
 do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
-plot_results = True
+show_anim = False
+show_debug = False
+plot_results = False
 show_results = True
 save_results = True
 gpu_type = "NVIDIA"
@@ -130,7 +133,7 @@ lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
 
 # Numero total de passos de tempo
-NSTEP = 2000
+NSTEP = 500
 
 # Passo de tempo em segundos
 dt = 1.0e-3
@@ -392,15 +395,6 @@ def sim_cpu():
     global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
     global epsilon_xx, epsilon_yy, epsilon_xy
 
-    # Configuracao e inicializacao da janela de exibicao
-    App = pg.QtWidgets.QApplication([])
-    windowVx = Window('Vx [CPU]')
-    windowVx.setGeometry(200, 50, vx.shape[0], vx.shape[1])
-    windowVy = Window('Vy [CPU]')
-    windowVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
-    windowVxVy = Window('Vx + Vy [CPU]')
-    windowVxVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
-
     DELTAT_over_rho = dt / rho
     denom = np.float32(4.0 * mu * (lambda_ + mu))
 
@@ -528,26 +522,23 @@ def sim_cpu():
 
         v_solid_norm[it - 1] = np.max(np.sqrt(vx[:, :] ** 2 + vy[:, :] ** 2))
         if (it % IT_DISPLAY) == 0 or it == 5:
-            print(f'Time step # {it} out of {NSTEP}')
-            print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}')
-            print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}')
-            print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
-            print(f'Total energy = {total_energy[it - 1]}')
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}')
+                print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}')
+                print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
+                print(f'Total energy = {total_energy[it - 1]}')
 
-        windowVx.imv.setImage(vx[:, :], levels=[v_min / 1.0, v_max / 1.0])
-        windowVy.imv.setImage(vy[:, :], levels=[v_min / 1.0, v_max / 1.0])
-        windowVxVy.imv.setImage(vx[:, :] + vy[:, :], levels=[2.0 * v_min / 1.0, 2.0 * v_max / 1.0])
-        App.processEvents()
+            if show_anim:
+                windowVx_CPU.imv.setImage(vx[:, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVy_CPU.imv.setImage(vy[:, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVxVy_CPU.imv.setImage(vx[:, :] + vy[:, :], levels=[2.0 * v_min / 1.0, 2.0 * v_max / 1.0])
+                App.processEvents()
 
         # Verifica a estabilidade da simulacao
         if v_solid_norm[it - 1] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
-
-    App.exit()
-
-    # End of the main loop
-    # print("Simulacao terminada.")
 
 
 # Simulação completa em WEB GPU
@@ -577,13 +568,15 @@ def sim_webgpu():
     if gpu_type == "NVIDIA":
         device = wgpu.utils.get_default_device()
     else:
-        adapter = wgpu.gpu.request_adapter(power_preference="low-power")
+        # adapter = wgpu.gpu.request_adapter(power_preference="low-power")  # 0.13.X
+        adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")  # 0.9.5
         device = adapter.request_device()
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
+    cshader = None
     with open('shader_2D_elast_cpml.wgsl') as shader_file:
-        cshader = device.create_shader_module(code=f"const wsx: i32 = {wsx};\n const wsy: i32 = {wsy};\n"
-                                                   + shader_file.read())
+        cshader_string = shader_file.read().replace('wsx', f'{wsx}').replace('wsy', f'{wsy}')
+        cshader = device.create_shader_module(code=cshader_string)
 
     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
     # ------- Buffers para o binding de parametros -------------
@@ -782,15 +775,6 @@ def sim_webgpu():
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
 
-    # Configuracao e inicializacao da janela de exibicao
-    App = pg.QtWidgets.QApplication([])
-    windowVx = Window('Vx [GPU]')
-    windowVx.setGeometry(200, 50, vx.shape[0], vx.shape[1])
-    windowVy = Window('Vy [GPU]')
-    windowVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
-    windowVxVy = Window('Vx + Vy [GPU]')
-    windowVxVy.setGeometry(200, 50, vy.shape[0], vy.shape[1])
-
     v_min = -1.0
     v_max = - v_min
     # Laco de tempo para execucao da simulacao
@@ -834,24 +818,27 @@ def sim_webgpu():
                                                                                                              ny + 2))
         v_sol_n = np.sqrt(np.max(vsn2))
         if (it % IT_DISPLAY) == 0 or it == 5:
-            v_out = np.asarray(device.queue.read_buffer(b_vel).cast("f")).reshape((2 * (nx + 2), ny + 2))
-            print(f'Time step # {it} out of {NSTEP}')
-            print(f'Max Vx = {np.max(v_out[:nx + 2, :])}, Vy = {np.max(v_out[nx + 2:, :])}')
-            print(f'Min Vx = {np.min(v_out[:nx + 2, :])}, Vy = {np.min(v_out[nx + 2:, :])}')
-            print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
-            print(f'Total energy = {en[it, 2]}')
-            windowVx.imv.setImage(v_out[:nx + 2, :], levels=[v_min / 1.0, v_max / 1.0])
-            windowVy.imv.setImage(v_out[nx + 2:, :], levels=[v_min / 1.0, v_max / 1.0])
-            windowVxVy.imv.setImage(v_out[:nx + 2, :] + v_out[nx + 2:, :], levels=[2.0 * v_min / 1.0,
-                                                                                   2.0 * v_max / 1.0])
-            App.processEvents()
+            if show_debug or show_anim:
+                v_out = np.asarray(device.queue.read_buffer(b_vel).cast("f")).reshape((2 * (nx + 2), ny + 2))
+
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max Vx = {np.max(v_out[:nx + 2, :])}, Vy = {np.max(v_out[nx + 2:, :])}')
+                print(f'Min Vx = {np.min(v_out[:nx + 2, :])}, Vy = {np.min(v_out[nx + 2:, :])}')
+                print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
+                print(f'Total energy = {en[it, 2]}')
+
+            if show_anim:
+                windowVx_GPU.imv.setImage(v_out[:nx + 2, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVy_GPU.imv.setImage(v_out[nx + 2:, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVxVy_GPU.imv.setImage(v_out[:nx + 2, :] + v_out[nx + 2:, :], levels=[2.0 * v_min / 1.0,
+                                                                                           2.0 * v_max / 1.0])
+                App.processEvents()
 
         # Verifica a estabilidade da simulacao
         if en[it, 3] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
-
-    App.exit()
 
     # Pega o sinal do sensor
     sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 2))
@@ -861,6 +848,26 @@ def sim_webgpu():
 
 times_webgpu = list()
 times_cpu = list()
+
+# Configuracao e inicializacao da janela de exibicao
+App = None
+if show_anim:
+    App = pg.QtWidgets.QApplication([])
+    if do_sim_cpu:
+        windowVx_CPU = Window('Vx [CPU]')
+        windowVx_CPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_CPU = Window('Vy [CPU]')
+        windowVy_CPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVxVy_CPU = Window('Vx + Vy [CPU]')
+        windowVxVy_CPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+
+    if do_sim_gpu:
+        windowVx_GPU = Window('Vx [GPU]')
+        windowVx_GPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_GPU = Window('Vy [GPU]')
+        windowVy_GPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVxVy_GPU = Window('Vx + Vy [GPU]')
+        windowVxVy_GPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
 
 # WebGPU
 if do_sim_gpu:
@@ -874,14 +881,15 @@ if do_sim_gpu:
         print(f'{times_webgpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        fig, ax = plt.subplots(3, sharex=True, sharey=True)
-        fig.suptitle(f'Receptor 1 [GPU]')
-        ax[0].plot(sensor[:, 0])
-        ax[0].set_title(r'$V_x$')
-        ax[1].plot(sensor[:, 1])
-        ax[1].set_title(r'$V_y$')
-        ax[2].plot(sensor[:, 0] + sensor[:, 1], 'tab:orange')
-        ax[2].set_title(r'$V_x + V_y$')
+        if plot_results:
+            fig, ax = plt.subplots(3, sharex=True, sharey=True)
+            fig.suptitle(f'Receptor 1 [GPU]')
+            ax[0].plot(sensor[:, 0])
+            ax[0].set_title(r'$V_x$')
+            ax[1].plot(sensor[:, 1])
+            ax[1].set_title(r'$V_y$')
+            ax[2].plot(sensor[:, 0] + sensor[:, 1], 'tab:orange')
+            ax[2].set_title(r'$V_x + V_y$')
 
 # CPU
 if do_sim_cpu:
@@ -894,30 +902,34 @@ if do_sim_cpu:
         print(f'{times_cpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        for irec in range(NREC):
-            fig, ax = plt.subplots(3, sharex=True, sharey=True)
-            fig.suptitle(f'Receptor {irec + 1} [CPU]')
-            ax[0].plot(sisvx[:, irec])
-            ax[0].set_title(r'$V_x$')
-            ax[1].plot(sisvy[:, irec])
-            ax[1].set_title(r'$V_y$')
-            ax[2].plot(sisvx[:, irec] + sisvy[:, irec], 'tab:orange')
-            ax[2].set_title(r'$V_x + V_y$')
+        if plot_results:
+            for irec in range(NREC):
+                fig, ax = plt.subplots(3, sharex=True, sharey=True)
+                fig.suptitle(f'Receptor {irec + 1} [CPU]')
+                ax[0].plot(sisvx[:, irec])
+                ax[0].set_title(r'$V_x$')
+                ax[1].plot(sisvy[:, irec])
+                ax[1].set_title(r'$V_y$')
+                ax[2].plot(sisvx[:, irec] + sisvy[:, irec], 'tab:orange')
+                ax[2].set_title(r'$V_x + V_y$')
 
-        plt.show()
+            plt.show()
 
-# times_for = np.array(times_for)
-# times_ser = np.array(times_ser)
-# if do_sim_gpu:
-#     print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
-#
-# print(f'TEMPO - {nt} pontos de tempo')
-# if do_sim_gpu and n_iter_gpu > 5:
-#     print(f'GPU: {times_for[5:].mean():.3}s (std = {times_for[5:].std()})')
-#
-# if do_sim_cpu and n_iter_cpu > 5:
-#     print(f'CPU: {times_ser[5:].mean():.3}s (std = {times_ser[5:].std()})')
-#
+if show_anim and App:
+    App.exit()
+
+times_webgpu = np.array(times_webgpu)
+times_cpu = np.array(times_cpu)
+if do_sim_gpu:
+    print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
+
+print(f'TEMPO - {NSTEP} pontos de tempo')
+if do_sim_gpu and n_iter_gpu > 5:
+    print(f'GPU: {times_webgpu[5:].mean():.3}s (std = {times_webgpu[5:].std()})')
+
+if do_sim_cpu and n_iter_cpu > 5:
+    print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
+
 # if do_sim_gpu and do_sim_cpu:
 #     print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 #
