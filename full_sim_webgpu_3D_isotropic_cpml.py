@@ -1,7 +1,8 @@
 import math
 
 import matplotlib.pyplot as plt
-import wgpu.backends.rs  # Select backend
+# import wgpu.backends.wgpu_native  # Select backend 0.13.X
+import wgpu.backends.rs  # Select backend 0.9.5
 from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
 # from sklearn.metrics import mean_squared_error
@@ -91,7 +92,9 @@ do_sim_gpu = False
 do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
-plot_results = True
+show_anim = True
+show_debug = True
+plot_results = False
 show_results = True
 save_results = True
 gpu_type = "NVIDIA"
@@ -184,11 +187,12 @@ sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # for evolution of total energy in the medium
-epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = np.zeros((nx + 2, ny + 2, nz + 2),
-                                                                                       dtype=flt32)
+v_2 = epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz =(
+    np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32))
 total_energy = np.zeros(NSTEP, dtype=flt32)
 total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
 total_energy_potential = np.zeros(NSTEP, dtype=flt32)
+v_solid_norm = np.zeros(NSTEP, dtype=flt32)
 
 # Valor da potencia para calcular "d0"
 NPOWER = 2.0
@@ -200,21 +204,21 @@ ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
 # Escolha do valor de wsx (GPU)
 wsx = 1
 for n in range(15, 0, -1):
-    if (nx % n) == 0:
+    if ((nx + 2) % n) == 0:
         wsx = n  # workgroup x size
         break
 
 # Escolha do valor de wsy (GPU)
 wsy = 1
 for n in range(15, 0, -1):
-    if (ny % n) == 0:
+    if ((ny + 2) % n) == 0:
         wsy = n  # workgroup x size
         break
 
 # TODO: Escolha do valor de wsz (GPU) --- Verificar necessidade
 wsz = 1
 for n in range(15, 0, -1):
-    if (nz % n) == 0:
+    if ((nz + 2) % n) == 0:
         wsz = n  # workgroup x size
         break
 
@@ -457,14 +461,18 @@ for irec in range(NREC):
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-courant_number = cp *  dt * math.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
+courant_number = cp * dt * math.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
 print(f'Numero de Courant e {courant_number}')
 if courant_number > 1:
-    print("O passo de tempo e muito longo, a simulação sera instavel")
+    print("O passo de tempo e muito longo, a simulacao sera instavel")
     exit(1)
 
 
 def sim_cpu():
+    global source_term, force_x, force_y
+    global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
+    global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
+    global a_z, a_z_half, b_z, b_z_half, k_z, k_z_half
     global vx, vy, vz, sigmaxx, sigmayy, sigmazz, sigmaxy, sigmaxz, sigmayz
     global memory_dvx_dx, memory_dvx_dy, memory_dvx_dz
     global memory_dvy_dx, memory_dvy_dy, memory_dvy_dz
@@ -473,30 +481,12 @@ def sim_cpu():
     global memory_dsigmaxy_dx, memory_dsigmaxy_dy
     global memory_dsigmaxz_dx, memory_dsigmaxz_dz
     global memory_dsigmayz_dy, memory_dsigmayz_dz
-    global sisvx, sisvy, sisvz
-    global total_energy, total_energy_kinetic, total_energy_potential
     global value_dvx_dx, value_dvy_dy, value_dvz_dz
-    global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
-    global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
-    global a_z, a_z_half, b_z, b_z_half, k_z, k_z_half
     global value_dsigmaxx_dx, value_dsigmaxy_dy, value_dsigmaxz_dz
-    global memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxz_dz
     global value_dsigmaxy_dx, value_dsigmayy_dy, value_dsigmayz_dz
-    global source_term, force_x, force_y, total_energy
+    global sisvx, sisvy, sisvz
+    global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
     global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
-
-    # Configuracao e inicializacao da janela de exibicao
-    App = pg.QtWidgets.QApplication([])
-    windowVx_XY = Window('Vx - Plano XY')
-    windowVy_XY = Window('Vy - Plano XY')
-    windowVz_XY = Window('Vz - Plano XY')
-    windowVx_XZ = Window('Vx - Plano XZ')
-    windowVy_XZ = Window('Vy - Plano XZ')
-    windowVz_XZ = Window('Vz - Plano XZ')
-    windowVx_YZ = Window('Vx - Plano YZ')
-    windowVy_YZ = Window('Vy - Plano YZ')
-    windowVz_YZ = Window('Vz - Plano YZ')
-    # windowVxVy = Window('Vx + Vy')
 
     DELTAT_over_rho = dt / rho
     two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
@@ -753,750 +743,407 @@ def sim_cpu():
 
         total_energy[it - 1] = local_energy_kinetic + local_energy_potential
 
-        v_solid_norm = np.max(np.sqrt(vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2))
+        v_solid_norm[it - 1] = np.max(np.sqrt(vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2))
         if (it % IT_DISPLAY) == 0 or it == 5:
-            print(f'Time step # {it} out of {NSTEP}')
-            print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
-            print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
-            print(f'Max norm velocity vector V (m/s) = {v_solid_norm}')
-            print(f'Total energy = {total_energy[it - 1]}')
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
+                print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
+                print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
+                print(f'Total energy = {total_energy[it - 1]}')
 
-        windowVx_XY.imv.setImage(vx[:, :, krec], levels=[v_min/10.0, v_max/10.0])
-        windowVy_XY.imv.setImage(vy[:, :, krec], levels=[v_min/10.0, v_max/10.0])
-        windowVz_XY.imv.setImage(vz[:, :, krec], levels=[v_min, v_max])
-        windowVx_XZ.imv.setImage(vx[:, jsource, :], levels=[v_min, v_max])
-        windowVy_XZ.imv.setImage(vy[:, jsource, :], levels=[v_min/10.0, v_max/10.0])
-        windowVz_XZ.imv.setImage(vz[:, jsource, :], levels=[v_min, v_max])
-        windowVx_YZ.imv.setImage(vx[isource, :, :], levels=[v_min/10.0, v_max/10.0])
-        windowVy_YZ.imv.setImage(vy[isource, :, :], levels=[v_min, v_max])
-        windowVz_YZ.imv.setImage(vz[isource, :, :], levels=[v_min, v_max])
-        # windowVxVy.imv.setImage(vx[:, :, krec] + vy[:, :, krec], levels=[-2.0, 2.0])
-        App.processEvents()
+            if show_anim:
+                windowVx_XY_CPU.imv.setImage(vx[:, :, krec], levels=[v_min/10.0, v_max/10.0])
+                windowVy_XY_CPU.imv.setImage(vy[:, :, krec], levels=[v_min/10.0, v_max/10.0])
+                windowVz_XY_CPU.imv.setImage(vz[:, :, krec], levels=[v_min, v_max])
+                windowVx_XZ_CPU.imv.setImage(vx[:, jsource, :], levels=[v_min, v_max])
+                windowVy_XZ_CPU.imv.setImage(vy[:, jsource, :], levels=[v_min/10.0, v_max/10.0])
+                windowVz_XZ_CPU.imv.setImage(vz[:, jsource, :], levels=[v_min, v_max])
+                windowVx_YZ_CPU.imv.setImage(vx[isource, :, :], levels=[v_min/10.0, v_max/10.0])
+                windowVy_YZ_CPU.imv.setImage(vy[isource, :, :], levels=[v_min, v_max])
+                windowVz_YZ_CPU.imv.setImage(vz[isource, :, :], levels=[v_min, v_max])
+                # windowVxVy.imv.setImage(vx[:, :, krec] + vy[:, :, krec], levels=[-2.0, 2.0])
+                App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if v_solid_norm > STABILITY_THRESHOLD:
+        if v_solid_norm[it -1] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
-    App.exit()
-
-    # End of the main loop
-    print("Simulacao terminada.")
-
-
-# --------------------------
-# Shader [kernel] para a simulação em WEBGPU
-shader_test = f"""
-    struct SimIntValues {{
-        y_sz: i32,          // Y field size
-        x_sz: i32,          // X field size
-        y_sens: i32,        // Y sensor
-        x_sens: i32,        // X sensor
-        k: i32              // iteraction
-    }};
-    
-    struct SimFltValues {{
-        cp_unrelaxed: f32,  // sound speed
-        dx: f32,            // delta x
-        dy: f32,            // delta y
-        dt: f32             // delta t
-    }};
-
-    // Group 0 - parameters
-    @group(0) @binding(0)   // param_flt32
-    var<storage,read> sim_flt_par: SimFltValues;
-
-    @group(0) @binding(1) // source term
-    var<storage,read> src: array<f32>;
-    
-    @group(0) @binding(2) // kronecker_src, rho_half_x, rho_half_y, kappa
-    var<storage,read> img_params: array<f32>;
-
-    @group(0) @binding(3) // a_x, b_x, k_x, a_x_h, b_x_h, k_x_h
-    var<storage,read> coef_x: array<f32>;
-    
-    @group(0) @binding(4) // a_y, b_y, k_y, a_y_h, b_y_h, k_y_h
-    var<storage,read> coef_y: array<f32>;
-    
-    @group(0) @binding(5) // param_int32
-    var<storage,read_write> sim_int_par: SimIntValues;
-
-    // Group 1 - simulation arrays
-    @group(1) @binding(6) // pressure future (p_0)
-    var<storage,read_write> pr_future: array<f32>;
-
-    @group(1) @binding(7) // pressure fields p_1, p_2
-    var<storage,read_write> pr_fields: array<f32>;
-
-    @group(1) @binding(8) // derivative fields x (v_x, mdp_x, dp_x, dmdp_x)
-    var<storage,read_write> der_x: array<f32>;
-
-    @group(1) @binding(9) // derivative fields y (v_y, mdp_y, dp_y, dmdp_y)
-    var<storage,read_write> der_y: array<f32>;
-
-    // Group 2 - sensors arrays
-    @group(2) @binding(10) // sensor signal
-    var<storage,read_write> sensor: array<f32>;
-
-    // function to convert 2D [y,x] index into 1D [yx] index
-    fn yx(y: i32, x: i32) -> i32 {{
-        let index = y + x * sim_int_par.y_sz;
-
-        return select(-1, index, y >= 0 && y < sim_int_par.y_sz && x >= 0 && x < sim_int_par.x_sz);
-    }}
-    
-    // function to convert 2D [i,j] index into 1D [] index
-    fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {{
-        let index = j + i * j_max;
-
-        return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
-    }}
-    
-    // function to convert 3D [i,j,k] index into 1D [] index
-    fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {{
-        let index = j + i * j_max + k * j_max * i_max;
-
-        return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
-    }}
-    
-    // function to get a kappa array value
-    fn get_kappa(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, img_params[index], index != -1);
-    }}
-    
-    // function to get a kronecker_src array value
-    fn get_kronecker_src(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, img_params[index], index != -1);
-    }}
-    
-    // function to get a rho_h_x array value
-    fn get_rho_h_x(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, img_params[index], index != -1);
-    }}
-    
-    // function to get a rho_h_y array value
-    fn get_rho_h_y(i: i32, j: i32) -> f32 {{
-        let index: i32 = ijk(i, j, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, img_params[index], index != -1);
-    }}
-    
-    // function to get a src array value
-    fn get_src(n: i32) -> f32 {{
-        return select(0.0, src[n], n >= 0);
-    }}
-    
-    // function to get a a_x array value
-    fn get_a_x(n: i32) -> f32 {{
-        let index: i32 = ij(0, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a b_x array value
-    fn get_b_x(n: i32) -> f32 {{
-        let index: i32 = ij(1, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a k_x array value
-    fn get_k_x(n: i32) -> f32 {{
-        let index: i32 = ij(2, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a a_y array value
-    fn get_a_y(n: i32) -> f32 {{
-        let index: i32 = ij(0, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-    
-    // function to get a b_y array value
-    fn get_b_y(n: i32) -> f32 {{
-        let index: i32 = ij(1, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-    
-    // function to get a k_y array value
-    fn get_k_y(n: i32) -> f32 {{
-        let index: i32 = ij(2, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-    
-    // function to get a a_x_h array value
-    fn get_a_x_h(n: i32) -> f32 {{
-        let index: i32 = ij(3, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a b_x_h array value
-    fn get_b_x_h(n: i32) -> f32 {{
-        let index: i32 = ij(4, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a k_x_h array value
-    fn get_k_x_h(n: i32) -> f32 {{
-        let index: i32 = ij(5, n, 6, sim_int_par.x_sz);
-        
-        return select(0.0, coef_x[index], index != -1);
-    }}
-    
-    // function to get a a_y_h array value
-    fn get_a_y_h(n: i32) -> f32 {{
-        let index: i32 = ij(3, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-    
-    // function to get a b_y_h array value
-    fn get_b_y_h(n: i32) -> f32 {{
-        let index: i32 = ij(4, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-    
-    // function to get a k_y_h array value
-    fn get_k_y_h(n: i32) -> f32 {{
-        let index: i32 = ij(5, n, 6, sim_int_par.y_sz);
-        
-        return select(0.0, coef_y[index], index != -1);
-    }}
-
-    // function to get an p_0 (pr_future) array value
-    fn get_p_0(y: i32, x: i32) -> f32 {{
-        let index: i32 = yx(y, x);
-
-        return select(0.0, pr_future[index], index != -1);
-    }}
-
-    // function to set a p_0 array value
-    fn set_p_0(y: i32, x: i32, val : f32) {{
-        let index: i32 = yx(y, x);
-
-        if(index != -1) {{
-            pr_future[index] = val;
-        }}
-    }}
-
-    // function to get an p_1 array value
-    fn get_p_1(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 2);
-
-        return select(0.0, pr_fields[index], index != -1);
-    }}
-
-    // function to set a p_1 array value
-    fn set_p_1(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 2);
-
-        if(index != -1) {{
-            pr_fields[index] = val;
-        }}
-    }}
-
-    // function to get an p_2 array value
-    fn get_p_2(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 2);
-
-        return select(0.0, pr_fields[index], index != -1);
-    }}
-
-    // function to set a p_2 array value
-    fn set_p_2(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 2);
-
-        if(index != -1) {{
-            pr_fields[index] = val;
-        }}
-    }}
-    
-    // function to get an v_x array value
-    fn get_v_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_x[index], index != -1);
-    }}
-
-    // function to set a v_x array value
-    fn set_v_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_x[index] = val;
-        }}
-    }}
-    
-    // function to get an v_y array value
-    fn get_v_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_y[index], index != -1);
-    }}
-
-    // function to set a v_y array value
-    fn set_v_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 0, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_y[index] = val;
-        }}
-    }}
-    
-    // function to get an mdp_x array value
-    fn get_mdp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_x[index], index != -1);
-    }}
-
-    // function to set a mdp_x array value
-    fn set_mdp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_x[index] = val;
-        }}
-    }}
-    
-    // function to get an mdp_y array value
-    fn get_mdp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_y[index], index != -1);
-    }}
-
-    // function to set a mdp_y array value
-    fn set_mdp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 1, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_y[index] = val;
-        }}
-    }}
-    
-    // function to get an dp_x array value
-    fn get_dp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_x[index], index != -1);
-    }}
-
-    // function to set a dp_x array value
-    fn set_dp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_x[index] = val;
-        }}
-    }}
-    
-    // function to get an dp_y array value
-    fn get_dp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_y[index], index != -1);
-    }}
-
-    // function to set a dp_y array value
-    fn set_dp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 2, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_y[index] = val;
-        }}
-    }}
-    
-    // function to get an dmdp_x array value
-    fn get_dmdp_x(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_x[index], index != -1);
-    }}
-
-    // function to set a dmdp_x array value
-    fn set_dmdp_x(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_x[index] = val;
-        }}
-    }}
-    
-    // function to get an dmdp_y array value
-    fn get_dmdp_y(y: i32, x: i32) -> f32 {{
-        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        return select(0.0, der_y[index], index != -1);
-    }}
-
-    // function to set a dmdp_y array value
-    fn set_dmdp_y(y: i32, x: i32, val : f32) {{
-        let index: i32 = ijk(y, x, 3, sim_int_par.y_sz, sim_int_par.x_sz, 4);
-
-        if(index != -1) {{
-            der_y[index] = val;
-        }}
-    }}
-
-    // function to calculate first derivatives
-    @compute
-    @workgroup_size({wsy}, {wsx})
-    fn space_sim1(@builtin(global_invocation_id) index: vec3<u32>) {{
-        let y: i32 = i32(index.x);          // y thread index
-        let x: i32 = i32(index.y);          // x thread index
-        var vdp_x: f32 = 0.0;
-        var vdp_y: f32 = 0.0;
-        
-        // Calcula a primeira derivada espacial dividida pela densidade
-        vdp_x = (get_p_1(y + 1, x) - get_p_1(y, x)) / sim_flt_par.dx;
-        set_mdp_x(y, x, get_b_x_h(y)*get_mdp_x(y, x) + get_a_x_h(y)*vdp_x);
-        vdp_y = (get_p_1(y, x + 1) - get_p_1(y, x)) / sim_flt_par.dy;
-        set_mdp_y(y, x, get_b_y_h(x)*get_mdp_y(y, x) + get_a_y_h(x)*vdp_y);
-        set_dp_x(y, x, (vdp_x / get_k_x_h(y) + get_mdp_x(y, x))/get_rho_h_x(y, x));
-        set_dp_y(y, x, (vdp_y / get_k_y_h(x) + get_mdp_y(y, x))/get_rho_h_y(y, x));      
-    }}
-    
-    // function to calculate second derivatives
-    @compute
-    @workgroup_size({wsy}, {wsx})
-    fn space_sim2(@builtin(global_invocation_id) index: vec3<u32>) {{
-        let y: i32 = i32(index.x);          // y thread index
-        let x: i32 = i32(index.y);          // x thread index
-        var vdp_xx: f32 = 0.0;
-        var vdp_yy: f32 = 0.0;
-            
-        // Calcula a segunda derivada espacial
-        vdp_xx = (get_dp_x(y, x) - get_dp_x(y - 1, x)) / sim_flt_par.dx;
-        set_dmdp_x(y, x, get_b_x(y)*get_dmdp_x(y, x) + get_a_x(y)*vdp_xx);
-        vdp_yy = (get_dp_y(y, x) - get_dp_y(y, x - 1)) / sim_flt_par.dy;
-        set_dmdp_y(y, x, get_b_y(x)*get_dmdp_y(y, x) + get_a_y(x)*vdp_yy);
-        set_v_x(y, x, vdp_xx / get_k_x(y) + get_dmdp_x(y, x));
-        set_v_y(y, x, vdp_yy / get_k_y(x) + get_dmdp_y(y, x));        
-    }}
-
-    @compute
-    @workgroup_size(1)
-    fn incr_k() {{
-        sim_int_par.k += 1;
-    }}
-
-    @compute
-    @workgroup_size({wsy}, {wsx})
-    fn time_sim(@builtin(global_invocation_id) index: vec3<u32>) {{
-        var add_src: f32 = 0.0;             // Source term
-        let y: i32 = i32(index.x);          // y thread index
-        let x: i32 = i32(index.y);          // x thread index
-        let dt: f32 = sim_flt_par.dt;
-        let pi_4: f32 = 12.5663706144;
-
-        // --------------------
-        // Update pressure field
-        add_src = pi_4*sim_flt_par.cp_unrelaxed*sim_flt_par.cp_unrelaxed*src[sim_int_par.k]*get_kronecker_src(y, x);
-        set_p_0(y, x, -1.0*get_p_2(y, x) + 2.0*get_p_1(y, x) +
-            dt*dt*((get_v_x(y, x) + get_v_y(y, x))*get_kappa(y, x) + add_src));
-
-        // Aplly Dirichlet conditions
-        if(y == 0 || y == (sim_int_par.y_sz - 1) || x == 0 || x == (sim_int_par.x_sz - 1)) {{
-            set_p_0(y, x, 0.0);
-        }}
-            
-        // --------------------
-        // Circular buffer
-        set_p_2(y, x, get_p_1(y, x));
-        set_p_1(y, x, get_p_0(y, x));
-
-        if(y == sim_int_par.y_sens && x == sim_int_par.x_sens) {{
-            sensor[sim_int_par.k] = get_p_0(y, x);
-        }}
-    }}
-    """
 
 # Simulação completa em WEB GPU
-# def sim_webgpu():
-#     global p_2, p_1, p_0, mdp_x, mdp_y, dp_x, dp_y, dmdp_x, dmdp_y, v_x, v_y, a_x, NSTEP
-#
-#     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
-#     params_i32 = np.array([ny, nx, sens_y, sens_x, 0], dtype=np.int32)
-#     params_f32 = np.array([cp_unrelaxed, dx, dy, dt], dtype=flt32)
-#
-#     # =====================
-#     # webgpu configurations
-#     if gpu_type == "NVIDIA":
-#         device = wgpu.utils.get_default_device()
-#     else:
-#         adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")
-#         device = adapter.request_device()
-#
-#     # Cria o shader para calculo contido na string ``shader_test''
-#     cshader = device.create_shader_module(code=shader_test)
-#
-#     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
-#     # ------- Buffers para o binding de parametros -------------
-#     # Buffer de parametros com valores em ponto flutuante
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 0
-#     b_param_flt32 = device.create_buffer_with_data(data=params_f32,
-#                                                    usage=wgpu.BufferUsage.STORAGE |
-#                                                          wgpu.BufferUsage.COPY_SRC)
-#
-#     # Termo de fonte
-#     # Binding 1
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     b_src = device.create_buffer_with_data(data=source_term,
-#                                            usage=wgpu.BufferUsage.STORAGE |
-#                                                  wgpu.BufferUsage.COPY_SRC)
-#
-#     # Mapa da posicao das fontes
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 2
-#     b_img_params = device.create_buffer_with_data(data=np.vstack((kronecker_source,
-#                                                                   rho_half_x,
-#                                                                   rho_half_y,
-#                                                                   kappa_unrelaxed)),
-#                                                    usage=wgpu.BufferUsage.STORAGE |
-#                                                          wgpu.BufferUsage.COPY_SRC)
-#
-#     # Coeficientes de absorcao
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 3
-#     b_coef_x = device.create_buffer_with_data(data=np.row_stack((a_x, b_x, k_x, a_x_half, b_x_half, k_x_half)),
-#                                               usage=wgpu.BufferUsage.STORAGE |
-#                                                     wgpu.BufferUsage.COPY_SRC)
-#
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 4
-#     b_coef_y = device.create_buffer_with_data(data=np.row_stack((a_y, b_y, k_y, a_y_half, b_y_half, k_y_half)),
-#                                               usage=wgpu.BufferUsage.STORAGE |
-#                                                     wgpu.BufferUsage.COPY_SRC)
-#
-#     # Buffer de parametros com valores inteiros
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 5
-#     b_param_int32 = device.create_buffer_with_data(data=params_i32,
-#                                                    usage=wgpu.BufferUsage.STORAGE |
-#                                                          wgpu.BufferUsage.COPY_SRC)
-#
-#     # Buffers com os campos de pressao
-#     # Pressao futura (amostra de tempo n+1)
-#     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-#     # Binding 6
-#     b_p_0 = device.create_buffer_with_data(data=p_0,
-#                                            usage=wgpu.BufferUsage.STORAGE |
-#                                                  wgpu.BufferUsage.COPY_DST |
-#                                                  wgpu.BufferUsage.COPY_SRC)
-#     # Campos de pressao atual
-#     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-#     # Binding 7
-#     b_pr_fields = device.create_buffer_with_data(data=np.vstack((p_1, p_2)),
-#                                                  usage=wgpu.BufferUsage.STORAGE |
-#                                                        wgpu.BufferUsage.COPY_SRC)
-#     # Matrizes para o calculo das derivadas (primeira e segunda)
-#     # Binding 8 - matrizes para o eixo x
-#     b_der_x = device.create_buffer_with_data(data=np.vstack((v_x, mdp_x, dp_x, dmdp_x)),
-#                                              usage=wgpu.BufferUsage.STORAGE |
-#                                                    wgpu.BufferUsage.COPY_SRC)
-#     # Binding 9 - matrizes para o eixo y
-#     b_der_y = device.create_buffer_with_data(data=np.vstack((v_y, mdp_y, dp_y, dmdp_y)),
-#                                              usage=wgpu.BufferUsage.STORAGE |
-#                                                    wgpu.BufferUsage.COPY_SRC)
-#
-#     # Sinal do sensor
-#     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-#     # Binding 10
-#     b_sens = device.create_buffer_with_data(data=sensor,
-#                                             usage=wgpu.BufferUsage.STORAGE |
-#                                                   wgpu.BufferUsage.COPY_DST |
-#                                                   wgpu.BufferUsage.COPY_SRC)
-#
-#     # Esquema de amarracao dos parametros (binding layouts [bl])
-#     # Parametros
-#     bl_params = [
-#         {"binding": ii,
-#          "visibility": wgpu.ShaderStage.COMPUTE,
-#          "buffer": {
-#              "type": wgpu.BufferBindingType.read_only_storage}
-#          } for ii in range(5)
-#     ]
-#     # b_param_i32
-#     bl_params.append({
-#                          "binding": 5,
-#                          "visibility": wgpu.ShaderStage.COMPUTE,
-#                          "buffer": {
-#                              "type": wgpu.BufferBindingType.storage,
-#                          },
-#                      })
-#
-#     # Arrays da simulacao
-#     bl_sim_arrays = [
-#         {"binding": ii,
-#          "visibility": wgpu.ShaderStage.COMPUTE,
-#          "buffer": {
-#              "type": wgpu.BufferBindingType.storage}
-#          } for ii in range(6, 10)
-#     ]
-#
-#     # Sensores
-#     bl_sensors = [
-#         {
-#             "binding": 10,
-#             "visibility": wgpu.ShaderStage.COMPUTE,
-#             "buffer": {
-#                 "type": wgpu.BufferBindingType.storage,
-#             },
-#         },
-#     ]
-#
-#     # Configuracao das amarracoes (bindings)
-#     b_params = [
-#         {
-#             "binding": 0,
-#             "resource": {"buffer": b_param_flt32, "offset": 0, "size": b_param_flt32.size},
-#         },
-#         {
-#             "binding": 1,
-#             "resource": {"buffer": b_src, "offset": 0, "size": b_src.size},
-#         },
-#         {
-#             "binding": 2,
-#             "resource": {"buffer": b_img_params, "offset": 0, "size": b_img_params.size},
-#         },
-#         {
-#             "binding": 3,
-#             "resource": {"buffer": b_coef_x, "offset": 0, "size": b_coef_x.size},
-#         },
-#         {
-#             "binding": 4,
-#             "resource": {"buffer": b_coef_y, "offset": 0, "size": b_coef_y.size},
-#         },
-#         {
-#             "binding": 5,
-#             "resource": {"buffer": b_param_int32, "offset": 0, "size": b_param_int32.size},
-#         },
-#     ]
-#     b_sim_arrays = [
-#         {
-#             "binding": 6,
-#             "resource": {"buffer": b_p_0, "offset": 0, "size": b_p_0.size},
-#         },
-#         {
-#             "binding": 7,
-#             "resource": {"buffer": b_pr_fields, "offset": 0, "size": b_pr_fields.size},
-#         },
-#         {
-#             "binding": 8,
-#             "resource": {"buffer": b_der_x, "offset": 0, "size": b_der_x.size},
-#         },
-#         {
-#             "binding": 9,
-#             "resource": {"buffer": b_der_y, "offset": 0, "size": b_der_y.size},
-#         },
-#     ]
-#     b_sensors = [
-#         {
-#             "binding": 10,
-#             "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
-#         },
-#     ]
-#
-#     # Coloca tudo junto
-#     bgl_0 = device.create_bind_group_layout(entries=bl_params)
-#     bgl_1 = device.create_bind_group_layout(entries=bl_sim_arrays)
-#     bgl_2 = device.create_bind_group_layout(entries=bl_sensors)
-#     pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2])
-#     bg_0 = device.create_bind_group(layout=bgl_0, entries=b_params)
-#     bg_1 = device.create_bind_group(layout=bgl_1, entries=b_sim_arrays)
-#     bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
-#
-#     # Cria os pipelines de execucao
-#     compute_space_sim1 = device.create_compute_pipeline(layout=pipeline_layout,
-#                                                         compute={"module": cshader, "entry_point": "space_sim1"})
-#     compute_space_sim2 = device.create_compute_pipeline(layout=pipeline_layout,
-#                                                         compute={"module": cshader, "entry_point": "space_sim2"})
-#     compute_time_sim = device.create_compute_pipeline(layout=pipeline_layout,
-#                                                       compute={"module": cshader, "entry_point": "time_sim"})
-#     compute_incr_k = device.create_compute_pipeline(layout=pipeline_layout,
-#                                                     compute={"module": cshader, "entry_point": "incr_k"})
-#
-#     # Configuracao e inicializacao da janela de exibicao
-#     App = pg.QtWidgets.QApplication([])
-#     window = Window()
-#
-#     # Laco de tempo para execucao da simulacao
-#     for it in range(NSTEP):
-#         # Cria o codificador de comandos
-#         command_encoder = device.create_command_encoder()
-#
-#         # Inicia os passos de execucao do decodificador
-#         compute_pass = command_encoder.begin_compute_pass()
-#
-#         # Ajusta os grupos de amarracao
-#         compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
-#         compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
-#         compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
-#
-#         # Ativa o pipeline de execucao da simulacao no espaco (calculo da primeira derivada espacial)
-#         compute_pass.set_pipeline(compute_space_sim1)
-#         compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
-#
-#         # Ativa o pipeline de execucao da simulacao no espaco (calculo da segunda derivada espacial)
-#         compute_pass.set_pipeline(compute_space_sim2)
-#         compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
-#
-#         # Ativa o pipeline de execucao da simulacao no tempo (calculo das derivadas temporais)
-#         compute_pass.set_pipeline(compute_time_sim)
-#         compute_pass.dispatch_workgroups(ny // wsy, nx // wsx)
-#
-#         # Ativa o pipeline de atualizacao da amostra de tempo
-#         compute_pass.set_pipeline(compute_incr_k)
-#         compute_pass.dispatch_workgroups(1)
-#
-#         # Termina o passo de execucao
-#         compute_pass.end()
-#
-#         # Efetua a execucao dos comandos na GPU
-#         device.queue.submit([command_encoder.finish()])
-#
-#         # Pega o resultado do campo de pressao
-#         if (it % 10) == 0:
-#             out = device.queue.read_buffer(b_p_0).cast("f")  # reads from buffer 3
-#             window.imv.setImage(np.asarray(out).reshape((ny, nx)).T, levels=[-1.0, 1.0])
-#             App.processEvents()
-#
-#     App.exit()
-#
-#     # Pega o sinal do sensor
-#     sens = np.array(device.queue.read_buffer(b_sens).cast("f"))
-#     adapter_info = device.adapter.request_adapter_info()
-#     return sens, adapter_info["device"]
+def sim_webgpu():
+    global source_term, force_x, force_y
+    global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
+    global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
+    global vx, vy, sigmaxx, sigmayy, sigmaxy
+    global memory_dvx_dx, memory_dvx_dy
+    global memory_dvy_dx, memory_dvy_dy
+    global memory_dsigmaxx_dx, memory_dsigmayy_dy
+    global memory_dsigmaxy_dx, memory_dsigmaxy_dy
+    global value_dvx_dx, value_dvy_dy
+    global value_dsigmaxx_dx, value_dsigmaxy_dy
+    global value_dsigmaxy_dx, value_dsigmayy_dy
+    global sisvx, sisvy
+    global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
+    global epsilon_xx, epsilon_yy, epsilon_xy
+
+    # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
+    params_i32 = np.array([nx + 2, ny + 2, isource, jsource, ix_rec[0], iy_rec[0], npoints_pml, NSTEP, 0],
+                          dtype=np.int32)
+    params_f32 = np.array([cp, cs, dx, dy, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
+
+    # =====================
+    # webgpu configurations
+    if gpu_type == "NVIDIA":
+        device = wgpu.utils.get_default_device()
+    else:
+        # adapter = wgpu.gpu.request_adapter(power_preference="low-power")  # 0.13.X
+        adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")  # 0.9.5
+        device = adapter.request_device()
+
+    # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
+    cshader = None
+    with open('shader_2D_elast_cpml.wgsl') as shader_file:
+        cshader_string = shader_file.read().replace('wsx', f'{wsx}').replace('wsy', f'{wsy}')
+        cshader = device.create_shader_module(code=cshader_string)
+
+    # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
+    # ------- Buffers para o binding de parametros -------------
+    # Buffer de parametros com valores em ponto flutuante
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 0
+    b_param_flt32 = device.create_buffer_with_data(data=params_f32,
+                                                   usage=wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+    # Forcas da fonte
+    # Binding 1
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    b_force = device.create_buffer_with_data(data=np.column_stack((force_x, force_y)),
+                                             usage=wgpu.BufferUsage.STORAGE |
+                                                   wgpu.BufferUsage.COPY_SRC)
+
+    # Coeficientes de absorcao
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 2
+    b_coef_x = device.create_buffer_with_data(data=np.column_stack((a_x, b_x, k_x, a_x_half, b_x_half, k_x_half)),
+                                              usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 3
+    b_coef_y = device.create_buffer_with_data(data=np.row_stack((a_y, b_y, k_y, a_y_half, b_y_half, k_y_half)),
+                                              usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+    # Buffer de parametros com valores inteiros
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 4
+    b_param_int32 = device.create_buffer_with_data(data=params_i32,
+                                                   usage=wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+    # Buffers com os arrays de simulacao
+    # Velocidades
+    # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
+    # Binding 5
+    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy)),
+                                           usage=wgpu.BufferUsage.STORAGE |
+                                                 wgpu.BufferUsage.COPY_DST |
+                                                 wgpu.BufferUsage.COPY_SRC)
+
+    # Estresses
+    # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
+    # Binding 6
+    b_sig = device.create_buffer_with_data(data=np.vstack((sigmaxx, sigmayy, sigmaxy)),
+                                           usage=wgpu.BufferUsage.STORAGE |
+                                                 wgpu.BufferUsage.COPY_DST |
+                                                 wgpu.BufferUsage.COPY_SRC)
+
+    # Arrays de memoria do simulador
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 7
+    b_memo = device.create_buffer_with_data(data=np.vstack((memory_dvx_dx, memory_dvx_dy,
+                                                            memory_dvy_dx, memory_dvy_dy,
+                                                            memory_dsigmaxx_dx, memory_dsigmayy_dy,
+                                                            memory_dsigmaxy_dx, memory_dsigmaxy_dy)),
+                                            usage=wgpu.BufferUsage.STORAGE |
+                                                  wgpu.BufferUsage.COPY_SRC)
+
+    # Sinal do sensor
+    # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
+    # Binding 8
+    b_sens = device.create_buffer_with_data(data=np.column_stack((sisvx[:, 0], sisvy[:, 0])),
+                                            usage=wgpu.BufferUsage.STORAGE |
+                                                  wgpu.BufferUsage.COPY_DST |
+                                                  wgpu.BufferUsage.COPY_SRC)
+
+    # Arrays epsilon
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 9
+    b_eps = device.create_buffer_with_data(data=np.vstack((epsilon_xx, epsilon_yy, epsilon_xy, v_2)),
+                                           usage=wgpu.BufferUsage.STORAGE |
+                                                 wgpu.BufferUsage.COPY_SRC)
+
+    # Arrays de energia total
+    # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
+    # Binding 10
+    b_energy = device.create_buffer_with_data(data=np.column_stack((total_energy, total_energy_kinetic,
+                                                                    total_energy_potential, v_solid_norm)),
+                                              usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+    # Esquema de amarracao dos parametros (binding layouts [bl])
+    # Parametros
+    bl_params = [
+        {"binding": ii,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         } for ii in range(4)
+    ]
+    # b_param_i32
+    bl_params.append({
+        "binding": 4,
+        "visibility": wgpu.ShaderStage.COMPUTE,
+        "buffer": {
+            "type": wgpu.BufferBindingType.storage,
+        },
+    })
+
+    # Arrays da simulacao
+    bl_sim_arrays = [
+        {"binding": ii,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         } for ii in range(5, 8)
+    ]
+
+    # Sensores
+    bl_sensors = [
+        {"binding": ii,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         } for ii in range(8, 11)
+    ]
+
+    # Configuracao das amarracoes (bindings)
+    b_params = [
+        {
+            "binding": 0,
+            "resource": {"buffer": b_param_flt32, "offset": 0, "size": b_param_flt32.size},
+        },
+        {
+            "binding": 1,
+            "resource": {"buffer": b_force, "offset": 0, "size": b_force.size},
+        },
+        {
+            "binding": 2,
+            "resource": {"buffer": b_coef_x, "offset": 0, "size": b_coef_x.size},
+        },
+        {
+            "binding": 3,
+            "resource": {"buffer": b_coef_y, "offset": 0, "size": b_coef_y.size},
+        },
+        {
+            "binding": 4,
+            "resource": {"buffer": b_param_int32, "offset": 0, "size": b_param_int32.size},
+        },
+    ]
+    b_sim_arrays = [
+        {
+            "binding": 5,
+            "resource": {"buffer": b_vel, "offset": 0, "size": b_vel.size},
+        },
+        {
+            "binding": 6,
+            "resource": {"buffer": b_sig, "offset": 0, "size": b_sig.size},
+        },
+        {
+            "binding": 7,
+            "resource": {"buffer": b_memo, "offset": 0, "size": b_memo.size},
+        },
+    ]
+    b_sensors = [
+        {
+            "binding": 8,
+            "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
+        },
+        {
+            "binding": 9,
+            "resource": {"buffer": b_eps, "offset": 0, "size": b_eps.size},
+        },
+        {
+            "binding": 10,
+            "resource": {"buffer": b_energy, "offset": 0, "size": b_energy.size},
+        },
+    ]
+
+    # Coloca tudo junto
+    bgl_0 = device.create_bind_group_layout(entries=bl_params)
+    bgl_1 = device.create_bind_group_layout(entries=bl_sim_arrays)
+    bgl_2 = device.create_bind_group_layout(entries=bl_sensors)
+    pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2])
+    bg_0 = device.create_bind_group(layout=bgl_0, entries=b_params)
+    bg_1 = device.create_bind_group(layout=bgl_1, entries=b_sim_arrays)
+    bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
+
+    # Cria os pipelines de execucao
+    compute_sigma_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                          compute={"module": cshader, "entry_point": "sigma_kernel"})
+    compute_velocity_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                             compute={"module": cshader,
+                                                                      "entry_point": "velocity_kernel"})
+    compute_finish_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                              compute={"module": cshader,
+                                                                       "entry_point": "finish_it_kernel"})
+    compute_incr_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                            compute={"module": cshader,
+                                                                     "entry_point": "incr_it_kernel"})
+
+    v_min = -1.0
+    v_max = - v_min
+    # Laco de tempo para execucao da simulacao
+    for it in range(NSTEP):
+        # Cria o codificador de comandos
+        command_encoder = device.create_command_encoder()
+
+        # Inicia os passos de execucao do decodificador
+        compute_pass = command_encoder.begin_compute_pass()
+
+        # Ajusta os grupos de amarracao
+        compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
+
+        # Ativa o pipeline de execucao do calculo dos es stresses
+        compute_pass.set_pipeline(compute_sigma_kernel)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+
+        # Ativa o pipeline de execucao do calculo das velocidades
+        compute_pass.set_pipeline(compute_velocity_kernel)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+
+        # Ativa o pipeline de execucao dos procedimentos finais da iteracao
+        compute_pass.set_pipeline(compute_finish_it_kernel)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+
+        # Ativa o pipeline de atualizacao da amostra de tempo
+        compute_pass.set_pipeline(compute_incr_it_kernel)
+        compute_pass.dispatch_workgroups(1)
+
+        # Termina o passo de execucao
+        compute_pass.end()
+
+        # Efetua a execucao dos comandos na GPU
+        device.queue.submit([command_encoder.finish()])
+
+        en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
+        vsn2 = np.asarray(device.queue.read_buffer(b_eps,
+                                                   buffer_offset=(v_2.size * 4) * 3).cast("f")).reshape((nx + 2,
+                                                                                                             ny + 2))
+        v_sol_n = np.sqrt(np.max(vsn2))
+        if (it % IT_DISPLAY) == 0 or it == 5:
+            if show_debug or show_anim:
+                v_out = np.asarray(device.queue.read_buffer(b_vel).cast("f")).reshape((2 * (nx + 2), ny + 2))
+
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max Vx = {np.max(v_out[:nx + 2, :])}, Vy = {np.max(v_out[nx + 2:, :])}')
+                print(f'Min Vx = {np.min(v_out[:nx + 2, :])}, Vy = {np.min(v_out[nx + 2:, :])}')
+                print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
+                print(f'Total energy = {en[it, 2]}')
+
+            if show_anim:
+                windowVx_GPU.imv.setImage(v_out[:nx + 2, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVy_GPU.imv.setImage(v_out[nx + 2:, :], levels=[v_min / 1.0, v_max / 1.0])
+                windowVxVy_GPU.imv.setImage(v_out[:nx + 2, :] + v_out[nx + 2:, :], levels=[2.0 * v_min / 1.0,
+                                                                                           2.0 * v_max / 1.0])
+                App.processEvents()
+
+        # Verifica a estabilidade da simulacao
+        if en[it, 3] > STABILITY_THRESHOLD:
+            print("Simulacao tornando-se instável")
+            exit(2)
+
+    # Pega o sinal do sensor
+    sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 2))
+    adapter_info = device.adapter.request_adapter_info()
+    return sens, adapter_info["device"]
 
 
 times_webgpu = list()
 times_cpu = list()
 
+# Configuracao e inicializacao da janela de exibicao
+App = None
+if show_anim:
+    App = pg.QtWidgets.QApplication([])
+    if do_sim_cpu:
+        windowVx_XY_CPU = Window('Vx - Plano XY [CPU]')
+        windowVx_XY_CPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_XY_CPU = Window('Vy - Plano XY [CPU]')
+        windowVy_XY_CPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_XY_CPU = Window('Vz - Plano XY [CPU]')
+        windowVz_XY_CPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+        windowVx_XZ_CPU = Window('Vx - Plano XZ [CPU]')
+        windowVx_XZ_CPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_XZ_CPU = Window('Vy - Plano XZ [CPU]')
+        windowVy_XZ_CPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_XZ_CPU = Window('Vz - Plano XZ [CPU]')
+        windowVz_XZ_CPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+        windowVx_YZ_CPU = Window('Vx - Plano YZ [CPU]')
+        windowVx_YZ_CPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_YZ_CPU = Window('Vy - Plano YZ [CPU]')
+        windowVy_YZ_CPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_YZ_CPU = Window('Vz - Plano YZ [CPU]')
+        windowVz_YZ_CPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+
+    if do_sim_gpu:
+        windowVx_XY_GPU = Window('Vx - Plano XY [GPU]')
+        windowVx_XY_GPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_XY_GPU = Window('Vy - Plano XY [GPU]')
+        windowVy_XY_GPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_XY_GPU = Window('Vz - Plano XY [GPU]')
+        windowVz_XY_GPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+        windowVx_XZ_GPU = Window('Vx - Plano XZ [GPU]')
+        windowVx_XZ_GPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_XZ_GPU = Window('Vy - Plano XZ [GPU]')
+        windowVy_XZ_GPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_XZ_GPU = Window('Vz - Plano XZ [GPU]')
+        windowVz_XZ_GPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+        windowVx_YZ_GPU = Window('Vx - Plano YZ [GPU]')
+        windowVx_YZ_GPU.setGeometry(200, 50, vx.shape[0], vx.shape[1])
+        windowVy_YZ_GPU = Window('Vy - Plano YZ [GPU]')
+        windowVy_YZ_GPU.setGeometry(200, 50, vy.shape[0], vy.shape[1])
+        windowVz_YZ_GPU = Window('Vz - Plano YZ [GPU]')
+        windowVz_YZ_GPU.setGeometry(200, 50, vz.shape[0], vz.shape[1])
+
 # WebGPU
-# if do_sim_gpu:
-#     for n in range(n_iter_gpu):
-#         print(f'Simulacao WEBGPU')
-#         print(f'Iteracao {n}')
-#         t_webgpu = time()
-#         sensor, gpu_str = sim_webgpu()
-#         times_webgpu.append(time() - t_webgpu)
-#         print(gpu_str)
-#         print(f'{times_webgpu[-1]:.3}s')
+if do_sim_gpu:
+    for n in range(n_iter_gpu):
+        print(f'Simulacao WEBGPU')
+        print(f'Iteracao {n}')
+        t_webgpu = time()
+        sensor, gpu_str = sim_webgpu()
+        times_webgpu.append(time() - t_webgpu)
+        print(gpu_str)
+        print(f'{times_webgpu[-1]:.3}s')
+
+        # Plota as velocidades tomadas no sensores
+        # if plot_results:
+        #     fig, ax = plt.subplots(3, sharex=True, sharey=True)
+        #     fig.suptitle(f'Receptor 1 [GPU]')
+        #     ax[0].plot(sensor[:, 0])
+        #     ax[0].set_title(r'$V_x$')
+        #     ax[1].plot(sensor[:, 1])
+        #     ax[1].set_title(r'$V_y$')
+        #     ax[2].plot(sensor[:, 0] + sensor[:, 1], 'tab:orange')
+        #     ax[2].set_title(r'$V_x + V_y$')
 
 # CPU
 if do_sim_cpu:
@@ -1509,30 +1156,34 @@ if do_sim_cpu:
         print(f'{times_cpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        for irec in range(NREC):
-            fig, ax = plt.subplots(3, sharex=True, sharey=True)
-            fig.suptitle(f'Receptor {irec + 1}')
-            ax[0].plot(sisvx[:, irec])
-            ax[0].set_title(r'$V_x$')
-            ax[1].plot(sisvy[:, irec])
-            ax[1].set_title(r'$V_y$')
-            ax[2].plot(sisvx[:, irec] + sisvy[:, irec], 'tab:orange')
-            ax[2].set_title(r'$V_x + V_y$')
+        # if plot_results:
+        #     for irec in range(NREC):
+        #         fig, ax = plt.subplots(3, sharex=True, sharey=True)
+        #         fig.suptitle(f'Receptor {irec + 1} [CPU]')
+        #         ax[0].plot(sisvx[:, irec])
+        #         ax[0].set_title(r'$V_x$')
+        #         ax[1].plot(sisvy[:, irec])
+        #         ax[1].set_title(r'$V_y$')
+        #         ax[2].plot(sisvx[:, irec] + sisvy[:, irec], 'tab:orange')
+        #         ax[2].set_title(r'$V_x + V_y$')
+        #
+        #     plt.show()
 
-        plt.show()
+if show_anim and App:
+    App.exit()
 
-# times_for = np.array(times_for)
-# times_ser = np.array(times_ser)
-# if do_sim_gpu:
-#     print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
-#
-# print(f'TEMPO - {nt} pontos de tempo')
-# if do_sim_gpu and n_iter_gpu > 5:
-#     print(f'GPU: {times_for[5:].mean():.3}s (std = {times_for[5:].std()})')
-#
-# if do_sim_cpu and n_iter_cpu > 5:
-#     print(f'CPU: {times_ser[5:].mean():.3}s (std = {times_ser[5:].std()})')
-#
+times_webgpu = np.array(times_webgpu)
+times_cpu = np.array(times_cpu)
+if do_sim_gpu:
+    print(f'workgroups X: {wsx}; workgroups Y: {wsy}; workgroups Z: {wsz}')
+
+print(f'TEMPO - {NSTEP} pontos de tempo')
+if do_sim_gpu and n_iter_gpu > 5:
+    print(f'GPU: {times_webgpu[5:].mean():.3}s (std = {times_webgpu[5:].std()})')
+
+if do_sim_cpu and n_iter_cpu > 5:
+    print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
+
 # if do_sim_gpu and do_sim_cpu:
 #     print(f'MSE entre as simulações: {mean_squared_error(u_ser, u_for)}')
 #
