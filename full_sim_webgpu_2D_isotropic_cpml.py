@@ -859,18 +859,22 @@ times_cpu = list()
 if show_anim:
     App = pg.QtWidgets.QApplication([])
     if do_sim_cpu:
+        x_pos = 200 + np.arange(3) * (nx + 10)
+        y_pos = 400
         windows_cpu_data = [
-            {"title": "Vx [CPU]", "geometry": (200, 400, vx.shape[0], vx.shape[1])},
-            {"title": "Vy [CPU]", "geometry": (500, 400, vy.shape[0], vy.shape[1])},
-            {"title": "Vx + Vy [CPU]", "geometry": (800, 400, vy.shape[0], vy.shape[1])},
+            {"title": "Vx [CPU]", "geometry": (x_pos[0], y_pos, vx.shape[0], vx.shape[1])},
+            {"title": "Vy [CPU]", "geometry": (x_pos[1], y_pos, vy.shape[0], vy.shape[1])},
+            {"title": "Vx + Vy [CPU]", "geometry": (x_pos[2], y_pos, vy.shape[0], vy.shape[1])},
         ]
         windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
 
     if do_sim_gpu:
+        x_pos = 200 + np.arange(3) * (nx + 10)
+        y_pos = 50
         windows_gpu_data = [
-            {"title": "Vx [GPU]", "geometry": (200, 50, vx.shape[0], vx.shape[1])},
-            {"title": "Vy [GPU]", "geometry": (500, 50, vy.shape[0], vy.shape[1])},
-            {"title": "Vx + Vy [GPU]", "geometry": (800, 50, vy.shape[0], vy.shape[1])},
+            {"title": "Vx [GPU]", "geometry": (x_pos[0], y_pos, vx.shape[0], vx.shape[1])},
+            {"title": "Vy [GPU]", "geometry": (x_pos[1], y_pos, vy.shape[0], vy.shape[1])},
+            {"title": "Vx + Vy [GPU]", "geometry": (x_pos[2], y_pos, vy.shape[0], vy.shape[1])},
         ]
         windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data]
 
