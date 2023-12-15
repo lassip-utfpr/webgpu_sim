@@ -11,7 +11,7 @@ from time import time
 # from datetime import datetime
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
-from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
+from pyqtgraph.widgets.RawImageWidget import RawImageWidget
 
 
 # ==========================================================
@@ -25,14 +25,6 @@ class ImageView(pg.ImageView):
     # ImageView
     def __init__(self, *args, **kwargs):
         pg.ImageView.__init__(self, *args, **kwargs)
-
-
-# RawImageWidget class
-class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
-    # constructor which inherit original
-    # RawImageWidget
-    def __init__(self):
-        pg.widgets.RawImageWidget.RawImageGLWidget.__init__(self)
 
 
 # Window class

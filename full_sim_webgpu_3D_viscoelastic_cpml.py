@@ -1,6 +1,9 @@
-import math
-import wgpu.backends.rs  # Select backend
-from wgpu.utils import compute_with_buffers  # Convenience function
+import wgpu
+if wgpu.version_info[1] > 11:
+    import wgpu.backends.wgpu_native  # Select backend 0.13.X
+else:
+    import wgpu.backends.rs  # Select backend 0.9.5
+
 import numpy as np
 # from sklearn.metrics import mean_squared_error
 # import matplotlib.pyplot as plt
@@ -8,7 +11,7 @@ from time import time
 # from datetime import datetime
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
-from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
+from pyqtgraph.widgets.RawImageWidget import RawImageWidget
 
 
 # ==========================================================
@@ -22,14 +25,6 @@ class ImageView(pg.ImageView):
     # ImageView
     def __init__(self, *args, **kwargs):
         pg.ImageView.__init__(self, *args, **kwargs)
-
-
-# RawImageWidget class
-class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
-    # constructor which inherit original
-    # RawImageWidget
-    def __init__(self):
-        pg.widgets.RawImageWidget.RawImageGLWidget.__init__(self)
 
 
 # Window class
@@ -368,9 +363,9 @@ if NPOWER < 1:
     raise ValueError('NPOWER deve ser maior que 1')
 
 # Calculo de d0 do relatorio da INRIA section 6.1 http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-d0_x = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_x)
-d0_y = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_y)
-d0_z = -(NPOWER + 1) * cp * math.sqrt(taumax) * math.log(rcoef) / (2.0 * thickness_pml_z)
+d0_x = -(NPOWER + 1) * cp * np.sqrt(taumax) * np.log(rcoef) / (2.0 * thickness_pml_x)
+d0_y = -(NPOWER + 1) * cp * np.sqrt(taumax) * np.log(rcoef) / (2.0 * thickness_pml_y)
+d0_z = -(NPOWER + 1) * cp * np.sqrt(taumax) * np.log(rcoef) / (2.0 * thickness_pml_z)
 
 print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')
@@ -521,7 +516,7 @@ for irec in range(NREC):
     dist = HUGEVAL
     for j in range(ny):
         for i in range(nx):
-            distval = math.sqrt((dx * i - xrec[irec])**2 + (dx * j - yrec[irec])**2)
+            distval = np.sqrt((dx * i - xrec[irec])**2 + (dx * j - yrec[irec])**2)
             if distval < dist:
                 dist = distval
                 ix_rec[irec] = i
@@ -532,13 +527,13 @@ for irec in range(NREC):
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-courant_number = cp * math.sqrt(taumax) * dt * math.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
+courant_number = cp * np.sqrt(taumax) * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
 print(f'Numero de Courant e {courant_number}')
-print(f'Vpmax = {cp * math.sqrt(taumax)}')
+print(f'Vpmax = {cp * np.sqrt(taumax)}')
 if courant_number > 1:
     print("O passo de tempo e muito longo, a simulação sera instavel")
     exit(1)
-print(f'Number of points per wavelength = {cs * math.sqrt(taumin)/(2.5 * f0)/dx}, Vsmin = {cs * math.sqrt(taumin)}')
+print(f'Number of points per wavelength = {cs * np.sqrt(taumin)/(2.5 * f0)/dx}, Vsmin = {cs * np.sqrt(taumin)}')
 
 
 def sim_cpu():

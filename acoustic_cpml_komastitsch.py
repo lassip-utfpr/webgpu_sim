@@ -4,7 +4,7 @@
 # Giovanni Alfredo Guarneri
 
 
-from PyQt5.QtWidgets import *
+from PyQt6.QtWidgets import *
 import numpy as np
 from scipy import signal
 from time import perf_counter
@@ -12,9 +12,9 @@ import math
 import matplotlib.pyplot as plt
 from matplotlib import use
 import pyqtgraph as pg
-from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
+from pyqtgraph.widgets.RawImageWidget import RawImageWidget
+from PyQt6.QtGui import *
+from PyQt6.QtCore import *
 
 
 # use('TkAgg')
@@ -25,14 +25,6 @@ class ImageView(pg.ImageView):
     # ImageView
     def __init__(self, *args, **kwargs):
         pg.ImageView.__init__(self, *args, **kwargs)
-
-
-# RawImageWidget class
-class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
-    # constructor which inherit original
-    # RawImageWidget
-    def __init__(self):
-        pg.widgets.RawImageWidget.RawImageGLWidget.__init__(self)
 
 
 # Window class

@@ -1,5 +1,9 @@
-import wgpu.backends.rs  # Select backend
-from wgpu.utils import compute_with_buffers  # Convenience function
+import wgpu
+if wgpu.version_info[1] > 11:
+    import wgpu.backends.wgpu_native  # Select backend 0.13.X
+else:
+    import wgpu.backends.rs  # Select backend 0.9.5
+
 import numpy as np
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt

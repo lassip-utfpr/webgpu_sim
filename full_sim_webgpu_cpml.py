@@ -1,16 +1,17 @@
-import math
+import wgpu
+if wgpu.version_info[1] > 11:
+    import wgpu.backends.wgpu_native  # Select backend 0.13.X
+else:
+    import wgpu.backends.rs  # Select backend 0.9.5
 
-import matplotlib.pyplot as plt
-import wgpu.backends.rs  # Select backend
-from wgpu.utils import compute_with_buffers  # Convenience function
 import numpy as np
-# from sklearn.metrics import mean_squared_error
-# import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 from time import time
 # from datetime import datetime
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
-from pyqtgraph.widgets.RawImageWidget import RawImageGLWidget
+from pyqtgraph.widgets.RawImageWidget import RawImageWidget
 
 
 # ==========================================================
@@ -24,14 +25,6 @@ class ImageView(pg.ImageView):
     # ImageView
     def __init__(self, *args, **kwargs):
         pg.ImageView.__init__(self, *args, **kwargs)
-
-
-# RawImageWidget class
-class RawImageWidget(pg.widgets.RawImageWidget.RawImageGLWidget):
-    # constructor which inherit original
-    # RawImageWidget
-    def __init__(self):
-        pg.widgets.RawImageWidget.RawImageGLWidget.__init__(self)
 
 
 # Window class
@@ -133,7 +126,7 @@ dt = 5.2e-4
 f0 = 35.0  # frequencia
 t0 = 1.20 / f0  # delay
 factor = 1.0
-a = math.pi ** 2 * f0 ** 2
+a = np.pi ** 2 * f0 ** 2
 t = np.arange(nstep) * dt
 
 # Funcao de Ricker (segunda derivada de uma gaussiana)
@@ -193,7 +186,7 @@ if NPOWER < 1:
 
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
 K_MAX_PML = 1.0
-ALPHA_MAX_PML = 2.0 * math.pi * (f0 / 2)  # from Festa and Vilotte
+ALPHA_MAX_PML = 2.0 * np.pi * (f0 / 2)  # from Festa and Vilotte
 
 # Constantes
 HUGEVAL = 1.0e30  # Valor enorme para o maximo da pressao
@@ -207,8 +200,8 @@ thickness_pml_y = npoints_pml * dy
 rcoef = 0.001
 
 # Calculo de d0 do relatorio da INRIA section 6.1 http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-d0_x = -(NPOWER + 1) * cp_unrelaxed * math.log(rcoef) / (2.0 * thickness_pml_x)
-d0_y = -(NPOWER + 1) * cp_unrelaxed * math.log(rcoef) / (2.0 * thickness_pml_y)
+d0_x = -(NPOWER + 1) * cp_unrelaxed * np.log(rcoef) / (2.0 * thickness_pml_x)
+d0_y = -(NPOWER + 1) * cp_unrelaxed * np.log(rcoef) / (2.0 * thickness_pml_y)
 
 # Amortecimento na direcao "x" (horizontal)
 # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
@@ -353,7 +346,7 @@ def sim_cpu():
         # will be erased by the Dirichlet conditions set on these edges below
         p_0 = 2.0 * p_1 - p_2 + \
               dt ** 2 * \
-              ((v_x + v_y) * kappa_unrelaxed + 4.0 * math.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
+              ((v_x + v_y) * kappa_unrelaxed + 4.0 * np.pi * cp_unrelaxed ** 2 * source_term[it] * kronecker_source)
 
         # apply Dirichlet conditions at the bottom of the C-PML layers
         # which is the right condition to implement in order for C-PML to remain stable at long times

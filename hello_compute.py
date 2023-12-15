@@ -1,5 +1,8 @@
-import wgpu.backends.rs  # Select backend
-from wgpu.utils import compute_with_buffers  # Convenience function
+import wgpu
+if wgpu.version_info[1] > 11:
+    import wgpu.backends.wgpu_native  # Select backend 0.13.X
+else:
+    import wgpu.backends.rs  # Select backend 0.9.5
 
 # Create device and shader object
 device = wgpu.utils.get_default_device()
@@ -27,7 +30,11 @@ copy_commands = copy_encoder.finish()
 device.queue.submit([copy_commands])
 
 # Read buffer
-read_data = gpu_read_buffer.map_read().cast("I")
+if wgpu.version_info[1] > 11:
+    gpu_read_buffer.map(wgpu.MapMode.READ)
+    read_data = gpu_read_buffer.read_mapped().cast("I")
+else:
+    read_data = gpu_read_buffer.map_read().cast("I")
 assert read_data.tolist() == data.tolist()
 
 print(read_data.tolist())
