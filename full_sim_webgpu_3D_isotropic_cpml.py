@@ -113,8 +113,7 @@ ny = 100  # linhas
 nz = 100  # altura
 
 # Tamanho do grid (aparentemente em metros)
-dx = 4.0
-dz = dy = dx
+dx = dy = dz = 4.0
 one_dx = one_dy = one_dz = 1.0 / dx
 
 # Constantes
@@ -144,13 +143,13 @@ lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
 
 # Numero total de passos de tempo
-NSTEP = 1000
+NSTEP = 300
 
 # Passo de tempo em segundos
 dt = 4.0e-4
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
-IT_DISPLAY = 10
+IT_DISPLAY = 50
 
 # Parametros da fonte
 f0 = 18.0  # frequencia
@@ -182,13 +181,13 @@ zsource = ksource * dz
 NREC = 3
 xrec = xsource + np.array([4,  0,  4]) * dx
 yrec = ysource + np.array([4, 10, 10]) * dy
-krec = int(nz / 2)
+zrec = zsource + np.array([0,  0,  0]) * dz
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # for evolution of total energy in the medium
-v_2 = epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz =(
+v_2 = epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = (
     np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32))
 total_energy = np.zeros(NSTEP, dtype=flt32)
 total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
@@ -204,21 +203,21 @@ ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
 
 # Escolha do valor de wsx (GPU)
 wsx = 1
-for n in range(15, 0, -1):
+for n in range(8, 0, -1):
     if ((nx + 2) % n) == 0:
         wsx = n  # workgroup x size
         break
 
 # Escolha do valor de wsy (GPU)
 wsy = 1
-for n in range(15, 0, -1):
+for n in range(8, 0, -1):
     if ((ny + 2) % n) == 0:
         wsy = n  # workgroup x size
         break
 
-# TODO: Escolha do valor de wsz (GPU) --- Verificar necessidade
+# TODO: Escolha do valor de wsz (GPU) --- Verificar necessidade e talvez o range deva iniciar em 4
 wsz = 1
-for n in range(15, 0, -1):
+for n in range(4, 0, -1):
     if ((nz + 2) % n) == 0:
         wsz = n  # workgroup x size
         break
@@ -447,18 +446,22 @@ print(f'Existem {NREC} receptores')
 # Find closest grid point for each receiver
 ix_rec = np.zeros(NREC, dtype=int)
 iy_rec = np.zeros(NREC, dtype=int)
+iz_rec = np.zeros(NREC, dtype=int)
 for irec in range(NREC):
     dist = HUGEVAL
-    for j in range(ny):
-        for i in range(nx):
-            distval = np.sqrt((dx * i - xrec[irec]) ** 2 + (dx * j - yrec[irec]) ** 2)
-            if distval < dist:
-                dist = distval
-                ix_rec[irec] = i
-                iy_rec[irec] = j
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                distval = np.sqrt((dx * i - xrec[irec]) ** 2 + (dx * j - yrec[irec]) ** 2 + (dz * k - zrec[irec]) ** 2)
+                if distval < dist:
+                    dist = distval
+                    ix_rec[irec] = i
+                    iy_rec[irec] = j
+                    iz_rec[irec] = k
 
-    print(f'receiver {irec}: x_target = {xrec[irec]}, y_target = {yrec[irec]}')
-    print(f'Ponto mais perto do grid encontrado na distancia {dist}, em i = {ix_rec[irec]}, j = {iy_rec[irec]}\n')
+    print(f'receiver {irec}: x_target = {xrec[irec]}, y_target = {yrec[irec]}, z_target = {zrec[irec]}')
+    print(f'Ponto mais perto do grid encontrado na distancia {dist},'
+          f' em i = {ix_rec[irec]}, j = {iy_rec[irec]}, k = {iz_rec[irec]}\n')
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
@@ -700,9 +703,9 @@ def sim_cpu():
 
         # Store seismograms
         for _irec in range(NREC):
-            sisvx[it - 1, _irec] = vx[ix_rec[_irec], iy_rec[_irec], krec]
-            sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], krec]
-            sisvz[it - 1, _irec] = vz[ix_rec[_irec], iy_rec[_irec], krec]
+            sisvx[it - 1, _irec] = vx[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
+            sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
+            sisvz[it - 1, _irec] = vz[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
 
         # Compute total energy in the medium (without the PML layers)
         imin = npoints_pml
@@ -753,9 +756,9 @@ def sim_cpu():
                 print(f'Total energy = {total_energy[it - 1]}')
 
             if show_anim:
-                windows_cpu[0].imv.setImage(vx[:, :, krec], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[1].imv.setImage(vy[:, :, krec], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[2].imv.setImage(vz[:, :, krec], levels=[v_min, v_max])
+                windows_cpu[0].imv.setImage(vx[:, :, ksource], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[1].imv.setImage(vy[:, :, ksource], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[2].imv.setImage(vz[:, :, ksource], levels=[v_min, v_max])
                 windows_cpu[3].imv.setImage(vx[:, jsource, :], levels=[v_min, v_max])
                 windows_cpu[4].imv.setImage(vy[:, jsource, :], levels=[v_min/10.0, v_max/10.0])
                 windows_cpu[5].imv.setImage(vz[:, jsource, :], levels=[v_min, v_max])
@@ -765,7 +768,7 @@ def sim_cpu():
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if v_solid_norm[it -1] > STABILITY_THRESHOLD:
+        if v_solid_norm[it - 1] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
@@ -791,11 +794,10 @@ def sim_webgpu(device):
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     params_i32 = np.array([nx + 2, ny + 2, nz + 2, isource, jsource, ksource,
-                           ix_rec[0], iy_rec[0], int(ksource * dz), npoints_pml, NSTEP, 0], dtype=np.int32)
+                           ix_rec[0], iy_rec[0], iz_rec[0], npoints_pml, NSTEP, 0], dtype=np.int32)
     params_f32 = np.array([cp, cs, dx, dy, dz, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
-    cshader = None
     with open('shader_3D_elast_cpml.wgsl') as shader_file:
         cshader_string = shader_file.read()
         cshader_string = cshader_string.replace('wsx', f'{wsx}')
@@ -832,9 +834,15 @@ def sim_webgpu(device):
                                               usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_SRC)
 
-    # Buffer de parametros com valores inteiros
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 4
+    b_coef_z = device.create_buffer_with_data(data=np.row_stack((a_z, b_z, k_z, a_z_half, b_z_half, k_z_half)),
+                                              usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+    # Buffer de parametros com valores inteiros
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 5
     b_param_int32 = device.create_buffer_with_data(data=params_i32,
                                                    usage=wgpu.BufferUsage.STORAGE |
                                                          wgpu.BufferUsage.COPY_SRC)
@@ -842,7 +850,7 @@ def sim_webgpu(device):
     # Buffers com os arrays de simulacao
     # Velocidades
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 5
+    # Binding 6
     b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, vz)),
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
@@ -850,7 +858,7 @@ def sim_webgpu(device):
 
     # Estresses
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 6
+    # Binding 7
     b_sig = device.create_buffer_with_data(data=np.vstack((sigmaxx, sigmayy, sigmazz, sigmaxy, sigmaxz, sigmayz)),
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
@@ -858,19 +866,20 @@ def sim_webgpu(device):
 
     # Arrays de memoria do simulador
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 7
+    # Binding 8
     b_memo = device.create_buffer_with_data(data=np.vstack((memory_dvx_dx, memory_dvx_dy, memory_dvx_dz,
                                                             memory_dvx_dy, memory_dvy_dy, memory_dvz_dy,
                                                             memory_dvx_dz, memory_dvy_dz, memory_dvz_dz,
                                                             memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxz_dz,
                                                             memory_dsigmaxy_dx, memory_dsigmayy_dy, memory_dsigmayz_dz,
-                                                            memory_dsigmaxz_dx, memory_dsigmayz_dy, memory_dsigmazz_dz)),
+                                                            memory_dsigmaxz_dx, memory_dsigmayz_dy, memory_dsigmazz_dz
+                                                            )),
                                             usage=wgpu.BufferUsage.STORAGE |
                                                   wgpu.BufferUsage.COPY_SRC)
 
     # Sinal do sensor
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 8
+    # Binding 9
     b_sens = device.create_buffer_with_data(data=np.column_stack((sisvx[:, 0], sisvy[:, 0], sisvz[:, 0])),
                                             usage=wgpu.BufferUsage.STORAGE |
                                                   wgpu.BufferUsage.COPY_DST |
@@ -878,7 +887,7 @@ def sim_webgpu(device):
 
     # Arrays epsilon
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 9
+    # Binding 10
     b_eps = device.create_buffer_with_data(data=np.vstack((epsilon_xx, epsilon_yy, epsilon_zz,
                                                            epsilon_xy, epsilon_xz, epsilon_yz, v_2)),
                                            usage=wgpu.BufferUsage.STORAGE |
@@ -886,7 +895,7 @@ def sim_webgpu(device):
 
     # Arrays de energia total
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 10
+    # Binding 11
     b_energy = device.create_buffer_with_data(data=np.column_stack((total_energy, total_energy_kinetic,
                                                                     total_energy_potential, v_solid_norm)),
                                               usage=wgpu.BufferUsage.STORAGE |
@@ -949,7 +958,7 @@ def sim_webgpu(device):
         },
         {
             "binding": 4,
-            "resource": {"buffer": b_coef_y, "offset": 0, "size": b_coef_y.size},
+            "resource": {"buffer": b_coef_z, "offset": 0, "size": b_coef_z.size},
         },
         {
             "binding": 5,
@@ -1024,15 +1033,15 @@ def sim_webgpu(device):
 
         # Ativa o pipeline de execucao do calculo dos es stresses
         compute_pass.set_pipeline(compute_sigma_kernel)
-        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy, (nz + 2) // wsz)
 
         # Ativa o pipeline de execucao do calculo das velocidades
         compute_pass.set_pipeline(compute_velocity_kernel)
-        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy, (nz + 2) // wsz)
 
         # Ativa o pipeline de execucao dos procedimentos finais da iteracao
         compute_pass.set_pipeline(compute_finish_it_kernel)
-        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy)
+        compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy, (nz + 2) // wsz)
 
         # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_it_kernel)
@@ -1046,25 +1055,45 @@ def sim_webgpu(device):
 
         en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
         vsn2 = np.asarray(device.queue.read_buffer(b_eps,
-                                                   buffer_offset=(v_2.size * 4) * 3).cast("f")).reshape((nx + 2,
-                                                                                                             ny + 2))
+                                                   buffer_offset=(v_2.size * 4) * 6).cast("f")).reshape((nx + 2,
+                                                                                                         ny + 2,
+                                                                                                         nz + 2))
         v_sol_n = np.sqrt(np.max(vsn2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug or show_anim:
-                v_out = np.asarray(device.queue.read_buffer(b_vel).cast("f")).reshape((2 * (nx + 2), ny + 2))
+                vxgpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                            buffer_offset=0,
+                                                            size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                                  ny + 2,
+                                                                                                  nz + 2))
+                vygpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                            buffer_offset=vx.size * 4,
+                                                            size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                                  ny + 2,
+                                                                                                  nz + 2))
+                vzgpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                            buffer_offset=2*(vx.size * 4),
+                                                            size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                                  ny + 2,
+                                                                                                  nz + 2))
 
             if show_debug:
                 print(f'Time step # {it} out of {NSTEP}')
-                print(f'Max Vx = {np.max(v_out[:nx + 2, :])}, Vy = {np.max(v_out[nx + 2:, :])}')
-                print(f'Min Vx = {np.min(v_out[:nx + 2, :])}, Vy = {np.min(v_out[nx + 2:, :])}')
+                print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}, Vz = {np.max(vzgpu)}')
+                print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}, Vz = {np.min(vzgpu)}')
                 print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
                 print(f'Total energy = {en[it, 2]}')
 
             if show_anim:
-                windows_gpu[0].imv.setImage(v_out[:nx + 2, :], levels=[v_min / 1.0, v_max / 1.0])
-                windows_gpu[1].imv.setImage(v_out[nx + 2:, :], levels=[v_min / 1.0, v_max / 1.0])
-                windows_gpu[2].imv.setImage(v_out[:nx + 2, :] + v_out[nx + 2:, :], levels=[2.0 * v_min / 1.0,
-                                                                                           2.0 * v_max / 1.0])
+                windows_gpu[0].imv.setImage(vxgpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[1].imv.setImage(vygpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[2].imv.setImage(vzgpu[:, :, ksource], levels=[v_min, v_max])
+                windows_gpu[3].imv.setImage(vxgpu[:, jsource, :], levels=[v_min, v_max])
+                windows_gpu[4].imv.setImage(vygpu[:, jsource, :], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[5].imv.setImage(vzgpu[:, jsource, :], levels=[v_min, v_max])
+                windows_gpu[6].imv.setImage(vxgpu[isource, :, :], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[7].imv.setImage(vygpu[isource, :, :], levels=[v_min, v_max])
+                windows_gpu[8].imv.setImage(vzgpu[isource, :, :], levels=[v_min, v_max])
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -1073,10 +1102,24 @@ def sim_webgpu(device):
             exit(2)
 
     # Pega os resultados da simulacao
-    v_out = np.asarray(device.queue.read_buffer(b_vel).cast("f")).reshape((2 * (nx + 2), ny + 2))
-    sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 2))
+    vxgpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                buffer_offset=0,
+                                                size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                      ny + 2,
+                                                                                      nz + 2))
+    vygpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                buffer_offset=vx.size * 4,
+                                                size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                      ny + 2,
+                                                                                      nz + 2))
+    vzgpu = np.asarray(device.queue.read_buffer(b_vel,
+                                                buffer_offset=2 * (vx.size * 4),
+                                                size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                                                      ny + 2,
+                                                                                      nz + 2))
+    sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 3))
     adapter_info = device.adapter.request_adapter_info()
-    return v_out[:nx + 2, :], v_out[nx + 2:, :], sens, adapter_info["device"]
+    return vxgpu, vygpu, vzgpu, sens, adapter_info["device"]
 
 
 times_webgpu = list()
@@ -1123,7 +1166,7 @@ if do_sim_gpu:
         print(f'Simulacao WEBGPU')
         print(f'Iteracao {n}')
         t_webgpu = time()
-        vx_gpu, vy_gpu, sensor, gpu_str = sim_webgpu(device_gpu)
+        vx_gpu, vy_gpu, vz_gpu, sensor, gpu_str = sim_webgpu(device_gpu)
         times_webgpu.append(time() - t_webgpu)
         print(gpu_str)
         print(f'{times_webgpu[-1]:.3}s')

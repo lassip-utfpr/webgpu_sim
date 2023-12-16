@@ -921,39 +921,83 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
        y >= 2 && y < (sim_int_par.y_sz - 1) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        //var vdvx_dx: f32 = (27.0*(get_vx(x + 1, y) - get_vx(x, y)) - get_vx(x + 2, y) + get_vx(x - 1, y))/(24.0 * dx);
-        //var vdvy_dy: f32 = (27.0*(get_vy(x, y) - get_vy(x, y - 1)) - get_vy(x, y + 1) + get_vy(x, y - 2))/(24.0 * dy);
+        var vdvx_dx: f32 = (27.0*(get_vx(x + 1, y, z) - get_vx(x, y, z)) - get_vx(x + 2, y, z) + get_vx(x - 1, y, z))/(24.0 * dx);
+        var vdvy_dy: f32 = (27.0*(get_vy(x, y, z) - get_vy(x, y - 1, z)) - get_vy(x, y + 1, z) + get_vy(x, y - 2, z))/(24.0 * dy);
+        var vdvz_dz: f32 = (27.0*(get_vz(x, y, z) - get_vz(x, y, z - 1)) - get_vz(x, y, z + 1) + get_vz(x, y, z - 2))/(24.0 * dy);
 
-        //var mdvx_dx_new: f32 = get_b_x_h(x - 1) * get_mdvx_dx(x, y) + get_a_x_h(x - 1) * vdvx_dx;
-        //var mdvy_dy_new: f32 = get_b_y(y - 1) * get_mdvy_dy(x, y) + get_a_y(y - 1) * vdvy_dy;
+        var mdvx_dx_new: f32 = get_b_x_h(x - 1) * get_mdvx_dx(x, y, z) + get_a_x_h(x - 1) * vdvx_dx;
+        var mdvy_dy_new: f32 = get_b_y(y - 1) * get_mdvy_dy(x, y, z) + get_a_y(y - 1) * vdvy_dy;
+        var mdvz_dz_new: f32 = get_b_z(z - 1) * get_mdvz_dz(x, y, z) + get_a_z(z - 1) * vdvz_dz;
 
-        //vdvx_dx = vdvx_dx/get_k_x_h(x - 1) + mdvx_dx_new;
-        //vdvy_dy = vdvy_dy/get_k_y(y - 1)  + mdvy_dy_new;
+        vdvx_dx = vdvx_dx/get_k_x_h(x - 1) + mdvx_dx_new;
+        vdvy_dy = vdvy_dy/get_k_y(y - 1)  + mdvy_dy_new;
+        vdvz_dz = vdvz_dz/get_k_z(z - 1)  + mdvz_dz_new;
 
-        //set_mdvx_dx(x, y, mdvx_dx_new);
-        //set_mdvy_dy(x, y, mdvy_dy_new);
+        set_mdvx_dx(x, y, z, mdvx_dx_new);
+        set_mdvy_dy(x, y, z, mdvy_dy_new);
+        set_mdvz_dz(x, y, z, mdvz_dz_new);
 
-        //set_sigmaxx(x, y, get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy) * dt);
-        //set_sigmayy(x, y, get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy) * dt);
+        set_sigmaxx(x, y, z, get_sigmaxx(x, y, z) + (lambdaplus2mu * vdvx_dx + lambda        * (vdvy_dy + vdvz_dz)) * dt);
+        set_sigmayy(x, y, z, get_sigmayy(x, y, z) + (lambda        * (vdvx_dx + vdvz_dz) + lambdaplus2mu * vdvy_dy) * dt);
+        set_sigmazz(x, y, z, get_sigmazz(x, y, z) + (lambda        * (vdvx_dx + vdvy_dy) + lambdaplus2mu * vdvz_dz) * dt);
     }
 
-    // Shear stress
+    // Shear stresses
+    // sigma_xy
     if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
        y >= 1 && y < (sim_int_par.y_sz - 2) &&
-       z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        //var vdvy_dx: f32 = (27.0*(get_vy(x, y) - get_vy(x - 1, y)) - get_vy(x + 1, y) + get_vy(x - 2, y))/(24.0 * dx);
-        //var vdvx_dy: f32 = (27.0*(get_vx(x, y + 1) - get_vx(x, y)) - get_vx(x, y + 2) + get_vx(x, y - 1))/(24.0 * dy);
+       z >= 1 && z < (sim_int_par.z_sz - 2)) {
+        var vdvy_dx: f32 = (27.0*(get_vy(x, y, z) - get_vy(x - 1, y, z)) - get_vy(x + 1, y, z) + get_vy(x - 2, y, z))/(24.0 * dx);
+        var vdvx_dy: f32 = (27.0*(get_vx(x, y + 1, z) - get_vx(x, y, z)) - get_vx(x, y + 2, z) + get_vx(x, y - 1, z))/(24.0 * dy);
 
-        //var mdvy_dx_new: f32 = get_b_x(x - 1) * get_mdvy_dx(x, y) + get_a_x(x - 1) * vdvy_dx;
-        //var mdvx_dy_new: f32 = get_b_y_h(y - 1) * get_mdvx_dy(x, y) + get_a_y_h(y - 1) * vdvx_dy;
+        var mdvy_dx_new: f32 = get_b_x(x - 1) * get_mdvy_dx(x, y, z) + get_a_x(x - 1) * vdvy_dx;
+        var mdvx_dy_new: f32 = get_b_y_h(y - 1) * get_mdvx_dy(x, y, z) + get_a_y_h(y - 1) * vdvx_dy;
 
-        //vdvy_dx = vdvy_dx/get_k_x(x - 1)   + mdvy_dx_new;
-        //vdvx_dy = vdvx_dy/get_k_y_h(y - 1) + mdvx_dy_new;
+        vdvy_dx = vdvy_dx/get_k_x(x - 1)   + mdvy_dx_new;
+        vdvx_dy = vdvx_dy/get_k_y_h(y - 1) + mdvx_dy_new;
 
-        //set_mdvy_dx(x, y, mdvy_dx_new);
-        //set_mdvx_dy(x, y, mdvx_dy_new);
+        set_mdvy_dx(x, y, z, mdvy_dx_new);
+        set_mdvx_dy(x, y, z, mdvx_dy_new);
 
-        //set_sigmaxy(x, y, get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt);
+        set_sigmaxy(x, y, z, get_sigmaxy(x, y, z) + (vdvx_dy + vdvy_dx) * mu * dt);
+    }
+
+    // sigma_xz
+    if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
+       y >= 1 && y < (sim_int_par.y_sz - 1) &&
+       z >= 1 && z < (sim_int_par.z_sz - 2)) {
+        var vdvz_dx: f32 = (27.0*(get_vz(x, y, z) - get_vz(x - 1, y, z)) - get_vz(x + 1, y, z) + get_vz(x - 2, y, z))/(24.0 * dx);
+        var vdvx_dz: f32 = (27.0*(get_vx(x, y, z + 1) - get_vx(x, y, z)) - get_vx(x, y, z + 2) + get_vx(x, y, z - 1))/(24.0 * dz);
+
+        var mdvz_dx_new: f32 = get_b_x(x - 1) * get_mdvz_dx(x, y, z) + get_a_x(x - 1) * vdvz_dx;
+        var mdvx_dz_new: f32 = get_b_z_h(z - 1) * get_mdvx_dz(x, y, z) + get_a_z_h(z - 1) * vdvx_dz;
+
+        vdvz_dx = vdvz_dx/get_k_x(x - 1)   + mdvz_dx_new;
+        vdvx_dz = vdvx_dz/get_k_z_h(z - 1) + mdvx_dz_new;
+
+        set_mdvz_dx(x, y, z, mdvz_dx_new);
+        set_mdvx_dz(x, y, z, mdvx_dz_new);
+
+        set_sigmaxz(x, y, z, get_sigmaxz(x, y, z) + (vdvx_dz + vdvz_dx) * mu * dt);
+    }
+
+    // sigma_yz
+    if(x >= 1 && x < (sim_int_par.x_sz - 1) &&
+       y >= 1 && y < (sim_int_par.y_sz - 2) &&
+       z >= 1 && z < (sim_int_par.z_sz - 2)) {
+        var vdvz_dy: f32 = (27.0*(get_vz(x, y + 1, z) - get_vz(x, y, z)) - get_vz(x, y + 2, z) + get_vz(x, y - 1, z))/(24.0 * dy);
+        var vdvy_dz: f32 = (27.0*(get_vy(x, y, z + 1) - get_vy(x, y, z)) - get_vy(x, y, z + 2) + get_vy(x, y, z - 1))/(24.0 * dz);
+
+        var mdvz_dy_new: f32 = get_b_y_h(y - 1) * get_mdvz_dy(x, y, z) + get_a_y_h(y - 1) * vdvz_dy;
+        var mdvy_dz_new: f32 = get_b_z_h(z - 1) * get_mdvy_dz(x, y, z) + get_a_z_h(z - 1) * vdvy_dz;
+
+        vdvz_dy = vdvz_dy/get_k_y_h(y - 1) + mdvz_dy_new;
+        vdvy_dz = vdvy_dz/get_k_z_h(z - 1) + mdvy_dz_new;
+
+        set_mdvz_dy(x, y, z, mdvz_dy_new);
+        set_mdvy_dz(x, y, z, mdvy_dz_new);
+
+        set_sigmayz(x, y, z, get_sigmayz(x, y, z) + (vdvy_dz + vdvz_dy) * mu * dt);
     }
 }
 
@@ -969,42 +1013,73 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let dy: f32 = sim_flt_par.dy;
     let dz: f32 = sim_flt_par.dz;
 
-    // first step
+    // Vx
     if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
        y >= 2 && y < (sim_int_par.y_sz - 1) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        //var vdsigmaxx_dx: f32 = (27.0*(get_sigmaxx(x, y) - get_sigmaxx(x - 1, y)) - get_sigmaxx(x + 1, y) + get_sigmaxx(x - 2, y))/(24.0 * dx);
-        //var vdsigmaxy_dy: f32 = (27.0*(get_sigmaxy(x, y) - get_sigmaxy(x, y - 1)) - get_sigmaxy(x, y + 1) + get_sigmaxy(x, y - 2))/(24.0 * dy);
+        var vdsigmaxx_dx: f32 = (27.0*(get_sigmaxx(x, y, z) - get_sigmaxx(x - 1, y, z)) - get_sigmaxx(x + 1, y, z) + get_sigmaxx(x - 2, y, z))/(24.0 * dx);
+        var vdsigmaxy_dy: f32 = (27.0*(get_sigmaxy(x, y, z) - get_sigmaxy(x, y - 1, z)) - get_sigmaxy(x, y + 1, z) + get_sigmaxy(x, y - 2, z))/(24.0 * dy);
+        var vdsigmaxz_dz: f32 = (27.0*(get_sigmaxz(x, y, z) - get_sigmaxz(x, y, z - 1)) - get_sigmaxz(x, y, z + 1) + get_sigmaxz(x, y, z - 2))/(24.0 * dz);
 
-        //var mdsxx_dx_new: f32 = get_b_x(x - 1) * get_mdsxx_dx(x, y) + get_a_x(x - 1) * vdsigmaxx_dx;
-        //var mdsxy_dy_new: f32 = get_b_y(y - 1) * get_mdsxy_dy(x, y) + get_a_y(y - 1) * vdsigmaxy_dy;
+        var mdsxx_dx_new: f32 = get_b_x(x - 1) * get_mdsxx_dx(x, y, z) + get_a_x(x - 1) * vdsigmaxx_dx;
+        var mdsxy_dy_new: f32 = get_b_y(y - 1) * get_mdsxy_dy(x, y, z) + get_a_y(y - 1) * vdsigmaxy_dy;
+        var mdsxz_dz_new: f32 = get_b_z(z - 1) * get_mdsxz_dz(x, y, z) + get_a_z(z - 1) * vdsigmaxz_dz;
 
-        //vdsigmaxx_dx = vdsigmaxx_dx/get_k_x(x - 1) + mdsxx_dx_new;
-        //vdsigmaxy_dy = vdsigmaxy_dy/get_k_y(y - 1) + mdsxy_dy_new;
+        vdsigmaxx_dx = vdsigmaxx_dx/get_k_x(x - 1) + mdsxx_dx_new;
+        vdsigmaxy_dy = vdsigmaxy_dy/get_k_y(y - 1) + mdsxy_dy_new;
+        vdsigmaxz_dz = vdsigmaxz_dz/get_k_z(z - 1) + mdsxz_dz_new;
 
-        //set_mdsxx_dx(x, y, mdsxx_dx_new);
-        //set_mdsxy_dy(x, y, mdsxy_dy_new);
+        set_mdsxx_dx(x, y, z, mdsxx_dx_new);
+        set_mdsxy_dy(x, y, z, mdsxy_dy_new);
+        set_mdsxz_dz(x, y, z, mdsxz_dz_new);
 
-        //set_vx(x, y, dt_over_rho * (vdsigmaxx_dx + vdsigmaxy_dy) + get_vx(x, y));
+        set_vx(x, y, z, dt_over_rho * (vdsigmaxx_dx + vdsigmaxy_dy + vdsigmaxz_dz) + get_vx(x, y, z));
     }
 
-    // second step
+    // Vy
     if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
        y >= 1 && y < (sim_int_par.y_sz - 2) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        //var vdsigmaxy_dx: f32 = (27.0*(get_sigmaxy(x + 1, y) - get_sigmaxy(x, y)) - get_sigmaxy(x + 2, y) + get_sigmaxy(x - 1, y))/(24.0 * dx);
-        //var vdsigmayy_dy: f32 = (27.0*(get_sigmayy(x, y + 1) - get_sigmayy(x, y)) - get_sigmayy(x, y + 2) + get_sigmayy(x, y - 1))/(24.0 * dy);
+        var vdsigmaxy_dx: f32 = (27.0*(get_sigmaxy(x + 1, y, z) - get_sigmaxy(x, y, z)) - get_sigmaxy(x + 2, y, z) + get_sigmaxy(x - 1, y, z))/(24.0 * dx);
+        var vdsigmayy_dy: f32 = (27.0*(get_sigmayy(x, y + 1, z) - get_sigmayy(x, y, z)) - get_sigmayy(x, y + 2, z) + get_sigmayy(x, y - 1, z))/(24.0 * dy);
+        var vdsigmayz_dz: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y, z - 1)) - get_sigmayz(x, y, z + 1) + get_sigmayz(x, y, z - 2))/(24.0 * dz);
 
-        //var mdsxy_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxy_dx(x, y) + get_a_x_h(x - 1) * vdsigmaxy_dx;
-        //var mdsyy_dy_new: f32 = get_b_y_h(y - 1) * get_mdsyy_dy(x, y) + get_a_y_h(y - 1) * vdsigmayy_dy;
+        var mdsxy_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxy_dx(x, y, z) + get_a_x_h(x - 1) * vdsigmaxy_dx;
+        var mdsyy_dy_new: f32 = get_b_y_h(y - 1) * get_mdsyy_dy(x, y, z) + get_a_y_h(y - 1) * vdsigmayy_dy;
+        var mdsyz_dz_new: f32 = get_b_z(z - 1)   * get_mdsyz_dz(x, y, z) + get_a_z(z - 1)   * vdsigmayz_dz;
 
-        //vdsigmaxy_dx = vdsigmaxy_dx/get_k_x_h(x - 1) + mdsxy_dx_new;
-        //vdsigmayy_dy = vdsigmayy_dy/get_k_y_h(y - 1) + mdsyy_dy_new;
+        vdsigmaxy_dx = vdsigmaxy_dx/get_k_x_h(x - 1) + mdsxy_dx_new;
+        vdsigmayy_dy = vdsigmayy_dy/get_k_y_h(y - 1) + mdsyy_dy_new;
+        vdsigmayz_dz = vdsigmayz_dz/get_k_z(z - 1)   + mdsyz_dz_new;
 
-        //set_mdsxy_dx(x, y, mdsxy_dx_new);
-        //set_mdsyy_dy(x, y, mdsyy_dy_new);
+        set_mdsxy_dx(x, y, z, mdsxy_dx_new);
+        set_mdsyy_dy(x, y, z, mdsyy_dy_new);
+        set_mdsyz_dz(x, y, z, mdsyz_dz_new);
 
-        //set_vy(x, y, dt_over_rho * (vdsigmaxy_dx + vdsigmayy_dy) + get_vy(x, y));
+        set_vy(x, y, z, dt_over_rho * (vdsigmaxy_dx + vdsigmayy_dy + vdsigmayz_dz) + get_vy(x, y, z));
+    }
+
+    // Vz
+    if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
+       y >= 2 && y < (sim_int_par.y_sz - 1) &&
+       z >= 1 && z < (sim_int_par.z_sz - 2)) {
+        var vdsigmaxz_dx: f32 = (27.0*(get_sigmaxz(x + 1, y, z) - get_sigmaxz(x, y, z)) - get_sigmaxz(x + 2, y, z) + get_sigmaxz(x - 1, y, z))/(24.0 * dx);
+        var vdsigmayz_dy: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y - 1, z)) - get_sigmayz(x, y + 1, z) + get_sigmayz(x, y - 2, z))/(24.0 * dy);
+        var vdsigmazz_dz: f32 = (27.0*(get_sigmazz(x, y, z + 1) - get_sigmazz(x, y, z)) - get_sigmazz(x, y, z + 2) + get_sigmazz(x, y, z - 1))/(24.0 * dz);
+
+        var mdsxz_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxz_dx(x, y, z) + get_a_x_h(x - 1) * vdsigmaxz_dx;
+        var mdsyz_dy_new: f32 = get_b_y(y - 1)   * get_mdsyz_dy(x, y, z) + get_a_y(y - 1)   * vdsigmayz_dy;
+        var mdszz_dz_new: f32 = get_b_z_h(z - 1) * get_mdszz_dz(x, y, z) + get_a_z_h(z - 1) * vdsigmazz_dz;
+
+        vdsigmaxz_dx = vdsigmaxz_dx/get_k_x_h(x - 1) + mdsxz_dx_new;
+        vdsigmayz_dy = vdsigmayz_dy/get_k_y(y - 1)   + mdsyz_dy_new;
+        vdsigmazz_dz = vdsigmazz_dz/get_k_z_h(z - 1) + mdszz_dz_new;
+
+        set_mdsxz_dx(x, y, z, mdsxz_dx_new);
+        set_mdsyz_dy(x, y, z, mdsyz_dy_new);
+        set_mdszz_dz(x, y, z, mdszz_dz_new);
+
+        set_vz(x, y, z, dt_over_rho * (vdsigmaxz_dx + vdsigmayz_dy + vdsigmazz_dz) + get_vz(x, y, z));
     }
 }
 
@@ -1032,46 +1107,58 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let rho_2: f32 = sim_flt_par.rho * 0.5;
     let lambda: f32 = sim_flt_par.lambda;
     let mu: f32 = sim_flt_par.mu;
-    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
-    let denom: f32 = 4.0 * mu * (lambda + mu);
+    let two_lambda_mu: f32 = 2.0 * (lambda + mu);
+    let denom: f32 = 2.0 * mu * (3.0 * lambda + 2.0 * mu);
     let mu2: f32 = 2.0 * mu;
 
-    // Add the source force
+    // TODO: Add the source force
     if(x == x_source && y == y_source && z == z_source) {
-        //set_vx(x, y, get_vx(x, y) + get_force_x(it) * dt_over_rho);
-        //set_vy(x, y, get_vy(x, y) + get_force_y(it) * dt_over_rho);
+        set_vz(x, y, z, get_vz(x, y, z) + get_force_y(it) * dt_over_rho);
     }
 
     // Apply Dirichlet conditions
     if(x <= 1 || x >= (sim_int_par.x_sz - 2) ||
        y <= 1 || y >= (sim_int_par.y_sz - 2) ||
        z <= 1 || z >= (sim_int_par.z_sz - 2)) {
-        //set_vx(x, y, 0.0);
-        //set_vy(x, y, 0.0);
+        set_vx(x, y, z, 0.0);
+        set_vy(x, y, z, 0.0);
+        set_vz(x, y, z, 0.0);
     }
 
     // Store sensor velocities
     if(x == x_sens && y == y_sens && z == z_sens) {
-        //set_sens_vx(it, get_vx(x, y));
-        //set_sens_vy(it, get_vy(x, y));
+        set_sens_vx(it, get_vx(x, y, z));
+        set_sens_vy(it, get_vy(x, y, z));
+        set_sens_vz(it, get_vz(x, y, z));
     }
 
     // Compute total energy in the medium (without the PML layers)
-    //set_v_2(x, y, get_vx(x, y)*get_vx(x, y) + get_vy(x, y)*get_vy(x, y));
+    set_v_2(x, y, z, get_vx(x, y, z)*get_vx(x, y, z) +
+                     get_vy(x, y, z)*get_vy(x, y, z) +
+                     get_vz(x, y, z)*get_vz(x, y, z));
     if(x >= xmin && x < xmax &&
        y >= ymin && y < ymax &&
        z >= zmin && z < zmax) {
-        //set_tot_en_k(it, rho_2 * get_vx_vy_2(x, y) + get_tot_en_k(it));
+        set_tot_en_k(it, rho_2 * get_v_2(x, y, z) + get_tot_en_k(it));
 
-        //set_eps_xx(x, y, (lambdaplus2mu*get_sigmaxx(x, y) - lambda*get_sigmayy(x, y))/denom);
-        //set_eps_yy(x, y, (lambdaplus2mu*get_sigmayy(x, y) - lambda*get_sigmaxx(x, y))/denom);
-        //set_eps_xy(x, y, get_sigmaxy(x, y)/mu2);
+        set_eps_xx(x, y, z, (two_lambda_mu * get_sigmaxx(x, y, z) -
+                             lambda * (get_sigmayy(x, y, z) - get_sigmazz(x, y, z)))/denom);
+        set_eps_yy(x, y, z, (two_lambda_mu * get_sigmayy(x, y, z) -
+                             lambda * (get_sigmaxx(x, y, z) - get_sigmazz(x, y, z)))/denom);
+        set_eps_zz(x, y, z, (two_lambda_mu * get_sigmazz(x, y, z) -
+                             lambda * (get_sigmaxx(x, y, z) - get_sigmayy(x, y, z)))/denom);
+        set_eps_xy(x, y, z, get_sigmaxy(x, y, z)/mu2);
+        set_eps_xz(x, y, z, get_sigmaxz(x, y, z)/mu2);
+        set_eps_yz(x, y, z, get_sigmayz(x, y, z)/mu2);
 
-        //set_tot_en_p(it, 0.5 * (get_eps_xx(x, y)*get_sigmaxx(x, y) +
-        //                        get_eps_yy(x, y)*get_sigmayy(x, y) +
-        //                        2.0 * get_eps_xy(x, y)* get_sigmaxy(x, y)));
+        set_tot_en_p(it, 0.5 * (get_eps_xx(x, y, z) * get_sigmaxx(x, y, z) +
+                                get_eps_yy(x, y, z) * get_sigmayy(x, y, z) +
+                                get_eps_zz(x, y, z) * get_sigmazz(x, y, z) +
+                                2.0 * (get_eps_xy(x, y, z) * get_sigmaxy(x, y, z) +
+                                       get_eps_xz(x, y, z) * get_sigmaxz(x, y, z) +
+                                       get_eps_yz(x, y, z) * get_sigmayz(x, y, z))));
 
-        //set_tot_en(it, get_tot_en_k(it) + get_tot_en_p(it));
+        set_tot_en(it, get_tot_en_k(it) + get_tot_en_p(it));
     }
 }
 
