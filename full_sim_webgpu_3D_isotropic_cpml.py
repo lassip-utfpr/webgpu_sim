@@ -5,7 +5,6 @@ else:
     import wgpu.backends.rs  # Select backend 0.9.5
 
 import numpy as np
-from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from time import time
 # from datetime import datetime
@@ -149,7 +148,7 @@ NSTEP = 300
 dt = 4.0e-4
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
-IT_DISPLAY = 50
+IT_DISPLAY = 10
 
 # Parametros da fonte
 f0 = 18.0  # frequencia
@@ -1019,7 +1018,7 @@ def sim_webgpu(device):
     v_min = -1.0
     v_max = - v_min
     # Laco de tempo para execucao da simulacao
-    for it in range(NSTEP):
+    for it in range(1, NSTEP + 1):
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -1082,7 +1081,7 @@ def sim_webgpu(device):
                 print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}, Vz = {np.max(vzgpu)}')
                 print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}, Vz = {np.min(vzgpu)}')
                 print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
-                print(f'Total energy = {en[it, 2]}')
+                print(f'Total energy = {en[it - 1, 2]}')
 
             if show_anim:
                 windows_gpu[0].imv.setImage(vxgpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
@@ -1097,7 +1096,7 @@ def sim_webgpu(device):
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if en[it, 3] > STABILITY_THRESHOLD:
+        if en[it - 1, 3] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
@@ -1118,8 +1117,9 @@ def sim_webgpu(device):
                                                                                       ny + 2,
                                                                                       nz + 2))
     sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 3))
+    en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
     adapter_info = device.adapter.request_adapter_info()
-    return vxgpu, vygpu, vzgpu, sens, adapter_info["device"]
+    return vxgpu, vygpu, vzgpu, sens, en[:, 3], adapter_info["device"]
 
 
 times_webgpu = list()
@@ -1166,7 +1166,7 @@ if do_sim_gpu:
         print(f'Simulacao WEBGPU')
         print(f'Iteracao {n}')
         t_webgpu = time()
-        vx_gpu, vy_gpu, vz_gpu, sensor, gpu_str = sim_webgpu(device_gpu)
+        vx_gpu, vy_gpu, vz_gpu, sensor, total_energy_gpu, gpu_str = sim_webgpu(device_gpu)
         times_webgpu.append(time() - t_webgpu)
         print(gpu_str)
         print(f'{times_webgpu[-1]:.3}s')
@@ -1212,7 +1212,7 @@ if show_anim and App:
 times_webgpu = np.array(times_webgpu)
 times_cpu = np.array(times_cpu)
 if do_sim_gpu:
-    print(f'workgroups X: {wsx}; workgroups Y: {wsy}')
+    print(f'workgroups X: {wsx}; workgroups Y: {wsy}; workgroups Z: {wsz}')
 
 print(f'TEMPO - {NSTEP} pontos de tempo')
 if do_sim_gpu and n_iter_gpu > 5:
@@ -1222,8 +1222,9 @@ if do_sim_cpu and n_iter_cpu > 5:
     print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
 
 if do_sim_gpu and do_sim_cpu:
-    print(f'MSE entre as simulações [Vx]: {mean_squared_error(vx_gpu, vx)}')
-    print(f'MSE entre as simulações [Vy]: {mean_squared_error(vy_gpu, vy)}')
+    print(f'MSE entre as simulações [Vx]: {np.sum((vx_gpu - vx) ** 2)/vx.size}')
+    print(f'MSE entre as simulações [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
+    print(f'MSE entre as simulações [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
 
 if plot_results:
     if do_sim_gpu:
