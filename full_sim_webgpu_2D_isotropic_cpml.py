@@ -34,7 +34,7 @@ class Window(QMainWindow):
 
         # setting title
         if title is None:
-            self.setWindowTitle(f"{ny}x{nx} Grid x {NSTEP} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
+            self.setWindowTitle(f"{nx}x{ny} Grid x {NSTEP} iterations - dx = {dx} m x dy = {dy} m x dt = {dt} s")
         else:
             self.setWindowTitle(title)
 
@@ -511,7 +511,6 @@ def sim_cpu():
         # jmin = npoints_pml
         # jmax = ny - npoints_pml + 1
 
-        v_2 = vx[:, :] ** 2 + vy[:, :] ** 2
         # local_energy_kinetic = 0.5 * rho * np.sum(v_2[imin: imax, jmin: jmax])
 
         # compute total field from split components
@@ -524,6 +523,7 @@ def sim_cpu():
         # local_energy_potential = 0.5 * np.sum(epsilon_xx * sigmaxx + epsilon_yy * sigmayy + 2.0 * epsilon_xy * sigmaxy)
         # total_energy[it - 1] = local_energy_kinetic + local_energy_potential
 
+        v_2 = vx[:, :] ** 2 + vy[:, :] ** 2
         v_solid_norm[it - 1] = np.sqrt(np.max(v_2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug:
@@ -559,8 +559,9 @@ def sim_webgpu(device):
     global value_dsigmaxx_dx, value_dsigmaxy_dy
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global sisvx, sisvy
-    global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
-    global epsilon_xx, epsilon_yy, epsilon_xy
+    global v_2, v_solid_norm
+    # global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
+    # global epsilon_xx, epsilon_yy, epsilon_xy
     global windows_gpu
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
@@ -818,9 +819,9 @@ def sim_webgpu(device):
         device.queue.submit([command_encoder.finish()])
 
         # en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
+        b_v_2_offset = (vx.size + vy.size) * 4
         vsn2 = np.asarray(device.queue.read_buffer(b_vel,
-                                                   buffer_offset=(v_2.size * 4) * 2).cast("f")).reshape((nx + 2,
-                                                                                                         ny + 2))
+                                                   buffer_offset=b_v_2_offset).cast("f")).reshape((nx + 2, ny + 2))
         v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug or show_anim:
@@ -959,19 +960,23 @@ if plot_results:
         vx_gpu_sim_result = plt.figure()
         plt.title(f'GPU simulation Vx ({nx}x{ny})')
         plt.imshow(vx_gpu, aspect='auto', cmap='turbo_r')
+        plt.colorbar()
 
         vy_gpu_sim_result = plt.figure()
         plt.title(f'GPU simulation Vy({nx}x{ny})')
         plt.imshow(vy_gpu, aspect='auto', cmap='turbo_r')
+        plt.colorbar()
 
     if do_sim_cpu:
         vx_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vx ({nx}x{ny})')
         plt.imshow(vx, aspect='auto', cmap='turbo_r')
+        plt.colorbar()
 
         vy_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vy ({nx}x{ny})')
         plt.imshow(vy, aspect='auto', cmap='turbo_r')
+        plt.colorbar()
 
     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
         vx_comp_sim_result = plt.figure()

@@ -171,7 +171,6 @@ force_y = np.cos(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
 isource = int(nx / 2)
 jsource = int(ny / 2)
 ksource = int(nz / 2)
-# ksource = npoints_pml + 1
 xsource = isource * dx
 ysource = jsource * dy
 zsource = ksource * dz
@@ -186,11 +185,12 @@ sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # for evolution of total energy in the medium
-v_2 = epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = (
-    np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32))
-total_energy = np.zeros(NSTEP, dtype=flt32)
-total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
-total_energy_potential = np.zeros(NSTEP, dtype=flt32)
+v_2 = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
+# v_2 = epsilon_xx = epsilon_yy = epsilon_zz = epsilon_xy = epsilon_xz = epsilon_yz = (
+#     np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32))
+# total_energy = np.zeros(NSTEP, dtype=flt32)
+# total_energy_kinetic = np.zeros(NSTEP, dtype=flt32)
+# total_energy_potential = np.zeros(NSTEP, dtype=flt32)
 v_solid_norm = np.zeros(NSTEP, dtype=flt32)
 
 # Valor da potencia para calcular "d0"
@@ -214,7 +214,7 @@ for n in range(8, 0, -1):
         wsy = n  # workgroup x size
         break
 
-# TODO: Escolha do valor de wsz (GPU) --- Verificar necessidade e talvez o range deva iniciar em 4
+# Escolha do valor de wsz (GPU)
 wsz = 1
 for n in range(4, 0, -1):
     if ((nz + 2) % n) == 0:
@@ -488,13 +488,14 @@ def sim_cpu():
     global value_dsigmaxx_dx, value_dsigmaxy_dy, value_dsigmaxz_dz
     global value_dsigmaxy_dx, value_dsigmayy_dy, value_dsigmayz_dz
     global sisvx, sisvy, sisvz
-    global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
-    global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
+    global v_2, v_solid_norm
+    # global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
+    # global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
     global windows_cpu
 
     DELTAT_over_rho = dt / rho
-    two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
-    denom = np.float32(2.0 * mu * (3.0 * lambda_ + 2.0 * mu))
+    # two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
+    # denom = np.float32(2.0 * mu * (3.0 * lambda_ + 2.0 * mu))
 
     v_min = -1.0
     v_max = - v_min
@@ -707,52 +708,52 @@ def sim_cpu():
             sisvz[it - 1, _irec] = vz[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
 
         # Compute total energy in the medium (without the PML layers)
-        imin = npoints_pml
-        imax = nx - npoints_pml + 1
-        jmin = npoints_pml
-        jmax = ny - npoints_pml + 1
-        kmin = npoints_pml
-        kmax = nz - npoints_pml + 1
+        # imin = npoints_pml
+        # imax = nx - npoints_pml + 1
+        # jmin = npoints_pml
+        # jmax = ny - npoints_pml + 1
+        # kmin = npoints_pml
+        # kmax = nz - npoints_pml + 1
 
-        local_energy_kinetic = 0.5 * rho * (np.sum(vx[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
-                                            np.sum(vy[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
-                                            np.sum(vz[imin: imax, jmin: jmax, kmin: kmax] ** 2))
+        # local_energy_kinetic = 0.5 * rho * (np.sum(vx[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+        #                                     np.sum(vy[imin: imax, jmin: jmax, kmin: kmax] ** 2) +
+        #                                     np.sum(vz[imin: imax, jmin: jmax, kmin: kmax] ** 2))
 
         # compute total field from split components
+        # epsilon_xx[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                    lambda_ * (sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                               sigmazz[imin: imax, jmin: jmax, kmin: kmax])) /
+        #                                                   denom)
+        # epsilon_yy[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                    lambda_ * (sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                               sigmazz[imin: imax, jmin: jmax, kmin: kmax])) /
+        #                                                   denom)
+        # epsilon_zz[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmazz[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                    lambda_ * (sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
+        #                                                               sigmayy[imin: imax, jmin: jmax, kmin: kmax])) /
+        #                                                   denom)
+        # epsilon_xy[imin: imax, jmin: jmax, kmin: kmax] = sigmaxy[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
+        # epsilon_xz[imin: imax, jmin: jmax, kmin: kmax] = sigmaxz[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
+        # epsilon_yz[imin: imax, jmin: jmax, kmin: kmax] = sigmayz[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
 
-        epsilon_xx[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
-                                                           lambda_ * (sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
-                                                                      sigmazz[imin: imax, jmin: jmax, kmin: kmax])) /
-                                                          denom)
-        epsilon_yy[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmayy[imin: imax, jmin: jmax, kmin: kmax] -
-                                                           lambda_ * (sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
-                                                                      sigmazz[imin: imax, jmin: jmax, kmin: kmax])) /
-                                                          denom)
-        epsilon_zz[imin: imax, jmin: jmax, kmin: kmax] = ((two_lambda_mu * sigmazz[imin: imax, jmin: jmax, kmin: kmax] -
-                                                           lambda_ * (sigmaxx[imin: imax, jmin: jmax, kmin: kmax] -
-                                                                      sigmayy[imin: imax, jmin: jmax, kmin: kmax])) /
-                                                          denom)
-        epsilon_xy[imin: imax, jmin: jmax, kmin: kmax] = sigmaxy[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
-        epsilon_xz[imin: imax, jmin: jmax, kmin: kmax] = sigmaxz[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
-        epsilon_yz[imin: imax, jmin: jmax, kmin: kmax] = sigmayz[imin: imax, jmin: jmax, kmin: kmax] / (2.0 * mu)
+        # local_energy_potential = 0.5 * np.sum(epsilon_xx * sigmaxx +
+        #                                       epsilon_yy * sigmayy +
+        #                                       epsilon_zz * sigmazz +
+        #                                       2.0 * (epsilon_xy * sigmaxy +
+        #                                              epsilon_xz * sigmaxz +
+        #                                              epsilon_yz * sigmayz))
 
-        local_energy_potential = 0.5 * np.sum(epsilon_xx * sigmaxx +
-                                              epsilon_yy * sigmayy +
-                                              epsilon_zz * sigmazz +
-                                              2.0 * (epsilon_xy * sigmaxy +
-                                                     epsilon_xz * sigmaxz +
-                                                     epsilon_yz * sigmayz))
+        # total_energy[it - 1] = local_energy_kinetic + local_energy_potential
 
-        total_energy[it - 1] = local_energy_kinetic + local_energy_potential
-
-        v_solid_norm[it - 1] = np.max(np.sqrt(vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2))
+        v_2 = vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2
+        v_solid_norm[it - 1] = np.sqrt(np.max(v_2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug:
                 print(f'Time step # {it} out of {NSTEP}')
                 print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
                 print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
                 print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
-                print(f'Total energy = {total_energy[it - 1]}')
+                # print(f'Total energy = {total_energy[it - 1]}')
 
             if show_anim:
                 windows_cpu[0].imv.setImage(vx[:, :, ksource], levels=[v_min/10.0, v_max/10.0])
@@ -787,8 +788,9 @@ def sim_webgpu(device):
     global memory_dsigmaxz_dx, memory_dsigmaxz_dz
     global memory_dsigmayz_dy, memory_dsigmayz_dz
     global sisvx, sisvy, sisvz
-    global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
-    global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
+    global v_2, v_solid_norm
+    # global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
+    # global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
     global windows_gpu
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
@@ -850,7 +852,7 @@ def sim_webgpu(device):
     # Velocidades
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 6
-    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, vz)),
+    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, vz, v_2)),
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
                                                  wgpu.BufferUsage.COPY_SRC)
@@ -887,19 +889,19 @@ def sim_webgpu(device):
     # Arrays epsilon
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 10
-    b_eps = device.create_buffer_with_data(data=np.vstack((epsilon_xx, epsilon_yy, epsilon_zz,
-                                                           epsilon_xy, epsilon_xz, epsilon_yz, v_2)),
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_SRC)
+    # b_eps = device.create_buffer_with_data(data=np.vstack((epsilon_xx, epsilon_yy, epsilon_zz,
+    #                                                        epsilon_xy, epsilon_xz, epsilon_yz, v_2)),
+    #                                        usage=wgpu.BufferUsage.STORAGE |
+    #                                              wgpu.BufferUsage.COPY_SRC)
 
     # Arrays de energia total
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 11
-    b_energy = device.create_buffer_with_data(data=np.column_stack((total_energy, total_energy_kinetic,
-                                                                    total_energy_potential, v_solid_norm)),
-                                              usage=wgpu.BufferUsage.STORAGE |
-                                                    wgpu.BufferUsage.COPY_DST |
-                                                    wgpu.BufferUsage.COPY_SRC)
+    # b_energy = device.create_buffer_with_data(data=np.column_stack((total_energy, total_energy_kinetic,
+    #                                                                 total_energy_potential, v_solid_norm)),
+    #                                           usage=wgpu.BufferUsage.STORAGE |
+    #                                                 wgpu.BufferUsage.COPY_DST |
+    #                                                 wgpu.BufferUsage.COPY_SRC)
 
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
@@ -930,11 +932,11 @@ def sim_webgpu(device):
 
     # Sensores
     bl_sensors = [
-        {"binding": ii,
+        {"binding": 9,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(9, 12)
+         }
     ]
 
     # Configuracao das amarracoes (bindings)
@@ -983,14 +985,14 @@ def sim_webgpu(device):
             "binding": 9,
             "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
         },
-        {
-            "binding": 10,
-            "resource": {"buffer": b_eps, "offset": 0, "size": b_eps.size},
-        },
-        {
-            "binding": 11,
-            "resource": {"buffer": b_energy, "offset": 0, "size": b_energy.size},
-        },
+        # {
+        #     "binding": 10,
+        #     "resource": {"buffer": b_eps, "offset": 0, "size": b_eps.size},
+        # },
+        # {
+        #     "binding": 11,
+        #     "resource": {"buffer": b_energy, "offset": 0, "size": b_energy.size},
+        # },
     ]
 
     # Coloca tudo junto
@@ -1011,12 +1013,16 @@ def sim_webgpu(device):
     compute_finish_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                               compute={"module": cshader,
                                                                        "entry_point": "finish_it_kernel"})
+    # compute_energy_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+    #                                                        compute={"module": cshader,
+    #                                                                 "entry_point": "energy_kernel"})
     compute_incr_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
 
     v_min = -1.0
     v_max = - v_min
+    v_sol_n = np.zeros(NSTEP, dtype=flt32)
     # Laco de tempo para execucao da simulacao
     for it in range(1, NSTEP + 1):
         # Cria o codificador de comandos
@@ -1042,6 +1048,10 @@ def sim_webgpu(device):
         compute_pass.set_pipeline(compute_finish_it_kernel)
         compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy, (nz + 2) // wsz)
 
+        # Ativa o pipeline de execucao da energia
+        # compute_pass.set_pipeline(compute_energy_kernel)
+        # compute_pass.dispatch_workgroups((nx + 2) // wsx, (ny + 2) // wsy, (nz + 2) // wsz)
+
         # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_it_kernel)
         compute_pass.dispatch_workgroups(1)
@@ -1052,12 +1062,13 @@ def sim_webgpu(device):
         # Efetua a execucao dos comandos na GPU
         device.queue.submit([command_encoder.finish()])
 
-        en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
-        vsn2 = np.asarray(device.queue.read_buffer(b_eps,
-                                                   buffer_offset=(v_2.size * 4) * 6).cast("f")).reshape((nx + 2,
-                                                                                                         ny + 2,
-                                                                                                         nz + 2))
-        v_sol_n = np.sqrt(np.max(vsn2))
+        # en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
+        b_v_2_offset = (vx.size + vy.size + vz.size) * 4
+        vsn2 = np.asarray(device.queue.read_buffer(b_vel,
+                                                   buffer_offset=b_v_2_offset).cast("f")).reshape((nx + 2,
+                                                                                                   ny + 2,
+                                                                                                   nz + 2))
+        v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug or show_anim:
                 vxgpu = np.asarray(device.queue.read_buffer(b_vel,
@@ -1067,12 +1078,12 @@ def sim_webgpu(device):
                                                                                                   nz + 2))
                 vygpu = np.asarray(device.queue.read_buffer(b_vel,
                                                             buffer_offset=vx.size * 4,
-                                                            size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                            size=vy.size * 4).cast("f")).reshape((nx + 2,
                                                                                                   ny + 2,
                                                                                                   nz + 2))
                 vzgpu = np.asarray(device.queue.read_buffer(b_vel,
-                                                            buffer_offset=2*(vx.size * 4),
-                                                            size=vx.size * 4).cast("f")).reshape((nx + 2,
+                                                            buffer_offset=(vx.size + vy.size) * 4,
+                                                            size=vz.size * 4).cast("f")).reshape((nx + 2,
                                                                                                   ny + 2,
                                                                                                   nz + 2))
 
@@ -1080,8 +1091,8 @@ def sim_webgpu(device):
                 print(f'Time step # {it} out of {NSTEP}')
                 print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}, Vz = {np.max(vzgpu)}')
                 print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}, Vz = {np.min(vzgpu)}')
-                print(f'Max norm velocity vector V (m/s) = {v_sol_n}')
-                print(f'Total energy = {en[it - 1, 2]}')
+                print(f'Max norm velocity vector V (m/s) = {v_sol_n[it - 1]}')
+                # print(f'Total energy = {en[it - 1, 2]}')
 
             if show_anim:
                 windows_gpu[0].imv.setImage(vxgpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
@@ -1096,7 +1107,7 @@ def sim_webgpu(device):
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if en[it - 1, 3] > STABILITY_THRESHOLD:
+        if v_sol_n[it - 1] > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instável")
             exit(2)
 
@@ -1117,9 +1128,9 @@ def sim_webgpu(device):
                                                                                       ny + 2,
                                                                                       nz + 2))
     sens = np.array(device.queue.read_buffer(b_sens).cast("f")).reshape((NSTEP, 3))
-    en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
+    # en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
     adapter_info = device.adapter.request_adapter_info()
-    return vxgpu, vygpu, vzgpu, sens, en[:, 3], adapter_info["device"]
+    return vxgpu, vygpu, vzgpu, sens, v_sol_n, adapter_info["device"]
 
 
 times_webgpu = list()
@@ -1166,7 +1177,7 @@ if do_sim_gpu:
         print(f'Simulacao WEBGPU')
         print(f'Iteracao {n}')
         t_webgpu = time()
-        vx_gpu, vy_gpu, vz_gpu, sensor, total_energy_gpu, gpu_str = sim_webgpu(device_gpu)
+        vx_gpu, vy_gpu, vz_gpu, sensor, v_solid_norm_gpu, gpu_str = sim_webgpu(device_gpu)
         times_webgpu.append(time() - t_webgpu)
         print(gpu_str)
         print(f'{times_webgpu[-1]:.3}s')
@@ -1226,38 +1237,42 @@ if do_sim_gpu and do_sim_cpu:
     print(f'MSE entre as simulações [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
     print(f'MSE entre as simulações [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
 
-if plot_results:
-    if do_sim_gpu:
-        vx_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vx ({nx}x{ny})')
-        plt.imshow(vx_gpu, aspect='auto', cmap='turbo_r')
-
-        vy_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vy({nx}x{ny})')
-        plt.imshow(vy_gpu, aspect='auto', cmap='turbo_r')
-
-    if do_sim_cpu:
-        vx_cpu_sim_result = plt.figure()
-        plt.title(f'CPU simulation Vx ({nx}x{ny})')
-        plt.imshow(vx, aspect='auto', cmap='turbo_r')
-
-        vy_cpu_sim_result = plt.figure()
-        plt.title(f'CPU simulation Vy ({nx}x{ny})')
-        plt.imshow(vy, aspect='auto', cmap='turbo_r')
-
-    if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-        vx_comp_sim_result = plt.figure()
-        plt.title(f'CPU vs GPU Vx ({gpu_type}) error simulation ({nx}x{ny})')
-        plt.imshow(vx - vx_gpu, aspect='auto', cmap='turbo_r')
-        plt.colorbar()
-
-        vy_comp_sim_result = plt.figure()
-        plt.title(f'CPU vs GPU Vy ({gpu_type}) error simulation ({nx}x{ny})')
-        plt.imshow(vy - vy_gpu, aspect='auto', cmap='turbo_r')
-        plt.colorbar()
-
-    if show_results:
-        plt.show()
+# if plot_results:
+#     if do_sim_gpu:
+#         vx_gpu_sim_result = plt.figure()
+#         plt.title(f'GPU simulation Vx ({nx}x{ny})')
+#         plt.imshow(vx_gpu, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#         vy_gpu_sim_result = plt.figure()
+#         plt.title(f'GPU simulation Vy({nx}x{ny})')
+#         plt.imshow(vy_gpu, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#     if do_sim_cpu:
+#         vx_cpu_sim_result = plt.figure()
+#         plt.title(f'CPU simulation Vx ({nx}x{ny})')
+#         plt.imshow(vx, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#         vy_cpu_sim_result = plt.figure()
+#         plt.title(f'CPU simulation Vy ({nx}x{ny})')
+#         plt.imshow(vy, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
+#         vx_comp_sim_result = plt.figure()
+#         plt.title(f'CPU vs GPU Vx ({gpu_type}) error simulation ({nx}x{ny})')
+#         plt.imshow(vx - vx_gpu, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#         vy_comp_sim_result = plt.figure()
+#         plt.title(f'CPU vs GPU Vy ({gpu_type}) error simulation ({nx}x{ny})')
+#         plt.imshow(vy - vy_gpu, aspect='auto', cmap='turbo_r')
+#         plt.colorbar()
+#
+#     if show_results:
+#         plt.show()
 
 # if save_results:
 #     now = datetime.now()

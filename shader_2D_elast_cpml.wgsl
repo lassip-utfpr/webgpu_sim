@@ -39,7 +39,7 @@ var<storage,read> coef_y: array<f32>;
 var<storage,read_write> sim_int_par: SimIntValues;
 
 // Group 1 - simulation arrays
-@group(1) @binding(5) // velocity fields (vx, vy)
+@group(1) @binding(5) // velocity fields (vx, vy, v_2)
 var<storage,read_write> vel: array<f32>;
 
 @group(1) @binding(6) // stress fields (sigmaxx, sigmayy, sigmaxy)
@@ -66,13 +66,6 @@ var<storage,read_write> sensors: array<f32>;
 // -------------------------------
 // --- Index access functions ----
 // -------------------------------
-// function to convert 2D [x,y] index into 1D [xy] index
-fn xy(x: i32, y: i32) -> i32 {
-    let index = y + x * sim_int_par.y_sz;
-
-    return select(-1, index, x >= 0 && x < sim_int_par.x_sz && y >= 0 && y < sim_int_par.y_sz);
-}
-
 // function to convert 2D [i,j] index into 1D [] index
 fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {
     let index = j + i * j_max;
