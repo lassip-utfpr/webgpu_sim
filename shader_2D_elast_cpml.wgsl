@@ -54,13 +54,13 @@ var<storage,read_write> memo: array<f32>;
 @group(2) @binding(8) // sensors signals (sisvx, sisvy)
 var<storage,read_write> sensors: array<f32>;
 
-@group(2) @binding(9) // epsilon fields
+//@group(2) @binding(9) // epsilon fields
                       // epsilon_xx, epsilon_yy, epsilon_xy, vx_vy_2
-var<storage,read_write> eps: array<f32>;
+//var<storage,read_write> eps: array<f32>;
 
-@group(2) @binding(10) // energy fields
+//@group(2) @binding(10) // energy fields
                        // total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
-var<storage,read_write> energy: array<f32>;
+//var<storage,read_write> energy: array<f32>;
 
 
 // -------------------------------
@@ -199,14 +199,14 @@ fn get_k_y_h(n: i32) -> f32 {
 // ---------------------------------------
 // function to get a vx array value
 fn get_vx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 2);
+    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
 
     return select(0.0, vel[index], index != -1);
 }
 
 // function to set a vx array value
 fn set_vx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 2);
+    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
 
     if(index != -1) {
         vel[index] = val;
@@ -215,14 +215,30 @@ fn set_vx(x: i32, y: i32, val : f32) {
 
 // function to get a vy array value
 fn get_vy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 2);
+    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
 
     return select(0.0, vel[index], index != -1);
 }
 
 // function to set a vy array value
 fn set_vy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 2);
+    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+
+    if(index != -1) {
+        vel[index] = val;
+    }
+}
+
+// function to get a v_2 array value
+fn get_v_2(x: i32, y: i32) -> f32 {
+    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+
+    return select(0.0, vel[index], index != -1);
+}
+
+// function to set a v_2 array value
+fn set_v_2(x: i32, y: i32, val : f32) {
+    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
 
     if(index != -1) {
         vel[index] = val;
@@ -436,135 +452,119 @@ fn set_sens_vy(n: i32, val : f32) {
 // --- Epsilon arrays access funtions ---
 // -------------------------------------
 // function to get a epsilon_xx array value
-fn get_eps_xx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    return select(0.0, eps[index], index != -1);
-}
+//fn get_eps_xx(x: i32, y: i32) -> f32 {
+//    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    return select(0.0, eps[index], index != -1);
+//}
 
 // function to set a epsilon_xx array value
-fn set_eps_xx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    if(index != -1) {
-        eps[index] = val;
-    }
-}
+//fn set_eps_xx(x: i32, y: i32, val : f32) {
+//    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    if(index != -1) {
+//        eps[index] = val;
+//    }
+//}
 
 // function to get a epsilon_yy array value
-fn get_eps_yy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    return select(0.0, eps[index], index != -1);
-}
+//fn get_eps_yy(x: i32, y: i32) -> f32 {
+//    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    return select(0.0, eps[index], index != -1);
+//}
 
 // function to set a epsilon_yy array value
-fn set_eps_yy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    if(index != -1) {
-        eps[index] = val;
-    }
-}
+//fn set_eps_yy(x: i32, y: i32, val : f32) {
+//    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    if(index != -1) {
+//        eps[index] = val;
+//    }
+//}
 
 // function to get a epsilon_xy array value
-fn get_eps_xy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    return select(0.0, eps[index], index != -1);
-}
+//fn get_eps_xy(x: i32, y: i32) -> f32 {
+//    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    return select(0.0, eps[index], index != -1);
+//}
 
 // function to set a epsilon_xy array value
-fn set_eps_xy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    if(index != -1) {
-        eps[index] = val;
-    }
-}
-
-// function to get a vx_vy_2 array value
-fn get_vx_vy_2(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    return select(0.0, eps[index], index != -1);
-}
-
-// function to set a vx_vy_2 array value
-fn set_vx_vy_2(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 4);
-
-    if(index != -1) {
-        eps[index] = val;
-    }
-}
+//fn set_eps_xy(x: i32, y: i32, val : f32) {
+//    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
+//
+//    if(index != -1) {
+//        eps[index] = val;
+//    }
+//}
 
 // ------------------------------------
 // --- Energy array access funtions ---
 // ------------------------------------
 // function to get a total_energy array value [tot_en]
-fn get_tot_en(n: i32) -> f32 {
-    let index: i32 = ij(n, 0, sim_int_par.n_iter, 4);
-
-    return select(0.0, energy[index], index != -1);
-}
+//fn get_tot_en(n: i32) -> f32 {
+//    let index: i32 = ij(n, 0, sim_int_par.n_iter, 4);
+//
+//    return select(0.0, energy[index], index != -1);
+//}
 
 // function to set a total_energy array value
-fn set_tot_en(n: i32, val : f32) {
-    let index: i32 = ij(n, 0, sim_int_par.n_iter, 4);
-
-    if(index != -1) {
-        energy[index] = val;
-    }
-}
+//fn set_tot_en(n: i32, val : f32) {
+//    let index: i32 = ij(n, 0, sim_int_par.n_iter, 4);
+//
+//    if(index != -1) {
+//        energy[index] = val;
+//    }
+//}
 
 // function to get a total_energy_kinetic array value [tot_en_k]
-fn get_tot_en_k(n: i32) -> f32 {
-    let index: i32 = ij(n, 1, sim_int_par.n_iter, 4);
-
-    return select(0.0, energy[index], index != -1);
-}
+//fn get_tot_en_k(n: i32) -> f32 {
+//    let index: i32 = ij(n, 1, sim_int_par.n_iter, 4);
+//
+//    return select(0.0, energy[index], index != -1);
+//}
 
 // function to set a total_energy_kinetic array value
-fn set_tot_en_k(n: i32, val : f32) {
-    let index: i32 = ij(n, 1, sim_int_par.n_iter, 4);
-
-    if(index != -1) {
-        energy[index] = val;
-    }
-}
+//fn set_tot_en_k(n: i32, val : f32) {
+//    let index: i32 = ij(n, 1, sim_int_par.n_iter, 4);
+//
+//    if(index != -1) {
+//        energy[index] = val;
+//    }
+//}
 
 // function to get a total_energy_potencial array value [tot_en_p]
-fn get_tot_en_p(n: i32) -> f32 {
-    let index: i32 = ij(n, 2, sim_int_par.n_iter, 4);
-
-    return select(0.0, energy[index], index != -1);
-}
+//fn get_tot_en_p(n: i32) -> f32 {
+//    let index: i32 = ij(n, 2, sim_int_par.n_iter, 4);
+//
+//    return select(0.0, energy[index], index != -1);
+//}
 
 // function to set a total_energy_potencial array value
-fn set_tot_en_p(n: i32, val : f32) {
-    let index: i32 = ij(n, 2, sim_int_par.n_iter, 4);
-
-    if(index != -1) {
-        energy[index] = val;
-    }
-}
+//fn set_tot_en_p(n: i32, val : f32) {
+//    let index: i32 = ij(n, 2, sim_int_par.n_iter, 4);
+//
+//    if(index != -1) {
+//        energy[index] = val;
+//    }
+//}
 
 // function to get a v_solid_norm array value [v_sol_n]
-fn get_v_sol_n(n: i32) -> f32 {
-    let index: i32 = ij(n, 3, sim_int_par.n_iter, 4);
-
-    return select(0.0, energy[index], index != -1);
-}
+//fn get_v_sol_n(n: i32) -> f32 {
+//    let index: i32 = ij(n, 3, sim_int_par.n_iter, 4);
+//
+//    return select(0.0, energy[index], index != -1);
+//}
 
 // function to set a v_solid_norm array value
-fn set_v_sol_n(n: i32, val : f32) {
-    let index: i32 = ij(n, 3, sim_int_par.n_iter, 4);
-
-    if(index != -1) {
-        energy[index] = val;
-    }
-}
+//fn set_v_sol_n(n: i32, val : f32) {
+//    let index: i32 = ij(n, 3, sim_int_par.n_iter, 4);
+//
+//    if(index != -1) {
+//        energy[index] = val;
+//    }
+//}
 
 // ---------------
 // --- Kernels ---
@@ -675,16 +675,6 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x_sens: i32 = sim_int_par.x_sens;
     let y_sens: i32 = sim_int_par.y_sens;
     let it: i32 = sim_int_par.it;
-    let xmin: i32 = sim_int_par.np_pml;
-    let xmax: i32 = sim_int_par.x_sz - sim_int_par.np_pml;
-    let ymin: i32 = sim_int_par.np_pml;
-    let ymax: i32 = sim_int_par.y_sz - sim_int_par.np_pml;
-    let rho_2: f32 = sim_flt_par.rho * 0.5;
-    let lambda: f32 = sim_flt_par.lambda;
-    let mu: f32 = sim_flt_par.mu;
-    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
-    let denom: f32 = 4.0 * mu * (lambda + mu);
-    let mu2: f32 = 2.0 * mu;
 
     // Add the source force
     if(x == x_source && y == y_source) {
@@ -704,22 +694,43 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_sens_vy(it, get_vy(x, y));
     }
 
-    // Compute total energy in the medium (without the PML layers)
-    set_vx_vy_2(x, y, get_vx(x, y)*get_vx(x, y) + get_vy(x, y)*get_vy(x, y));
-    if(x >= xmin && x < xmax && y >= ymin && y < ymax) {
-        set_tot_en_k(it, rho_2 * get_vx_vy_2(x, y) + get_tot_en_k(it));
-
-        set_eps_xx(x, y, (lambdaplus2mu*get_sigmaxx(x, y) - lambda*get_sigmayy(x, y))/denom);
-        set_eps_yy(x, y, (lambdaplus2mu*get_sigmayy(x, y) - lambda*get_sigmaxx(x, y))/denom);
-        set_eps_xy(x, y, get_sigmaxy(x, y)/mu2);
-
-        set_tot_en_p(it, 0.5 * (get_eps_xx(x, y)*get_sigmaxx(x, y) +
-                                get_eps_yy(x, y)*get_sigmayy(x, y) +
-                                2.0 * get_eps_xy(x, y)* get_sigmaxy(x, y)));
-
-        set_tot_en(it, get_tot_en_k(it) + get_tot_en_p(it));
-    }
+    // Compute velocity norm L2
+    set_v_2(x, y, get_vx(x, y)*get_vx(x, y) + get_vy(x, y)*get_vy(x, y));
 }
+
+// Kernel to compute energy
+//@compute
+//@workgroup_size(wsx, wsy)
+//fn energy_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
+//    let x: i32 = i32(index.x);          // x thread index
+//    let y: i32 = i32(index.y);          // y thread index
+//    let it: i32 = sim_int_par.it;
+//    let xmin: i32 = sim_int_par.np_pml;
+//    let xmax: i32 = sim_int_par.x_sz - sim_int_par.np_pml;
+//    let ymin: i32 = sim_int_par.np_pml;
+//    let ymax: i32 = sim_int_par.y_sz - sim_int_par.np_pml;
+//    let rho_2: f32 = sim_flt_par.rho * 0.5;
+//    let lambda: f32 = sim_flt_par.lambda;
+//    let mu: f32 = sim_flt_par.mu;
+//    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
+//    let denom: f32 = 4.0 * mu * (lambda + mu);
+//    let mu2: f32 = 2.0 * mu;
+//
+//    // Compute total energy in the medium (without the PML layers)
+//    if(x >= xmin && x < xmax && y >= ymin && y < ymax) {
+//        set_tot_en_k(it, rho_2 * get_v_2(x, y) + get_tot_en_k(it));
+//
+//        set_eps_xx(x, y, (lambdaplus2mu*get_sigmaxx(x, y) - lambda*get_sigmayy(x, y))/denom);
+//        set_eps_yy(x, y, (lambdaplus2mu*get_sigmayy(x, y) - lambda*get_sigmaxx(x, y))/denom);
+//        set_eps_xy(x, y, get_sigmaxy(x, y)/mu2);
+//
+//        set_tot_en_p(it, 0.5 * (get_eps_xx(x, y)*get_sigmaxx(x, y) +
+//                                get_eps_yy(x, y)*get_sigmayy(x, y) +
+//                                2.0 * get_eps_xy(x, y)* get_sigmaxy(x, y)));
+//
+//        set_tot_en(it, get_tot_en_k(it) + get_tot_en_p(it));
+//    }
+//}
 
 // Kernel to increase time iteraction [it]
 @compute
