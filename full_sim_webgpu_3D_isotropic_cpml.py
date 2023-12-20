@@ -107,9 +107,9 @@ if do_sim_gpu:
         device_gpu = adapter.request_device()
 
 # Parametros da simulacao
-nx = 100  # colunas
-ny = 100  # linhas
-nz = 100  # altura
+nx = 300  # colunas
+ny = 300  # linhas
+nz = 21   # altura
 
 # Tamanho do grid (aparentemente em metros)
 dx = dy = dz = 4.0
@@ -168,8 +168,8 @@ force_x = np.sin(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
 force_y = np.cos(ANGLE_FORCE * DEGREES_TO_RADIANS) * source_term
 
 # Posicao da fonte
-isource = int(nx / 2)
-jsource = int(ny / 2)
+isource = int(nx / 2) - 1
+jsource = int(ny / 2) - 1
 ksource = int(nz / 2)
 xsource = isource * dx
 ysource = jsource * dy
@@ -756,15 +756,15 @@ def sim_cpu():
                 # print(f'Total energy = {total_energy[it - 1]}')
 
             if show_anim:
-                windows_cpu[0].imv.setImage(vx[:, :, ksource], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[1].imv.setImage(vy[:, :, ksource], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[2].imv.setImage(vz[:, :, ksource], levels=[v_min, v_max])
-                windows_cpu[3].imv.setImage(vx[:, jsource, :], levels=[v_min, v_max])
-                windows_cpu[4].imv.setImage(vy[:, jsource, :], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[5].imv.setImage(vz[:, jsource, :], levels=[v_min, v_max])
-                windows_cpu[6].imv.setImage(vx[isource, :, :], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[7].imv.setImage(vy[isource, :, :], levels=[v_min, v_max])
-                windows_cpu[8].imv.setImage(vz[isource, :, :], levels=[v_min, v_max])
+                windows_cpu[0].imv.setImage(vx[1:-1, 1:-1, ksource], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[1].imv.setImage(vy[1:-1, 1:-1, ksource], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[2].imv.setImage(vz[1:-1, 1:-1, ksource], levels=[v_min, v_max])
+                windows_cpu[3].imv.setImage(vx[1:-1, jsource, 1:-1], levels=[v_min, v_max])
+                windows_cpu[4].imv.setImage(vy[1:-1, jsource, 1:-1], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[5].imv.setImage(vz[1:-1, jsource, 1:-1], levels=[v_min, v_max])
+                windows_cpu[6].imv.setImage(vx[isource, 1:-1, 1:-1], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[7].imv.setImage(vy[isource, 1:-1, 1:-1], levels=[v_min, v_max])
+                windows_cpu[8].imv.setImage(vz[isource, 1:-1, 1:-1], levels=[v_min, v_max])
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -1095,15 +1095,15 @@ def sim_webgpu(device):
                 # print(f'Total energy = {en[it - 1, 2]}')
 
             if show_anim:
-                windows_gpu[0].imv.setImage(vxgpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
-                windows_gpu[1].imv.setImage(vygpu[:, :, ksource], levels=[v_min / 10.0, v_max / 10.0])
-                windows_gpu[2].imv.setImage(vzgpu[:, :, ksource], levels=[v_min, v_max])
-                windows_gpu[3].imv.setImage(vxgpu[:, jsource, :], levels=[v_min, v_max])
-                windows_gpu[4].imv.setImage(vygpu[:, jsource, :], levels=[v_min / 10.0, v_max / 10.0])
-                windows_gpu[5].imv.setImage(vzgpu[:, jsource, :], levels=[v_min, v_max])
-                windows_gpu[6].imv.setImage(vxgpu[isource, :, :], levels=[v_min / 10.0, v_max / 10.0])
-                windows_gpu[7].imv.setImage(vygpu[isource, :, :], levels=[v_min, v_max])
-                windows_gpu[8].imv.setImage(vzgpu[isource, :, :], levels=[v_min, v_max])
+                windows_gpu[0].imv.setImage(vxgpu[1:-1, 1:-1, ksource], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[1].imv.setImage(vygpu[1:-1, 1:-1, ksource], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[2].imv.setImage(vzgpu[1:-1, 1:-1, ksource], levels=[v_min, v_max])
+                windows_gpu[3].imv.setImage(vxgpu[1:-1, jsource, 1:-1], levels=[v_min, v_max])
+                windows_gpu[4].imv.setImage(vygpu[1:-1, jsource, 1:-1], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[5].imv.setImage(vzgpu[1:-1, jsource, 1:-1], levels=[v_min, v_max])
+                windows_gpu[6].imv.setImage(vxgpu[isource, 1:-1, 1:-1], levels=[v_min / 10.0, v_max / 10.0])
+                windows_gpu[7].imv.setImage(vygpu[isource, 1:-1, 1:-1], levels=[v_min, v_max])
+                windows_gpu[8].imv.setImage(vzgpu[isource, 1:-1, 1:-1], levels=[v_min, v_max])
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -1143,15 +1143,15 @@ if show_anim:
         x_pos = 800 + np.arange(3) * (nx + 10)
         y_pos = 100 + np.arange(3) * (ny + 50)
         windows_cpu_data = [
-            {"title": "Vx - Plano XY [CPU]", "geometry": (x_pos[0], y_pos[0], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano XY [CPU]", "geometry": (x_pos[1], y_pos[0], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano XY [CPU]", "geometry": (x_pos[2], y_pos[0], vz.shape[0], vz.shape[1])},
-            {"title": "Vx - Plano XZ [CPU]", "geometry": (x_pos[0], y_pos[1], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano XZ [CPU]", "geometry": (x_pos[1], y_pos[1], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano XZ [CPU]", "geometry": (x_pos[2], y_pos[1], vz.shape[0], vz.shape[1])},
-            {"title": "Vx - Plano YZ [CPU]", "geometry": (x_pos[0], y_pos[2], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano YZ [CPU]", "geometry": (x_pos[1], y_pos[2], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano YZ [CPU]", "geometry": (x_pos[2], y_pos[2], vz.shape[0], vz.shape[1])},
+            {"title": "Vx - Plano XY [CPU]", "geometry": (x_pos[0], y_pos[0], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano XY [CPU]", "geometry": (x_pos[1], y_pos[0], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano XY [CPU]", "geometry": (x_pos[2], y_pos[0], vz.shape[0] - 2, vz.shape[1] - 2)},
+            {"title": "Vx - Plano XZ [CPU]", "geometry": (x_pos[0], y_pos[1], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano XZ [CPU]", "geometry": (x_pos[1], y_pos[1], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano XZ [CPU]", "geometry": (x_pos[2], y_pos[1], vz.shape[0] - 2, vz.shape[1] - 2)},
+            {"title": "Vx - Plano YZ [CPU]", "geometry": (x_pos[0], y_pos[2], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano YZ [CPU]", "geometry": (x_pos[1], y_pos[2], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano YZ [CPU]", "geometry": (x_pos[2], y_pos[2], vz.shape[0] - 2, vz.shape[1] - 2)},
         ]
         windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
 
@@ -1159,15 +1159,15 @@ if show_anim:
         x_pos = 200 + np.arange(3) * (nx + 10)
         y_pos = 100 + np.arange(3) * (ny + 50)
         windows_gpu_data = [
-            {"title": "Vx - Plano XY [GPU]", "geometry": (x_pos[0], y_pos[0], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano XY [GPU]", "geometry": (x_pos[1], y_pos[0], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano XY [GPU]", "geometry": (x_pos[2], y_pos[0], vz.shape[0], vz.shape[1])},
-            {"title": "Vx - Plano XZ [GPU]", "geometry": (x_pos[0], y_pos[1], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano XZ [GPU]", "geometry": (x_pos[1], y_pos[1], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano XZ [GPU]", "geometry": (x_pos[2], y_pos[1], vz.shape[0], vz.shape[1])},
-            {"title": "Vx - Plano YZ [GPU]", "geometry": (x_pos[0], y_pos[2], vx.shape[0], vx.shape[1])},
-            {"title": "Vy - Plano YZ [GPU]", "geometry": (x_pos[1], y_pos[2], vy.shape[0], vy.shape[1])},
-            {"title": "Vz - Plano YZ [GPU]", "geometry": (x_pos[2], y_pos[2], vz.shape[0], vz.shape[1])},
+            {"title": "Vx - Plano XY [GPU]", "geometry": (x_pos[0], y_pos[0], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano XY [GPU]", "geometry": (x_pos[1], y_pos[0], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano XY [GPU]", "geometry": (x_pos[2], y_pos[0], vz.shape[0] - 2, vz.shape[1] - 2)},
+            {"title": "Vx - Plano XZ [GPU]", "geometry": (x_pos[0], y_pos[1], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano XZ [GPU]", "geometry": (x_pos[1], y_pos[1], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano XZ [GPU]", "geometry": (x_pos[2], y_pos[1], vz.shape[0] - 2, vz.shape[1] - 2)},
+            {"title": "Vx - Plano YZ [GPU]", "geometry": (x_pos[0], y_pos[2], vx.shape[0] - 2, vx.shape[1] - 2)},
+            {"title": "Vy - Plano YZ [GPU]", "geometry": (x_pos[1], y_pos[2], vy.shape[0] - 2, vy.shape[1] - 2)},
+            {"title": "Vz - Plano YZ [GPU]", "geometry": (x_pos[2], y_pos[2], vz.shape[0] - 2, vz.shape[1] - 2)},
         ]
         windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data]
 
