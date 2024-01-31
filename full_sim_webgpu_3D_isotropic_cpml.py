@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import wgpu
 if wgpu.version_info[1] > 11:
     import wgpu.backends.wgpu_native  # Select backend 0.13.X
@@ -85,10 +87,11 @@ do_sim_gpu = True
 do_sim_cpu = True
 do_comp_fig_cpu_gpu = True
 use_refletors = False
-show_anim = True
+show_anim = False
 show_debug = True
-plot_results = False
-show_results = True
+plot_results = True
+plot_sensors = False
+show_results = False
 save_results = True
 gpu_type = "NVIDIA"
 
@@ -448,9 +451,12 @@ iy_rec = np.zeros(NREC, dtype=int)
 iz_rec = np.zeros(NREC, dtype=int)
 for irec in range(NREC):
     dist = HUGEVAL
-    for k in range(nz):
-        for j in range(ny):
-            for i in range(nx):
+    ix_rec_0 = int(xrec[irec] / dx)
+    iy_rec_0 = int(yrec[irec] / dy)
+    iz_rec_0 = int(zrec[irec] / dz)
+    for k in range(iz_rec_0, iz_rec_0 + 2):
+        for j in range(iy_rec_0, iy_rec_0 + 2):
+            for i in range(ix_rec_0, ix_rec_0 + 2):
                 distval = np.sqrt((dx * i - xrec[irec]) ** 2 + (dx * j - yrec[irec]) ** 2 + (dz * k - zrec[irec]) ** 2)
                 if distval < dist:
                     dist = distval
@@ -1183,7 +1189,7 @@ if do_sim_gpu:
         print(f'{times_webgpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        if plot_results:
+        if plot_results and plot_sensors:
             fig, ax = plt.subplots(3, sharex=True, sharey=True)
             fig.suptitle(f'Receptor 1 [GPU]')
             ax[0].plot(sensor[:, 0])
@@ -1196,7 +1202,7 @@ if do_sim_gpu:
 # CPU
 if do_sim_cpu:
     for n in range(n_iter_cpu):
-        print(f'SIMULACaO CPU')
+        print(f'SIMULACAO CPU')
         print(f'Iteracao {n}')
         t_cpu = time()
         sim_cpu()
@@ -1204,7 +1210,7 @@ if do_sim_cpu:
         print(f'{times_cpu[-1]:.3}s')
 
         # Plota as velocidades tomadas no sensores
-        if plot_results:
+        if plot_results and plot_sensors:
             for irec in range(NREC):
                 fig, ax = plt.subplots(3, sharex=True, sharey=True)
                 fig.suptitle(f'Receptor {irec + 1} [CPU]')
@@ -1237,84 +1243,118 @@ if do_sim_gpu and do_sim_cpu:
     print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
     print(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
 
-# if plot_results:
-#     if do_sim_gpu:
-#         vx_gpu_sim_result = plt.figure()
-#         plt.title(f'GPU simulation Vx ({nx}x{ny})')
-#         plt.imshow(vx_gpu, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#         vy_gpu_sim_result = plt.figure()
-#         plt.title(f'GPU simulation Vy({nx}x{ny})')
-#         plt.imshow(vy_gpu, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#     if do_sim_cpu:
-#         vx_cpu_sim_result = plt.figure()
-#         plt.title(f'CPU simulation Vx ({nx}x{ny})')
-#         plt.imshow(vx, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#         vy_cpu_sim_result = plt.figure()
-#         plt.title(f'CPU simulation Vy ({nx}x{ny})')
-#         plt.imshow(vy, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-#         vx_comp_sim_result = plt.figure()
-#         plt.title(f'CPU vs GPU Vx ({gpu_type}) error simulation ({nx}x{ny})')
-#         plt.imshow(vx - vx_gpu, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#         vy_comp_sim_result = plt.figure()
-#         plt.title(f'CPU vs GPU Vy ({gpu_type}) error simulation ({nx}x{ny})')
-#         plt.imshow(vy - vy_gpu, aspect='auto', cmap='turbo_r')
-#         plt.colorbar()
-#
-#     if show_results:
-#         plt.show()
+if plot_results:
+    if do_sim_gpu:
+        vx_gpu_sim_result = plt.figure()
+        plt.title(f'GPU simulation Vx - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+        plt.imshow(vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
 
-# if save_results:
-#     now = datetime.now()
-#     name = f'results/result_{now.strftime("%Y%m%d-%H%M%S")}_{nz}x{nx}_{nt}_iter'
-#     if plot_results:
-#         if do_sim_gpu:
-#             gpu_sim_result.savefig(name + '_gpu_' + gpu_type + '.png')
-#             sensor_gpu_result.savefig(name + '_sensor_' + gpu_type + '.png')
-#
-#         if do_sim_cpu:
-#             cpu_sim_result.savefig(name + 'cpu.png')
-#
-#         if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-#             comp_sim_result.savefig(name + 'comp_cpu_gpu_' + gpu_type + '.png')
-#
-#     np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_for, '%10.3f', delimiter=',')
-#     np.savetxt(name + '_CPU.csv', times_ser, '%10.3f', delimiter=',')
-#     with open(name + '_desc.txt', 'w') as f:
-#         f.write('Parametros do ensaio\n')
-#         f.write('--------------------\n')
-#         f.write('\n')
-#         f.write(f'Quantidade de iteracoes no tempo: {nt}\n')
-#         f.write(f'Tamanho da ROI: {nz}x{nx}\n')
-#         f.write(f'Refletores na ROI: {"Sim" if use_refletors else "Nao"}\n')
-#         f.write(f'Simulacao GPU: {"Sim" if do_sim_gpu else "Nao"}\n')
-#         if do_sim_gpu:
-#             f.write(f'GPU: {gpu_str}\n')
-#             f.write(f'Numero de simulacoes GPU: {n_iter_gpu}\n')
-#             if n_iter_gpu > 5:
-#                 f.write(f'Tempo medio de execucao: {times_for[5:].mean():.3}s\n')
-#                 f.write(f'Desvio padrao: {times_for[5:].std()}\n')
-#             else:
-#                 f.write(f'Tempo execucao: {times_for[0]:.3}s\n')
-#
-#         f.write(f'Simulacao CPU: {"Sim" if do_sim_cpu else "Nao"}\n')
-#         if do_sim_cpu:
-#             f.write(f'Numero de simulacoes CPU: {n_iter_cpu}\n')
-#             if n_iter_cpu > 5:
-#                 f.write(f'Tempo medio de execucao: {times_ser[5:].mean():.3}s\n')
-#                 f.write(f'Desvio padrao: {times_ser[5:].std()}\n')
-#             else:
-#                 f.write(f'Tempo execucao: {times_ser[0]:.3}s\n')
-#
-#         if do_sim_gpu and do_sim_cpu:
-#             f.write(f'MSE entre as simulacoes: {mean_squared_error(u_ser, u_for)}')
+        vy_gpu_sim_result = plt.figure()
+        plt.title(f'GPU simulation Vy - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+        plt.imshow(vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+        vz_gpu_sim_result = plt.figure()
+        plt.title(f'GPU simulation Vz - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+        plt.imshow(vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+    if do_sim_cpu:
+        vx_cpu_sim_result = plt.figure()
+        plt.title(f'CPU simulation Vx - Plane XY\n[CPU] ({nx}x{ny})')
+        plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+        vy_cpu_sim_result = plt.figure()
+        plt.title(f'CPU simulation Vy - Plane XY\n[CPU] ({nx}x{ny})')
+        plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+        vz_cpu_sim_result = plt.figure()
+        plt.title(f'CPU simulation Vz - Plane XY\n[CPU] ({nx}x{ny})')
+        plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+    if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
+        vx_comp_sim_result = plt.figure()
+        plt.title(f'CPU vs GPU Vx - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
+        plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource] -
+                   vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+        vy_comp_sim_result = plt.figure()
+        plt.title(f'CPU vs GPU Vy - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
+        plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource] -
+                   vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+        vz_comp_sim_result = plt.figure()
+        plt.title(f'CPU vs GPU Vz - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
+        plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource] -
+                   vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, ksource],
+                   aspect='auto', cmap='turbo_r')
+        plt.colorbar()
+
+    if show_results:
+        plt.show()
+
+if save_results:
+    now = datetime.now()
+    name = f'results/result_3D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_{nx}x{ny}x{nz}_{NSTEP}_iter_'
+    if plot_results:
+        if do_sim_gpu:
+            vx_gpu_sim_result.savefig(name + 'Vx_XY_gpu_' + gpu_type + '.png')
+            vy_gpu_sim_result.savefig(name + 'Vy_XY_gpu_' + gpu_type + '.png')
+            vz_gpu_sim_result.savefig(name + 'Vz_XY_gpu_' + gpu_type + '.png')
+
+        if do_sim_cpu:
+            vx_cpu_sim_result.savefig(name + 'Vx_XY_cpu.png')
+            vy_cpu_sim_result.savefig(name + 'Vy_XY_cpu.png')
+            vz_cpu_sim_result.savefig(name + 'Vz_XY_cpu.png')
+
+        if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
+            vx_comp_sim_result.savefig(name + 'Vx_XY_comp_cpu_gpu_' + gpu_type + '.png')
+            vy_comp_sim_result.savefig(name + 'Vy_XY_comp_cpu_gpu_' + gpu_type + '.png')
+            vz_comp_sim_result.savefig(name + 'Vz_XY_comp_cpu_gpu_' + gpu_type + '.png')
+
+    np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_webgpu, '%10.3f', delimiter=',')
+    np.savetxt(name + '_CPU.csv', times_cpu, '%10.3f', delimiter=',')
+    with open(name + '_desc.txt', 'w') as f:
+        f.write('Parametros do ensaio\n')
+        f.write('--------------------\n')
+        f.write('\n')
+        f.write(f'Quantidade de iteracoes no tempo: {NSTEP}\n')
+        f.write(f'Tamanho da ROI: {nx}x{ny}x{nz}\n')
+        f.write(f'Refletores na ROI: {"Sim" if use_refletors else "Nao"}\n')
+        f.write(f'Simulacao GPU: {"Sim" if do_sim_gpu else "Nao"}\n')
+        if do_sim_gpu:
+            f.write(f'GPU: {gpu_str}\n')
+            f.write(f'Numero de simulacoes GPU: {n_iter_gpu}\n')
+            if n_iter_gpu > 5:
+                f.write(f'Tempo medio de execucao: {times_webgpu[5:].mean():.3}s\n')
+                f.write(f'Desvio padrao: {times_webgpu[5:].std()}\n')
+            else:
+                f.write(f'Tempo execucao: {times_webgpu[0]:.3}s\n')
+
+        f.write(f'Simulacao CPU: {"Sim" if do_sim_cpu else "Nao"}\n')
+        if do_sim_cpu:
+            f.write(f'Numero de simulacoes CPU: {n_iter_cpu}\n')
+            if n_iter_cpu > 5:
+                f.write(f'Tempo medio de execucao: {times_cpu[5:].mean():.3}s\n')
+                f.write(f'Desvio padrao: {times_cpu[5:].std()}\n')
+            else:
+                f.write(f'Tempo execucao: {times_cpu[0]:.3}s\n')
+
+        if do_sim_gpu and do_sim_cpu:
+            f.write(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}\n')
+            f.write(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}\n')
+            f.write(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2) / vz.size}\n')
