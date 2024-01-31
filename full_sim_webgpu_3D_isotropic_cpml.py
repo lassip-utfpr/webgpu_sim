@@ -14,10 +14,10 @@ from pyqtgraph.widgets.RawImageWidget import RawImageWidget
 
 
 # ==========================================================
-# Esse arquivo contém as simulações realizadas dentro da GPU.
+# Esse arquivo contem as simulacoes realizadas dentro da GPU.
 # ==========================================================
 
-# Código para visualização da janela de simulação
+# Codigo para visualizacao da janela de simulacao
 # Image View class
 class ImageView(pg.ImageView):
     # constructor which inherit original
@@ -769,11 +769,11 @@ def sim_cpu():
 
         # Verifica a estabilidade da simulacao
         if v_solid_norm[it - 1] > STABILITY_THRESHOLD:
-            print("Simulacao tornando-se instável")
+            print("Simulacao tornando-se instavel")
             exit(2)
 
 
-# Simulação completa em WEB GPU
+# Simulacao completa em WEB GPU
 def sim_webgpu(device):
     global source_term, force_x, force_y
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
@@ -1108,7 +1108,7 @@ def sim_webgpu(device):
 
         # Verifica a estabilidade da simulacao
         if v_sol_n[it - 1] > STABILITY_THRESHOLD:
-            print("Simulacao tornando-se instável")
+            print("Simulacao tornando-se instavel")
             exit(2)
 
     # Pega os resultados da simulacao
@@ -1196,7 +1196,7 @@ if do_sim_gpu:
 # CPU
 if do_sim_cpu:
     for n in range(n_iter_cpu):
-        print(f'SIMULAÇÃO CPU')
+        print(f'SIMULACaO CPU')
         print(f'Iteracao {n}')
         t_cpu = time()
         sim_cpu()
@@ -1233,9 +1233,9 @@ if do_sim_cpu and n_iter_cpu > 5:
     print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
 
 if do_sim_gpu and do_sim_cpu:
-    print(f'MSE entre as simulações [Vx]: {np.sum((vx_gpu - vx) ** 2)/vx.size}')
-    print(f'MSE entre as simulações [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
-    print(f'MSE entre as simulações [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
+    print(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2)/vx.size}')
+    print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
+    print(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
 
 # if plot_results:
 #     if do_sim_gpu:

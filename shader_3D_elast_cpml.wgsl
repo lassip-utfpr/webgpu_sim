@@ -921,9 +921,12 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
        y >= 2 && y < (sim_int_par.y_sz - 1) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        var vdvx_dx: f32 = (27.0*(get_vx(x + 1, y, z) - get_vx(x, y, z)) - get_vx(x + 2, y, z) + get_vx(x - 1, y, z))/(24.0 * dx);
-        var vdvy_dy: f32 = (27.0*(get_vy(x, y, z) - get_vy(x, y - 1, z)) - get_vy(x, y + 1, z) + get_vy(x, y - 2, z))/(24.0 * dy);
-        var vdvz_dz: f32 = (27.0*(get_vz(x, y, z) - get_vz(x, y, z - 1)) - get_vz(x, y, z + 1) + get_vz(x, y, z - 2))/(24.0 * dy);
+        var vdvx_dx: f32 = (27.0*(get_vx(x + 1, y, z) - get_vx(x, y, z)) -
+                            get_vx(x + 2, y, z) + get_vx(x - 1, y, z))/(24.0 * dx);
+        var vdvy_dy: f32 = (27.0*(get_vy(x, y, z) - get_vy(x, y - 1, z)) -
+                            get_vy(x, y + 1, z) + get_vy(x, y - 2, z))/(24.0 * dy);
+        var vdvz_dz: f32 = (27.0*(get_vz(x, y, z) - get_vz(x, y, z - 1)) -
+                            get_vz(x, y, z + 1) + get_vz(x, y, z - 2))/(24.0 * dy);
 
         var mdvx_dx_new: f32 = get_b_x_h(x - 1) * get_mdvx_dx(x, y, z) + get_a_x_h(x - 1) * vdvx_dx;
         var mdvy_dy_new: f32 = get_b_y(y - 1) * get_mdvy_dy(x, y, z) + get_a_y(y - 1) * vdvy_dy;
@@ -937,9 +940,9 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvy_dy(x, y, z, mdvy_dy_new);
         set_mdvz_dz(x, y, z, mdvz_dz_new);
 
-        set_sigmaxx(x, y, z, get_sigmaxx(x, y, z) + (lambdaplus2mu * vdvx_dx + lambda        * (vdvy_dy + vdvz_dz)) * dt);
-        set_sigmayy(x, y, z, get_sigmayy(x, y, z) + (lambda        * (vdvx_dx + vdvz_dz) + lambdaplus2mu * vdvy_dy) * dt);
-        set_sigmazz(x, y, z, get_sigmazz(x, y, z) + (lambda        * (vdvx_dx + vdvy_dy) + lambdaplus2mu * vdvz_dz) * dt);
+        set_sigmaxx(x, y, z, get_sigmaxx(x, y, z) + (lambdaplus2mu * vdvx_dx + lambda        * (vdvy_dy + vdvz_dz))*dt);
+        set_sigmayy(x, y, z, get_sigmayy(x, y, z) + (lambda        * (vdvx_dx + vdvz_dz) + lambdaplus2mu * vdvy_dy)*dt);
+        set_sigmazz(x, y, z, get_sigmazz(x, y, z) + (lambda        * (vdvx_dx + vdvy_dy) + lambdaplus2mu * vdvz_dz)*dt);
     }
 
     // Shear stresses
@@ -947,8 +950,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
        y >= 1 && y < (sim_int_par.y_sz - 2) &&
        z >= 1 && z < (sim_int_par.z_sz - 2)) {
-        var vdvy_dx: f32 = (27.0*(get_vy(x, y, z) - get_vy(x - 1, y, z)) - get_vy(x + 1, y, z) + get_vy(x - 2, y, z))/(24.0 * dx);
-        var vdvx_dy: f32 = (27.0*(get_vx(x, y + 1, z) - get_vx(x, y, z)) - get_vx(x, y + 2, z) + get_vx(x, y - 1, z))/(24.0 * dy);
+        var vdvy_dx: f32 = (27.0*(get_vy(x, y, z) - get_vy(x - 1, y, z)) -
+                            get_vy(x + 1, y, z) + get_vy(x - 2, y, z))/(24.0 * dx);
+        var vdvx_dy: f32 = (27.0*(get_vx(x, y + 1, z) - get_vx(x, y, z)) -
+                            get_vx(x, y + 2, z) + get_vx(x, y - 1, z))/(24.0 * dy);
 
         var mdvy_dx_new: f32 = get_b_x(x - 1) * get_mdvy_dx(x, y, z) + get_a_x(x - 1) * vdvy_dx;
         var mdvx_dy_new: f32 = get_b_y_h(y - 1) * get_mdvx_dy(x, y, z) + get_a_y_h(y - 1) * vdvx_dy;
@@ -966,8 +971,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
        y >= 1 && y < (sim_int_par.y_sz - 1) &&
        z >= 1 && z < (sim_int_par.z_sz - 2)) {
-        var vdvz_dx: f32 = (27.0*(get_vz(x, y, z) - get_vz(x - 1, y, z)) - get_vz(x + 1, y, z) + get_vz(x - 2, y, z))/(24.0 * dx);
-        var vdvx_dz: f32 = (27.0*(get_vx(x, y, z + 1) - get_vx(x, y, z)) - get_vx(x, y, z + 2) + get_vx(x, y, z - 1))/(24.0 * dz);
+        var vdvz_dx: f32 = (27.0*(get_vz(x, y, z) - get_vz(x - 1, y, z)) -
+                            get_vz(x + 1, y, z) + get_vz(x - 2, y, z))/(24.0 * dx);
+        var vdvx_dz: f32 = (27.0*(get_vx(x, y, z + 1) - get_vx(x, y, z)) -
+                            get_vx(x, y, z + 2) + get_vx(x, y, z - 1))/(24.0 * dz);
 
         var mdvz_dx_new: f32 = get_b_x(x - 1) * get_mdvz_dx(x, y, z) + get_a_x(x - 1) * vdvz_dx;
         var mdvx_dz_new: f32 = get_b_z_h(z - 1) * get_mdvx_dz(x, y, z) + get_a_z_h(z - 1) * vdvx_dz;
@@ -985,8 +992,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 1 && x < (sim_int_par.x_sz - 1) &&
        y >= 1 && y < (sim_int_par.y_sz - 2) &&
        z >= 1 && z < (sim_int_par.z_sz - 2)) {
-        var vdvz_dy: f32 = (27.0*(get_vz(x, y + 1, z) - get_vz(x, y, z)) - get_vz(x, y + 2, z) + get_vz(x, y - 1, z))/(24.0 * dy);
-        var vdvy_dz: f32 = (27.0*(get_vy(x, y, z + 1) - get_vy(x, y, z)) - get_vy(x, y, z + 2) + get_vy(x, y, z - 1))/(24.0 * dz);
+        var vdvz_dy: f32 = (27.0*(get_vz(x, y + 1, z) - get_vz(x, y, z)) -
+                            get_vz(x, y + 2, z) + get_vz(x, y - 1, z))/(24.0 * dy);
+        var vdvy_dz: f32 = (27.0*(get_vy(x, y, z + 1) - get_vy(x, y, z)) -
+                            get_vy(x, y, z + 2) + get_vy(x, y, z - 1))/(24.0 * dz);
 
         var mdvz_dy_new: f32 = get_b_y_h(y - 1) * get_mdvz_dy(x, y, z) + get_a_y_h(y - 1) * vdvz_dy;
         var mdvy_dz_new: f32 = get_b_z_h(z - 1) * get_mdvy_dz(x, y, z) + get_a_z_h(z - 1) * vdvy_dz;
@@ -1017,9 +1026,12 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 2 && x < (sim_int_par.x_sz - 1) &&
        y >= 2 && y < (sim_int_par.y_sz - 1) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        var vdsigmaxx_dx: f32 = (27.0*(get_sigmaxx(x, y, z) - get_sigmaxx(x - 1, y, z)) - get_sigmaxx(x + 1, y, z) + get_sigmaxx(x - 2, y, z))/(24.0 * dx);
-        var vdsigmaxy_dy: f32 = (27.0*(get_sigmaxy(x, y, z) - get_sigmaxy(x, y - 1, z)) - get_sigmaxy(x, y + 1, z) + get_sigmaxy(x, y - 2, z))/(24.0 * dy);
-        var vdsigmaxz_dz: f32 = (27.0*(get_sigmaxz(x, y, z) - get_sigmaxz(x, y, z - 1)) - get_sigmaxz(x, y, z + 1) + get_sigmaxz(x, y, z - 2))/(24.0 * dz);
+        var vdsigmaxx_dx: f32 = (27.0*(get_sigmaxx(x, y, z) - get_sigmaxx(x - 1, y, z)) -
+                                 get_sigmaxx(x + 1, y, z) + get_sigmaxx(x - 2, y, z))/(24.0 * dx);
+        var vdsigmaxy_dy: f32 = (27.0*(get_sigmaxy(x, y, z) - get_sigmaxy(x, y - 1, z)) -
+                                 get_sigmaxy(x, y + 1, z) + get_sigmaxy(x, y - 2, z))/(24.0 * dy);
+        var vdsigmaxz_dz: f32 = (27.0*(get_sigmaxz(x, y, z) - get_sigmaxz(x, y, z - 1)) -
+                                 get_sigmaxz(x, y, z + 1) + get_sigmaxz(x, y, z - 2))/(24.0 * dz);
 
         var mdsxx_dx_new: f32 = get_b_x(x - 1) * get_mdsxx_dx(x, y, z) + get_a_x(x - 1) * vdsigmaxx_dx;
         var mdsxy_dy_new: f32 = get_b_y(y - 1) * get_mdsxy_dy(x, y, z) + get_a_y(y - 1) * vdsigmaxy_dy;
@@ -1040,9 +1052,12 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
        y >= 1 && y < (sim_int_par.y_sz - 2) &&
        z >= 2 && z < (sim_int_par.z_sz - 1)) {
-        var vdsigmaxy_dx: f32 = (27.0*(get_sigmaxy(x + 1, y, z) - get_sigmaxy(x, y, z)) - get_sigmaxy(x + 2, y, z) + get_sigmaxy(x - 1, y, z))/(24.0 * dx);
-        var vdsigmayy_dy: f32 = (27.0*(get_sigmayy(x, y + 1, z) - get_sigmayy(x, y, z)) - get_sigmayy(x, y + 2, z) + get_sigmayy(x, y - 1, z))/(24.0 * dy);
-        var vdsigmayz_dz: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y, z - 1)) - get_sigmayz(x, y, z + 1) + get_sigmayz(x, y, z - 2))/(24.0 * dz);
+        var vdsigmaxy_dx: f32 = (27.0*(get_sigmaxy(x + 1, y, z) - get_sigmaxy(x, y, z)) -
+                                 get_sigmaxy(x + 2, y, z) + get_sigmaxy(x - 1, y, z))/(24.0 * dx);
+        var vdsigmayy_dy: f32 = (27.0*(get_sigmayy(x, y + 1, z) - get_sigmayy(x, y, z)) -
+                                 get_sigmayy(x, y + 2, z) + get_sigmayy(x, y - 1, z))/(24.0 * dy);
+        var vdsigmayz_dz: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y, z - 1)) -
+                                 get_sigmayz(x, y, z + 1) + get_sigmayz(x, y, z - 2))/(24.0 * dz);
 
         var mdsxy_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxy_dx(x, y, z) + get_a_x_h(x - 1) * vdsigmaxy_dx;
         var mdsyy_dy_new: f32 = get_b_y_h(y - 1) * get_mdsyy_dy(x, y, z) + get_a_y_h(y - 1) * vdsigmayy_dy;
@@ -1063,9 +1078,12 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     if(x >= 1 && x < (sim_int_par.x_sz - 2) &&
        y >= 2 && y < (sim_int_par.y_sz - 1) &&
        z >= 1 && z < (sim_int_par.z_sz - 2)) {
-        var vdsigmaxz_dx: f32 = (27.0*(get_sigmaxz(x + 1, y, z) - get_sigmaxz(x, y, z)) - get_sigmaxz(x + 2, y, z) + get_sigmaxz(x - 1, y, z))/(24.0 * dx);
-        var vdsigmayz_dy: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y - 1, z)) - get_sigmayz(x, y + 1, z) + get_sigmayz(x, y - 2, z))/(24.0 * dy);
-        var vdsigmazz_dz: f32 = (27.0*(get_sigmazz(x, y, z + 1) - get_sigmazz(x, y, z)) - get_sigmazz(x, y, z + 2) + get_sigmazz(x, y, z - 1))/(24.0 * dz);
+        var vdsigmaxz_dx: f32 = (27.0*(get_sigmaxz(x + 1, y, z) - get_sigmaxz(x, y, z)) -
+                                 get_sigmaxz(x + 2, y, z) + get_sigmaxz(x - 1, y, z))/(24.0 * dx);
+        var vdsigmayz_dy: f32 = (27.0*(get_sigmayz(x, y, z) - get_sigmayz(x, y - 1, z)) -
+                                 get_sigmayz(x, y + 1, z) + get_sigmayz(x, y - 2, z))/(24.0 * dy);
+        var vdsigmazz_dz: f32 = (27.0*(get_sigmazz(x, y, z + 1) - get_sigmazz(x, y, z)) -
+                                 get_sigmazz(x, y, z + 2) + get_sigmazz(x, y, z - 1))/(24.0 * dz);
 
         var mdsxz_dx_new: f32 = get_b_x_h(x - 1) * get_mdsxz_dx(x, y, z) + get_a_x_h(x - 1) * vdsigmaxz_dx;
         var mdsyz_dy_new: f32 = get_b_y(y - 1)   * get_mdsyz_dy(x, y, z) + get_a_y(y - 1)   * vdsigmayz_dy;
