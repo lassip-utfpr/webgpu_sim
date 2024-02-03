@@ -1,0 +1,18 @@
+Parametros do ensaio
+--------------------
+
+Quantidade de iteracoes no tempo: 1000
+Tamanho da ROI: 100x100x21
+Refletores na ROI: Nao
+Simulacao GPU: Sim
+GPU: NVIDIA GeForce RTX 3060 Ti
+Numero de simulacoes GPU: 15
+Tempo medio de execucao: 3.44s
+Desvio padrao: 0.02280617063536197
+Simulacao CPU: Sim
+Numero de simulacoes CPU: 15
+Tempo medio de execucao: 42.2s
+Desvio padrao: 0.5469818939320577
+MSE entre as simulacoes [Vx]: 5.488157851956454e-15
+MSE entre as simulacoes [Vy]: 6.404110869698369e-15
+MSE entre as simulacoes [Vz]: 4.1461263729477863e-13
