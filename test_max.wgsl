@@ -20,6 +20,7 @@ var<storage,read_write> data5 : array<i32>;
 @group(6) @binding(0)
 var<storage,read_write> data6 : array<i32>;
 
+for i in range(1000)
 @group(7) @binding(0)
 var<storage,read_write> data7 : array<i32>;
 
