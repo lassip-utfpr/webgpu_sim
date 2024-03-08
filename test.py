@@ -11,5 +11,7 @@ with open('test_max.wgsl') as shader_file:
     cshader_str = shader_file.read()
     cshader = device.create_shader_module(code=cshader_str)
 
+#TAMANHO MAXIMO DO BUFFER
+
 max_bf = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
                                                         wgpu.BufferUsage.COPY_SRC)

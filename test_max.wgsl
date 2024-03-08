@@ -32,6 +32,12 @@ var<storage,read_write> data6 : array<i32>;
 //i++
 //}
 
+@compute
+@workgroup_size(16384,16384,16384) // o MAX é 16384
+fn incr_k() {
+    data0[0] = 1;
+}
+
 // Caso seja adicionado um oitavo grupo, será impossível computar esse arquivo
 // @group(8) @binding(0)
 //var<storage,read_write> data8 : array<i32>;
