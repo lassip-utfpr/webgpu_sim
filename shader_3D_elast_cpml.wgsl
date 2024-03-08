@@ -49,27 +49,45 @@ var<storage,read_write> sim_int_par: SimIntValues;
 @group(1) @binding(6) // velocity fields (vx, vy, vz, v_2)
 var<storage,read_write> vel: array<f32>;
 
-@group(1) @binding(7) // stress fields (sigmaxx, sigmayy, sigmazz, sigmaxy, sigmaxz, sigmayz)
-var<storage,read_write> sig: array<f32>;
+@group(1) @binding(7) // normal stress fields (sigmaxx, sigmayy, sigmazz)
+var<storage,read_write> sig_norm: array<f32>;
 
-@group(1) @binding(8) // memory fields
+@group(1) @binding(8) // transversal stress fields (sigmaxy, sigmaxz, sigmayz)
+var<storage,read_write> sig_trans: array<f32>;
+
+@group(1) @binding(9) // memory fields
                       // memory_dvx_dx, memory_dvx_dy, memory_dvx_dz
+var<storage,read_write> memo_v_dx: array<f32>;
+
+@group(1) @binding(10) // memory fields
                       // memory_dvx_dy, memory_dvy_dy, memory_dvz_dy
+var<storage,read_write> memo_v_dy: array<f32>;
+
+@group(1) @binding(11) // memory fields
                       // memory_dvx_dz, memory_dvy_dz, memory_dvz_dz
+var<storage,read_write> memo_v_dz: array<f32>;
+
+@group(1) @binding(12) // memory fields
                       // memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxz_dz
+var<storage,read_write> memo_sigx: array<f32>;
+
+@group(1) @binding(13) // memory fields
                       // memory_dsigmaxy_dx, memory_dsigmayy_dy, memory_dsigmayz_dz
+var<storage,read_write> memo_sigy: array<f32>;
+
+@group(1) @binding(14) // memory fields
                       // memory_dsigmaxz_dx, memory_dsigmayz_dy, memory_dsigmazz_dz
-var<storage,read_write> memo: array<f32>;
+var<storage,read_write> memo_sigz: array<f32>;
 
 // Group 2 - sensors arrays and energies
-@group(2) @binding(9) // sensors signals (sisvx, sisvy, sisvz)
+@group(2) @binding(15) // sensors signals (sisvx, sisvy, sisvz)
 var<storage,read_write> sensors: array<f32>;
 
-//@group(2) @binding(10) // epsilon fields
+//@group(2) @binding(16) // epsilon fields
                        // epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz, v_2
 //var<storage,read_write> eps: array<f32>;
 
-//@group(2) @binding(11) // energy fields
+//@group(2) @binding(17) // energy fields
                        // total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
 //var<storage,read_write> energy: array<f32>;
 
@@ -318,97 +336,97 @@ fn set_v_2(x: i32, y: i32, z: i32, val: f32) {
 // -------------------------------------
 // function to get a sigmaxx array value
 fn get_sigmaxx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_norm[index], index != -1);
 }
 
 // function to set a sigmaxx array value
 fn set_sigmaxx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_norm[index] = val;
     }
 }
 
 // function to get a sigmayy array value
 fn get_sigmayy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_norm[index], index != -1);
 }
 
 // function to set a sigmayy array value
 fn set_sigmayy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_norm[index] = val;
     }
 }
 
 // function to get a sigmazz array value
 fn get_sigmazz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_norm[index], index != -1);
 }
 
 // function to set a sigmazz array value
 fn set_sigmazz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_norm[index] = val;
     }
 }
 
 // function to get a sigmaxy array value
 fn get_sigmaxy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_trans[index], index != -1);
 }
 
 // function to set a sigmaxy array value
 fn set_sigmaxy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_trans[index] = val;
     }
 }
 
 // function to get a sigmaxz array value
 fn get_sigmaxz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 4, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_trans[index], index != -1);
 }
 
 // function to set a sigmaxz array value
 fn set_sigmaxz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 4, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_trans[index] = val;
     }
 }
 
 // function to get a sigmayz array value
 fn get_sigmayz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 5, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, sig[index], index != -1);
+    return select(0.0, sig_trans[index], index != -1);
 }
 
 // function to set a sigmayz array value
 fn set_sigmayz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 5, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 6);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        sig[index] = val;
+        sig_trans[index] = val;
     }
 }
 
@@ -417,289 +435,289 @@ fn set_sigmayz(x: i32, y: i32, z: i32, val: f32) {
 // -------------------------------------
 // function to get a memory_dvx_dx array value
 fn get_mdvx_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dx[index], index != -1);
 }
 
 // function to set a memory_dvx_dx array value
 fn set_mdvx_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dx[index] = val;
     }
 }
 
 // function to get a memory_dvy_dx array value
 fn get_mdvy_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dx[index], index != -1);
 }
 
 // function to set a memory_dvy_dx array value
 fn set_mdvy_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dx[index] = val;
     }
 }
 
 // function to get a memory_dvz_dx array value
 fn get_mdvz_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dx[index], index != -1);
 }
 
 // function to set a memory_dvz_dx array value
 fn set_mdvz_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dx[index] = val;
     }
 }
 
 // function to get a memory_dvx_dy array value
 fn get_mdvx_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dy[index], index != -1);
 }
 
 // function to set a memory_dvx_dy array value
 fn set_mdvx_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dy[index] = val;
     }
 }
 
 // function to get a memory_dvy_dy array value
 fn get_mdvy_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 4, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dy[index], index != -1);
 }
 
 // function to set a memory_dvy_dy array value
 fn set_mdvy_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 4, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dy[index] = val;
     }
 }
 
 // function to get a memory_dvz_dy array value
 fn get_mdvz_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 5, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dy[index], index != -1);
 }
 
 // function to set a memory_dvz_dy array value
 fn set_mdvz_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 5, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dy[index] = val;
     }
 }
 
 // function to get a memory_dvx_dz array value
 fn get_mdvx_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 6, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dz[index], index != -1);
 }
 
 // function to set a memory_dvy_dx array value
 fn set_mdvx_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 6, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dz[index] = val;
     }
 }
 
 // function to get a memory_dvy_dz array value
 fn get_mdvy_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 7, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dz[index], index != -1);
 }
 
 // function to set a memory_dvy_dz array value
 fn set_mdvy_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 7, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dz[index] = val;
     }
 }
 
 // function to get a memory_dvz_dz array value
 fn get_mdvz_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 8, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_v_dz[index], index != -1);
 }
 
 // function to set a memory_dvz_dz array value
 fn set_mdvz_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 8, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_v_dz[index] = val;
     }
 }
 
 // function to get a memory_dsigmaxx_dx array value
 fn get_mdsxx_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 9, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigx[index], index != -1);
 }
 
 // function to set a memory_dsigmaxx_dx array value
 fn set_mdsxx_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 9, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigx[index] = val;
     }
 }
 
 // function to get a memory_dsigmaxy_dy array value
 fn get_mdsxy_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 10, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigx[index], index != -1);
 }
 
 // function to set a memory_dsigmaxy_dy array value
 fn set_mdsxy_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 10, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigx[index] = val;
     }
 }
 
 // function to get a memory_dsigmaxz_dz array value
 fn get_mdsxz_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 11, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigx[index], index != -1);
 }
 
 // function to set a memory_dsigmaxz_dz array value
 fn set_mdsxz_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 11, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigx[index] = val;
     }
 }
 
 // function to get a memory_dsigmaxy_dx array value
 fn get_mdsxy_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 12, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigy[index], index != -1);
 }
 
 // function to set a memory_dsigmaxy_dx array value
 fn set_mdsxy_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 12, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigy[index] = val;
     }
 }
 
 // function to get a memory_dsigmayy_dy array value
 fn get_mdsyy_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 13, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigy[index], index != -1);
 }
 
 // function to set a memory_dsigmayy_dy array value
 fn set_mdsyy_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 13, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigy[index] = val;
     }
 }
 
 // function to get a memory_dsigmayz_dz array value
 fn get_mdsyz_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 14, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigy[index], index != -1);
 }
 
 // function to set a memory_dsigmayz_dz array value
 fn set_mdsyz_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 14, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigy[index] = val;
     }
 }
 
 // function to get a memory_dsigmaxz_dx array value
 fn get_mdsxz_dx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 15, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigz[index], index != -1);
 }
 
 // function to set a memory_dsigmaxz_dx array value
 fn set_mdsxz_dx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 15, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigz[index] = val;
     }
 }
 
 // function to get a memory_dsigmayz_dy array value
 fn get_mdsyz_dy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 16, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigz[index], index != -1);
 }
 
 // function to set a memory_dsigmayz_dy array value
 fn set_mdsyz_dy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 16, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 1, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigz[index] = val;
     }
 }
 
 // function to get a memory_dsigmazz_dz array value
 fn get_mdszz_dz(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 17, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
-    return select(0.0, memo[index], index != -1);
+    return select(0.0, memo_sigz[index], index != -1);
 }
 
 // function to set a memory_dsigmazz_dz array value
 fn set_mdszz_dz(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 17, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 18);
+    let index: i32 = ijkl(x, y, z, 2, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 3);
 
     if(index != -1) {
-        memo[index] = val;
+        memo_sigz[index] = val;
     }
 }
 
@@ -1117,7 +1135,7 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let z_sens: i32 = sim_int_par.z_sens;
     let it: i32 = sim_int_par.it;
 
-    // TODO: Add the source force
+    // Add the source force
     if(x == x_source && y == y_source && z == z_source) {
         set_vz(x, y, z, get_vz(x, y, z) + get_force_y(it) * dt_over_rho);
     }
