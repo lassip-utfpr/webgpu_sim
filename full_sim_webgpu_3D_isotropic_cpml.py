@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import wgpu
+
 if wgpu.version_info[1] > 11:
     import wgpu.backends.wgpu_native  # Select backend 0.13.X
 else:
@@ -84,10 +85,10 @@ flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
 do_sim_gpu = True
-do_sim_cpu = True
+do_sim_cpu = False
 do_comp_fig_cpu_gpu = True
 use_refletors = False
-show_anim = False
+show_anim = True
 show_debug = True
 plot_results = True
 plot_sensors = False
@@ -112,7 +113,7 @@ if do_sim_gpu:
 # Parametros da simulacao
 nx = 300  # colunas
 ny = 300  # linhas
-nz = 21   # altura
+nz = 21  # altura
 
 # Tamanho do grid (aparentemente em metros)
 dx = dy = dz = 4.0
@@ -180,9 +181,9 @@ zsource = ksource * dz
 
 # Receptores
 NREC = 3
-xrec = xsource + np.array([4,  0,  4]) * dx
+xrec = xsource + np.array([4, 0, 4]) * dx
 yrec = ysource + np.array([4, 10, 10]) * dy
-zrec = zsource + np.array([0,  0,  0]) * dz
+zrec = zsource + np.array([0, 0, 0]) * dz
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
@@ -762,13 +763,13 @@ def sim_cpu():
                 # print(f'Total energy = {total_energy[it - 1]}')
 
             if show_anim:
-                windows_cpu[0].imv.setImage(vx[1:-1, 1:-1, ksource], levels=[v_min/10.0, v_max/10.0])
-                windows_cpu[1].imv.setImage(vy[1:-1, 1:-1, ksource], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[0].imv.setImage(vx[1:-1, 1:-1, ksource], levels=[v_min / 10.0, v_max / 10.0])
+                windows_cpu[1].imv.setImage(vy[1:-1, 1:-1, ksource], levels=[v_min / 10.0, v_max / 10.0])
                 windows_cpu[2].imv.setImage(vz[1:-1, 1:-1, ksource], levels=[v_min, v_max])
                 windows_cpu[3].imv.setImage(vx[1:-1, jsource, 1:-1], levels=[v_min, v_max])
-                windows_cpu[4].imv.setImage(vy[1:-1, jsource, 1:-1], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[4].imv.setImage(vy[1:-1, jsource, 1:-1], levels=[v_min / 10.0, v_max / 10.0])
                 windows_cpu[5].imv.setImage(vz[1:-1, jsource, 1:-1], levels=[v_min, v_max])
-                windows_cpu[6].imv.setImage(vx[isource, 1:-1, 1:-1], levels=[v_min/10.0, v_max/10.0])
+                windows_cpu[6].imv.setImage(vx[isource, 1:-1, 1:-1], levels=[v_min / 10.0, v_max / 10.0])
                 windows_cpu[7].imv.setImage(vy[isource, 1:-1, 1:-1], levels=[v_min, v_max])
                 windows_cpu[8].imv.setImage(vz[isource, 1:-1, 1:-1], levels=[v_min, v_max])
                 App.processEvents()
@@ -866,27 +867,64 @@ def sim_webgpu(device):
     # Estresses
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 7
-    b_sig = device.create_buffer_with_data(data=np.vstack((sigmaxx, sigmayy, sigmazz, sigmaxy, sigmaxz, sigmayz)),
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_DST |
-                                                 wgpu.BufferUsage.COPY_SRC)
+    b_sig_norm = device.create_buffer_with_data(data=np.vstack((sigmaxx, sigmayy, sigmazz)),
+                                                usage=wgpu.BufferUsage.STORAGE |
+                                                      wgpu.BufferUsage.COPY_DST |
+                                                      wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 8
+    b_sig_trans = device.create_buffer_with_data(data=np.vstack((sigmaxy, sigmaxz, sigmayz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_DST |
+                                                       wgpu.BufferUsage.COPY_SRC)
 
     # Arrays de memoria do simulador
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 8
-    b_memo = device.create_buffer_with_data(data=np.vstack((memory_dvx_dx, memory_dvx_dy, memory_dvx_dz,
-                                                            memory_dvx_dy, memory_dvy_dy, memory_dvz_dy,
-                                                            memory_dvx_dz, memory_dvy_dz, memory_dvz_dz,
-                                                            memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxz_dz,
-                                                            memory_dsigmaxy_dx, memory_dsigmayy_dy, memory_dsigmayz_dz,
-                                                            memory_dsigmaxz_dx, memory_dsigmayz_dy, memory_dsigmazz_dz
-                                                            )),
-                                            usage=wgpu.BufferUsage.STORAGE |
-                                                  wgpu.BufferUsage.COPY_SRC)
+    # Binding 9
+    b_memo_v_dx = device.create_buffer_with_data(data=np.vstack((memory_dvx_dx,
+                                                                 memory_dvx_dy,
+                                                                 memory_dvx_dz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 10
+    b_memo_v_dy = device.create_buffer_with_data(data=np.vstack((memory_dvx_dy,
+                                                                 memory_dvy_dy,
+                                                                 memory_dvz_dy)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 11
+    b_memo_v_dz = device.create_buffer_with_data(data=np.vstack((memory_dvx_dz,
+                                                                 memory_dvy_dz,
+                                                                 memory_dvz_dz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 12
+    b_memo_sigx = device.create_buffer_with_data(data=np.vstack((memory_dsigmaxx_dx,
+                                                                 memory_dsigmaxy_dy,
+                                                                 memory_dsigmaxz_dz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 13
+    b_memo_sigy = device.create_buffer_with_data(data=np.vstack((memory_dsigmaxy_dx,
+                                                                 memory_dsigmayy_dy,
+                                                                 memory_dsigmayz_dz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 14
+    b_memo_sigz = device.create_buffer_with_data(data=np.vstack((memory_dsigmaxz_dx,
+                                                                 memory_dsigmayz_dy,
+                                                                 memory_dsigmazz_dz)),
+                                                 usage=wgpu.BufferUsage.STORAGE |
+                                                       wgpu.BufferUsage.COPY_SRC)
 
     # Sinal do sensor
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 9
+    # Binding 15
     b_sens = device.create_buffer_with_data(data=np.column_stack((sisvx[:, 0], sisvy[:, 0], sisvz[:, 0])),
                                             usage=wgpu.BufferUsage.STORAGE |
                                                   wgpu.BufferUsage.COPY_DST |
@@ -933,12 +971,12 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(6, 9)
+         } for ii in range(6, 15)
     ]
 
     # Sensores
     bl_sensors = [
-        {"binding": 9,
+        {"binding": 15,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
@@ -979,24 +1017,48 @@ def sim_webgpu(device):
         },
         {
             "binding": 7,
-            "resource": {"buffer": b_sig, "offset": 0, "size": b_sig.size},
+            "resource": {"buffer": b_sig_norm, "offset": 0, "size": b_sig_norm.size},
         },
         {
             "binding": 8,
-            "resource": {"buffer": b_memo, "offset": 0, "size": b_memo.size},
+            "resource": {"buffer": b_sig_trans, "offset": 0, "size": b_sig_trans.size},
+        },
+        {
+            "binding": 9,
+            "resource": {"buffer": b_memo_v_dx, "offset": 0, "size": b_memo_v_dx.size},
+        },
+        {
+            "binding": 10,
+            "resource": {"buffer": b_memo_v_dy, "offset": 0, "size": b_memo_v_dy.size},
+        },
+        {
+            "binding": 11,
+            "resource": {"buffer": b_memo_v_dz, "offset": 0, "size": b_memo_v_dz.size},
+        },
+        {
+            "binding": 12,
+            "resource": {"buffer": b_memo_sigx, "offset": 0, "size": b_memo_sigx.size},
+        },
+        {
+            "binding": 13,
+            "resource": {"buffer": b_memo_sigy, "offset": 0, "size": b_memo_sigy.size},
+        },
+        {
+            "binding": 14,
+            "resource": {"buffer": b_memo_sigz, "offset": 0, "size": b_memo_sigz.size},
         },
     ]
     b_sensors = [
         {
-            "binding": 9,
+            "binding": 15,
             "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
         },
         # {
-        #     "binding": 10,
+        #     "binding": 16,
         #     "resource": {"buffer": b_eps, "offset": 0, "size": b_eps.size},
         # },
         # {
-        #     "binding": 11,
+        #     "binding": 17,
         #     "resource": {"buffer": b_energy, "offset": 0, "size": b_energy.size},
         # },
     ]
@@ -1239,9 +1301,9 @@ if do_sim_cpu and n_iter_cpu > 5:
     print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
 
 if do_sim_gpu and do_sim_cpu:
-    print(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2)/vx.size}')
-    print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2)/vy.size}')
-    print(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2)/vz.size}')
+    print(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}')
+    print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}')
+    print(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2) / vz.size}')
 
 if plot_results:
     if do_sim_gpu:
