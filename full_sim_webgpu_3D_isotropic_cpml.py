@@ -82,14 +82,14 @@ class Window(QMainWindow):
 
 # Parametros dos ensaios
 flt32 = np.float32
-n_iter_gpu = 1
+n_iter_gpu = 15
 n_iter_cpu = 1
 do_sim_gpu = True
 do_sim_cpu = False
 do_comp_fig_cpu_gpu = True
 use_refletors = False
-show_anim = True
-show_debug = True
+show_anim = False
+show_debug = False
 plot_results = True
 plot_sensors = False
 show_results = False
@@ -255,8 +255,8 @@ sigmaxy = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 sigmaxz = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 sigmayz = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 
-# Total de arrays
-N_ARRAYS = 9 + 2 * 9
+# Total de arrays para o campo de simulacao (ROI) na GPU
+N_ARRAYS = 3 + 6 + 2 * 9 + 1
 
 value_dvx_dx = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
 value_dvx_dy = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
@@ -859,7 +859,7 @@ def sim_webgpu(device):
     # Velocidades
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 6
-    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, vz, v_2)),
+    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, vz)),
                                            usage=wgpu.BufferUsage.STORAGE |
                                                  wgpu.BufferUsage.COPY_DST |
                                                  wgpu.BufferUsage.COPY_SRC)
@@ -925,6 +925,12 @@ def sim_webgpu(device):
     # Sinal do sensor
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
     # Binding 15
+    b_v_2 = device.create_buffer_with_data(data=np.vstack(v_2),
+                                           usage=wgpu.BufferUsage.STORAGE |
+                                                 wgpu.BufferUsage.COPY_DST |
+                                                 wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 16
     b_sens = device.create_buffer_with_data(data=np.column_stack((sisvx[:, 0], sisvy[:, 0], sisvz[:, 0])),
                                             usage=wgpu.BufferUsage.STORAGE |
                                                   wgpu.BufferUsage.COPY_DST |
@@ -932,7 +938,7 @@ def sim_webgpu(device):
 
     # Arrays epsilon
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 10
+    # Binding 17
     # b_eps = device.create_buffer_with_data(data=np.vstack((epsilon_xx, epsilon_yy, epsilon_zz,
     #                                                        epsilon_xy, epsilon_xz, epsilon_yz, v_2)),
     #                                        usage=wgpu.BufferUsage.STORAGE |
@@ -940,7 +946,7 @@ def sim_webgpu(device):
 
     # Arrays de energia total
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 11
+    # Binding 18
     # b_energy = device.create_buffer_with_data(data=np.column_stack((total_energy, total_energy_kinetic,
     #                                                                 total_energy_potential, v_solid_norm)),
     #                                           usage=wgpu.BufferUsage.STORAGE |
@@ -971,12 +977,12 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(6, 15)
+         } for ii in range(6, 16)
     ]
 
     # Sensores
     bl_sensors = [
-        {"binding": 15,
+        {"binding": 16,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
@@ -1047,18 +1053,22 @@ def sim_webgpu(device):
             "binding": 14,
             "resource": {"buffer": b_memo_sigz, "offset": 0, "size": b_memo_sigz.size},
         },
+        {
+            "binding": 15,
+            "resource": {"buffer": b_v_2, "offset": 0, "size": b_v_2.size},
+        },
     ]
     b_sensors = [
         {
-            "binding": 15,
+            "binding": 16,
             "resource": {"buffer": b_sens, "offset": 0, "size": b_sens.size},
         },
         # {
-        #     "binding": 16,
+        #     "binding": 17,
         #     "resource": {"buffer": b_eps, "offset": 0, "size": b_eps.size},
         # },
         # {
-        #     "binding": 17,
+        #     "binding": 18,
         #     "resource": {"buffer": b_energy, "offset": 0, "size": b_energy.size},
         # },
     ]
@@ -1131,11 +1141,10 @@ def sim_webgpu(device):
         device.queue.submit([command_encoder.finish()])
 
         # en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
-        b_v_2_offset = (vx.size + vy.size + vz.size) * 4
-        vsn2 = np.asarray(device.queue.read_buffer(b_vel,
-                                                   buffer_offset=b_v_2_offset).cast("f")).reshape((nx + 2,
-                                                                                                   ny + 2,
-                                                                                                   nz + 2))
+        # b_v_2_offset = (vx.size + vy.size + vz.size) * 4
+        vsn2 = np.asarray(device.queue.read_buffer(b_v_2, buffer_offset=0).cast("f")).reshape((nx + 2,
+                                                                                               ny + 2,
+                                                                                               nz + 2))
         v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug or show_anim:

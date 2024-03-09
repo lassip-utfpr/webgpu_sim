@@ -46,7 +46,7 @@ var<storage,read> coef_z: array<f32>;
 var<storage,read_write> sim_int_par: SimIntValues;
 
 // Group 1 - simulation arrays
-@group(1) @binding(6) // velocity fields (vx, vy, vz, v_2)
+@group(1) @binding(6) // velocity fields (vx, vy, vz)
 var<storage,read_write> vel: array<f32>;
 
 @group(1) @binding(7) // normal stress fields (sigmaxx, sigmayy, sigmazz)
@@ -79,8 +79,11 @@ var<storage,read_write> memo_sigy: array<f32>;
                       // memory_dsigmaxz_dx, memory_dsigmayz_dy, memory_dsigmazz_dz
 var<storage,read_write> memo_sigz: array<f32>;
 
+@group(1) @binding(15) // velocity ^ 2 (v_2)
+var<storage,read_write> v_2: array<f32>;
+
 // Group 2 - sensors arrays and energies
-@group(2) @binding(15) // sensors signals (sisvx, sisvy, sisvz)
+@group(2) @binding(16) // sensors signals (sisvx, sisvy, sisvz)
 var<storage,read_write> sensors: array<f32>;
 
 //@group(2) @binding(16) // epsilon fields
@@ -317,17 +320,17 @@ fn set_vz(x: i32, y: i32, z: i32, val: f32) {
 
 // function to get a v_2 array value
 fn get_v_2(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 4);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 1);
 
-    return select(0.0, vel[index], index != -1);
+    return select(0.0, v_2[index], index != -1);
 }
 
 // function to set a v_2 array value
 fn set_v_2(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijkl(x, y, z, 3, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 4);
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 1);
 
     if(index != -1) {
-        vel[index] = val;
+        v_2[index] = val;
     }
 }
 
