@@ -40,19 +40,9 @@ fn incr_h(){
 }
 
 @compute
-@workgroup_size(16,1,64) // o MAX é 16384 quando programado em wgsl, entretanto quando utilizado como shader no py seu limite é 1024,1024,64 MAS o numero total no workgroup tem que ser menor que 1024
+@workgroup_size(16384) // o MAX é 16384 quando programado em wgsl, entretanto quando utilizado como shader no py seu limite é 1024,1024,64 MAS o numero total no workgroup tem que ser menor que 1024
 fn big_t() {
-    data0[0] = 1;
-    data0[1] = 2;
-    data0[2] = 3;
-    data0[3] = 4;
-    data0[4] = 5;
-    data0[5] = 6;
-    data0[6] = 7;
-    data0[999999999] = 8;
-//    data3[0] = 1;
-//    data3[1] = 2;
-//    data3[2] = 3;
+//    data3[0]=1;
 //    data3[3] = 4;
 //    data3[4] = 5;
 //    data3[5] = 6;
@@ -82,7 +72,7 @@ fn big_t() {
 //    data6[5] = 6;
 //    data6[6] = 7;
 //    data6[999999999] = 8;
-//    data7[0] = 1;
+    data7[0] = 1;
 //    data7[1] = 2;
 //    data7[2] = 3;
 //    data7[3] = 4;
