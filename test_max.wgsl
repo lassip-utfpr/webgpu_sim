@@ -23,20 +23,11 @@ var<storage,read_write> data6 : array<i32>;
 @group(7) @binding(7)
 var<storage,read_write> data7 : array<i32>;
 
-
-//var i: i32 = 0;
-//loop{
-//if i>=1000 {break;}
-//@group(7) @binding(i)
-//    var<storage,read_write> i : array<i32>;
-//i++
-//}
-
 @compute
 @workgroup_size(16,1,64)
 fn incr_h(){
 
-//data7[0]+=1;
+data7[0]=1;
 }
 
 @compute

@@ -168,11 +168,16 @@ bgf = device.create_bind_group(layout=bgl, entries=binding_group)
 bgf7 = device.create_bind_group(layout=bgl7, entries=binding_group7)
 
 
-compute_big_t = device.create_compute_pipeline(
-    layout= pipeline,
-    compute= {"module":cshader, "entry_point":"big_t"},
-)
 
+# compute_big_t = device.create_compute_pipeline(
+#     layout= pipeline,
+#     compute= {"module":cshader, "entry_point":"big_t"},
+# )
+
+compute_incr_h = device.create_compute_pipeline(
+    layout= pipeline,
+    compute= {"module":cshader, "entry_point":"incr_h"},
+)
 
 
 
