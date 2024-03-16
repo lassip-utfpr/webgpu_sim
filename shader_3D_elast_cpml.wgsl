@@ -5,11 +5,9 @@ struct SimIntValues {
     x_source: i32,      // x source index
     y_source: i32,      // y source index
     z_source: i32,      // z source index
-    x_sens: i32,        // x sensor
-    y_sens: i32,        // y sensor
-    z_sens: i32,        // z sensor
     np_pml: i32,        // PML size
     n_iter: i32,        // max iterations
+    n_rec: i32,         // max receptors
     it: i32             // time iteraction
 };
 
@@ -82,12 +80,27 @@ var<storage,read_write> memo_sigz: array<f32>;
 @group(1) @binding(15) // velocity ^ 2 (v_2)
 var<storage,read_write> v_2: array<f32>;
 
-// Group 2 - sensors arrays and energies
-@group(2) @binding(16) // sensors signals (sisvx, sisvy, sisvz)
-var<storage,read_write> sensors: array<f32>;
+// Group 2 - sensors arrays
+@group(2) @binding(16) // sensors signals vx
+var<storage,read_write> sensors_vx: array<f32>;
 
-//@group(2) @binding(16) // epsilon fields
-                       // epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz, v_2
+@group(2) @binding(17) // sensors signals vy
+var<storage,read_write> sensors_vy: array<f32>;
+
+@group(2) @binding(18) // sensors signals vz
+var<storage,read_write> sensors_vz: array<f32>;
+
+@group(2) @binding(19) // sensors positions
+var<storage,read> sensors_pos_x: array<i32>;
+
+@group(2) @binding(20) // sensors positions
+var<storage,read> sensors_pos_y: array<i32>;
+
+@group(2) @binding(21) // sensors positions
+var<storage,read> sensors_pos_z: array<i32>;
+
+//@group(2) @binding(9) // epsilon fields
+                      // epsilon_xx, epsilon_yy, epsilon_xy, vx_vy_2
 //var<storage,read_write> eps: array<f32>;
 
 //@group(2) @binding(17) // energy fields
@@ -728,30 +741,45 @@ fn set_mdszz_dz(x: i32, y: i32, z: i32, val: f32) {
 // --- Sensors arrays access funtions ---
 // --------------------------------------
 // function to set a sens_vx array value
-fn set_sens_vx(n: i32, val: f32) {
-    let index: i32 = ij(n, 0, sim_int_par.n_iter, 3);
+fn set_sens_vx(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
 
     if(index != -1) {
-        sensors[index] = val;
+        sensors_vx[index] = val;
     }
 }
 
 // function to set a sens_vy array value
-fn set_sens_vy(n: i32, val: f32) {
-    let index: i32 = ij(n, 1, sim_int_par.n_iter, 3);
+fn set_sens_vy(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
 
     if(index != -1) {
-        sensors[index] = val;
+        sensors_vy[index] = val;
     }
 }
 
 // function to set a sens_vz array value
-fn set_sens_vz(n: i32, val: f32) {
-    let index: i32 = ij(n, 1, sim_int_par.n_iter, 3);
+fn set_sens_vz(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
 
     if(index != -1) {
-        sensors[index] = val;
+        sensors_vz[index] = val;
     }
+}
+
+// function to get a x index position of a sensor
+fn get_sens_pos_x(s: i32) -> i32 {
+    return select(-1, sensors_pos_x[s], s >= 0 && s < sim_int_par.n_rec);
+}
+
+// function to get a y index position of a sensor
+fn get_sens_pos_y(s: i32) -> i32 {
+    return select(-1, sensors_pos_y[s], s >= 0 && s < sim_int_par.n_rec);
+}
+
+// function to get a z index position of a sensor
+fn get_sens_pos_z(s: i32) -> i32 {
+    return select(-1, sensors_pos_z[s], s >= 0 && s < sim_int_par.n_rec);
 }
 
 // -------------------------------------
@@ -1133,14 +1161,13 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x_source: i32 = sim_int_par.x_source;
     let y_source: i32 = sim_int_par.y_source;
     let z_source: i32 = sim_int_par.z_source;
-    let x_sens: i32 = sim_int_par.x_sens;
-    let y_sens: i32 = sim_int_par.y_sens;
-    let z_sens: i32 = sim_int_par.z_sens;
     let it: i32 = sim_int_par.it;
 
     // Add the source force
     if(x == x_source && y == y_source && z == z_source) {
-        set_vz(x, y, z, get_vz(x, y, z) + get_force_y(it) * dt_over_rho);
+        set_vx(x, y, z, get_vx(x, y, z) + get_force_x(it) * dt_over_rho);
+        set_vy(x, y, z, get_vy(x, y, z) + get_force_y(it) * dt_over_rho);
+//        set_vz(x, y, z, get_vz(x, y, z) + get_force_y(it) * dt_over_rho);
     }
 
     // Apply Dirichlet conditions
@@ -1153,10 +1180,13 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     }
 
     // Store sensor velocities
-    if(x == x_sens && y == y_sens && z == z_sens) {
-        set_sens_vx(it, get_vx(x, y, z));
-        set_sens_vy(it, get_vy(x, y, z));
-        set_sens_vz(it, get_vz(x, y, z));
+    for(var s: i32 = 0; s < sim_int_par.n_rec; s++) {
+        if(x == get_sens_pos_x(s) && y == get_sens_pos_y(s) && z == get_sens_pos_z(s)) {
+            set_sens_vx(it, s, get_vx(x, y, z));
+            set_sens_vy(it, s, get_vy(x, y, z));
+            set_sens_vz(it, s, get_vz(x, y, z));
+            break;
+        }
     }
 
     // Compute velocity norm L2
