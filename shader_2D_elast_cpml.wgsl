@@ -3,10 +3,9 @@ struct SimIntValues {
     y_sz: i32,          // y field size
     x_source: i32,      // x source index
     y_source: i32,      // y source index
-    x_sens: i32,        // x sensor
-    y_sens: i32,        // y sensor
     np_pml: i32,        // PML size
     n_iter: i32,        // max iterations
+    n_rec: i32,         // max receptors
     it: i32             // time iteraction
 };
 
@@ -51,8 +50,17 @@ var<storage,read_write> sig: array<f32>;
 var<storage,read_write> memo: array<f32>;
 
 // Group 2 - sensors arrays and energies
-@group(2) @binding(8) // sensors signals (sisvx, sisvy)
-var<storage,read_write> sensors: array<f32>;
+@group(2) @binding(8) // sensors signals vx
+var<storage,read_write> sensors_vx: array<f32>;
+
+@group(2) @binding(9) // sensors signals vy
+var<storage,read_write> sensors_vy: array<f32>;
+
+@group(2) @binding(10) // sensors positions
+var<storage,read> sensors_pos_x: array<i32>;
+
+@group(2) @binding(11) // sensors positions
+var<storage,read> sensors_pos_y: array<i32>;
 
 //@group(2) @binding(9) // epsilon fields
                       // epsilon_xx, epsilon_yy, epsilon_xy, vx_vy_2
@@ -424,21 +432,31 @@ fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
 // --- Sensors arrays access funtions ---
 // --------------------------------------
 // function to set a sens_vx array value
-fn set_sens_vx(n: i32, val : f32) {
-    let index: i32 = ij(n, 0, sim_int_par.n_iter, 2);
+fn set_sens_vx(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
 
     if(index != -1) {
-        sensors[index] = val;
+        sensors_vx[index] = val;
     }
 }
 
 // function to set a sens_vy array value
-fn set_sens_vy(n: i32, val : f32) {
-    let index: i32 = ij(n, 1, sim_int_par.n_iter, 2);
+fn set_sens_vy(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
 
     if(index != -1) {
-        sensors[index] = val;
+        sensors_vy[index] = val;
     }
+}
+
+// function to get a x index position of a sensor
+fn get_sens_pos_x(s: i32) -> i32 {
+    return select(-1, sensors_pos_x[s], s >= 0 && s < sim_int_par.n_rec);
+}
+
+// function to get a y index position of a sensor
+fn get_sens_pos_y(s: i32) -> i32 {
+    return select(-1, sensors_pos_y[s], s >= 0 && s < sim_int_par.n_rec);
 }
 
 // -------------------------------------
@@ -665,8 +683,6 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let dt_over_rho: f32 = sim_flt_par.dt / sim_flt_par.rho;
     let x_source: i32 = sim_int_par.x_source;
     let y_source: i32 = sim_int_par.y_source;
-    let x_sens: i32 = sim_int_par.x_sens;
-    let y_sens: i32 = sim_int_par.y_sens;
     let it: i32 = sim_int_par.it;
 
     // Add the source force
@@ -681,10 +697,13 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_vy(x, y, 0.0);
     }
 
-    // Store sensor velocities
-    if(x == x_sens && y == y_sens) {
-        set_sens_vx(it, get_vx(x, y));
-        set_sens_vy(it, get_vy(x, y));
+    // Store sensors velocities
+    for(var s: i32 = 0; s < sim_int_par.n_rec; s++) {
+        if(x == get_sens_pos_x(s) && y == get_sens_pos_y(s)) {
+            set_sens_vx(it, s, get_vx(x, y));
+            set_sens_vy(it, s, get_vy(x, y));
+            break;
+        }
     }
 
     // Compute velocity norm L2
