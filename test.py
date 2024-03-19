@@ -1,9 +1,9 @@
 import numpy as np
 import wgpu
 
-wsx=2
+wsx=3
 wsy=3
-data =  np.zeros((wsx, wsy), dtype=np.int32)
+data =  np.zeros((16), dtype=np.int32)
 datatest= np.zeros((wsx, wsy), dtype=np.int32)
 t_out = np.zeros(shape=data.shape, dtype= np.int32)
 
@@ -127,11 +127,11 @@ bf15 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE
                                                          wgpu.BufferUsage.COPY_DST |
                                                          wgpu.BufferUsage.COPY_SRC)
 
-bf16 = device.create_buffer_with_data(data=datatest, usage= wgpu.BufferUsage.STORAGE |
+bf16 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
                                                          wgpu.BufferUsage.COPY_DST |
                                                          wgpu.BufferUsage.COPY_SRC)
 
-bf17 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+bf17 = device.create_buffer(size= 64,               usage= wgpu.BufferUsage.STORAGE |
                                                          wgpu.BufferUsage.COPY_DST |
                                                          wgpu.BufferUsage.COPY_SRC)
 
@@ -203,7 +203,7 @@ b_layout_6 = [
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-     } for nn in range(6,24)
+     } for nn in range(6,42)
 ]
 
 b_layout_7 = [
@@ -211,7 +211,7 @@ b_layout_7 = [
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-     } for ii in range(24,1001)
+     } for ii in range(42,1001)
 ]
 
 #LIGAÇÕES DOS BINDINGS
@@ -261,75 +261,147 @@ binding5 = [
 binding6 = [
     {
         "binding": 6,
-        "resource": {"buffer": max_bf0, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf1x4, "offset": 0, "size": 32},
     },
     {
         "binding": 7,
-        "resource": {"buffer": max_bf1, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf1x4, "offset": 32, "size": 32},
     },
     {
         "binding": 8,
-        "resource": {"buffer": max_bf2, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf1, "offset": 0, "size": 32},
     },
     {
         "binding": 9,
-        "resource": {"buffer": max_bf3, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf1, "offset": 32, "size": 32},
     },
     {
         "binding": 10,
-        "resource": {"buffer": max_bf4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf2, "offset": 0, "size": 32},
     },
     {
         "binding": 11,
-        "resource": {"buffer": max_bf5, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf2, "offset": 32, "size": 32},
     },
     {
         "binding": 12,
-        "resource": {"buffer": max_bf6, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf3, "offset": 0, "size": 32},
     },
     {
         "binding": 13,
-        "resource": {"buffer": max_bf7, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf3, "offset": 32, "size": 32},
     },
     {
         "binding": 14,
-        "resource": {"buffer": max_bf8, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf4, "offset": 0, "size": 32},
     },
     {
         "binding": 15,
-        "resource": {"buffer": max_bf9, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf4, "offset": 32, "size": 32},
     },
     {
         "binding": 16,
-        "resource": {"buffer": bf10, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf5, "offset": 0, "size": 32},
     },
     {
         "binding": 17,
-        "resource": {"buffer": bf11, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf5, "offset": 32, "size": 32},
     },
     {
         "binding": 18,
-        "resource": {"buffer": bf12, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf6, "offset": 0, "size": 32},
     },
     {
         "binding": 19,
-        "resource": {"buffer": bf13, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf6, "offset": 32, "size": 32},
     },
     {
         "binding": 20,
-        "resource": {"buffer": bf14, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf7, "offset": 0, "size": 32},
     },
     {
         "binding": 21,
-        "resource": {"buffer": bf15, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf7, "offset": 32, "size": 32},
     },
     {
         "binding": 22,
-        "resource": {"buffer": bf16, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf17, "offset": 0, "size": 32},
     },
     {
         "binding": 23,
-        "resource": {"buffer": bf17, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf17, "offset": 32, "size": 32},
+    },
+{
+        "binding": 24,
+        "resource": {"buffer": bf8, "offset": 0, "size": 32},
+    },
+{
+        "binding": 25,
+        "resource": {"buffer": bf8, "offset": 32, "size": 32},
+    },
+{
+        "binding": 26,
+        "resource": {"buffer": bf9, "offset": 0, "size": 32},
+    },
+{
+        "binding": 27,
+        "resource": {"buffer": bf9, "offset": 32, "size": 32},
+    },
+{
+        "binding": 28,
+        "resource": {"buffer": bf10, "offset": 0, "size": 32},
+    },
+{
+        "binding": 29,
+        "resource": {"buffer": bf10, "offset": 32, "size": 32},
+    },
+{
+        "binding": 30,
+        "resource": {"buffer": bf11, "offset": 0, "size": 32},
+    },
+{
+        "binding": 31,
+        "resource": {"buffer": bf11, "offset": 32, "size": 32},
+    },
+{
+        "binding": 32,
+        "resource": {"buffer": bf12, "offset": 0, "size": 32},
+    },
+{
+        "binding": 33,
+        "resource": {"buffer": bf12, "offset": 32, "size": 32},
+    },
+{
+        "binding": 34,
+        "resource": {"buffer": bf13, "offset": 0, "size": 32},
+    },
+{
+        "binding": 35,
+        "resource": {"buffer": bf13, "offset": 32, "size": 32},
+    },
+{
+        "binding": 36,
+        "resource": {"buffer": bf14, "offset": 0, "size": 32},
+    },
+{
+        "binding": 37,
+        "resource": {"buffer": bf14, "offset": 32, "size": 32},
+    },
+{
+        "binding": 38,
+        "resource": {"buffer": bf15, "offset": 0, "size": 32},
+    },
+{
+        "binding": 39,
+        "resource": {"buffer": bf15, "offset": 32, "size": 32},
+    },
+{
+        "binding": 40,
+        "resource": {"buffer": bf16, "offset": 0, "size": 32},
+    },
+{
+        "binding": 41,
+        "resource": {"buffer": bf16, "offset": 32, "size": 32},
     },
 
 ]
@@ -337,8 +409,8 @@ binding6 = [
 binding7 = [
     {
         "binding": jj,
-        "resource": {"buffer": bf7, "offset": 0, "size": bf1x4.size},
-    } for jj in range(24, 1001)
+        "resource": {"buffer": bf7, "offset": 0, "size": bf7.size},
+    } for jj in range(42, 1001)
 
 ]
 
@@ -384,6 +456,7 @@ compute_pass.set_bind_group(5,b_group_5,[],0,999999)
 compute_pass.set_bind_group(6,b_group_6,[],0,999999)
 compute_pass.set_bind_group(7,b_group_7,[],0,999999)
 
+
 for i in range(wsy):
     compute_pass.set_pipeline(compute_test)
     compute_pass.dispatch_workgroups(wsx,wsy)
@@ -392,5 +465,38 @@ for i in range(wsy):
 compute_pass.end()
 device.queue.submit([command_encoder.finish()])
 
-t_out = np.asarray(device.queue.read_buffer(bf17).cast("i")).reshape((wsx, wsy))
+t_out = np.asarray(device.queue.read_buffer(bf17).cast("i"))
+t2_out = np.asarray(device.queue.read_buffer(bf1x4).cast("i"))
+t3_out = np.asarray(device.queue.read_buffer(bf1).cast("i"))
+t4_out = np.asarray(device.queue.read_buffer(bf2).cast("i"))
+t5_out = np.asarray(device.queue.read_buffer(bf3).cast("i"))
+t6_out = np.asarray(device.queue.read_buffer(bf4).cast("i"))
+t7_out = np.asarray(device.queue.read_buffer(bf5).cast("i"))
+t8_out = np.asarray(device.queue.read_buffer(bf6).cast("i"))
+t9_out = np.asarray(device.queue.read_buffer(bf7).cast("i"))
+t10_out = np.asarray(device.queue.read_buffer(bf8).cast("i"))
+t11_out = np.asarray(device.queue.read_buffer(bf9).cast("i"))
+t12_out = np.asarray(device.queue.read_buffer(bf10).cast("i"))
+t13_out = np.asarray(device.queue.read_buffer(bf11).cast("i"))
+t14_out = np.asarray(device.queue.read_buffer(bf12).cast("i"))
+t15_out = np.asarray(device.queue.read_buffer(bf13).cast("i"))
+t16_out = np.asarray(device.queue.read_buffer(bf14).cast("i"))
+t17_out = np.asarray(device.queue.read_buffer(bf15).cast("i"))
+
 print(t_out)
+print(t2_out)
+print(t3_out)
+print(t4_out)
+print(t5_out)
+print(t6_out)
+print(t7_out)
+print(t8_out)
+print(t9_out)
+print(t10_out)
+print(t11_out)
+print(t12_out)
+print(t13_out)
+print(t14_out)
+print(t15_out)
+print(t16_out)
+print(t17_out)

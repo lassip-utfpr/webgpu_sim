@@ -71,58 +71,58 @@ var<storage,read_write> data22: array<i32>;
 @group(6) @binding(23)
 var<storage,read_write> data23: array<i32>;
 
-@group(7) @binding(24)
+@group(6) @binding(24)
 var<storage,read_write> data24: array<i32>;
 
-@group(7) @binding(25)
+@group(6) @binding(25)
 var<storage,read_write> data25: array<i32>;
 
-@group(7) @binding(26)
+@group(6) @binding(26)
 var<storage,read_write> data26: array<i32>;
 
-@group(7) @binding(27)
+@group(6) @binding(27)
 var<storage,read_write> data27: array<i32>;
 
-@group(7) @binding(28)
+@group(6) @binding(28)
 var<storage,read_write> data28: array<i32>;
 
-@group(7) @binding(29)
+@group(6) @binding(29)
 var<storage,read_write> data29: array<i32>;
 
-@group(7) @binding(30)
+@group(6) @binding(30)
 var<storage,read_write> data30: array<i32>;
 
-@group(7) @binding(31)
+@group(6) @binding(31)
 var<storage,read_write> data31: array<i32>;
 
-@group(7) @binding(32)
+@group(6) @binding(32)
 var<storage,read_write> data32: array<i32>;
 
-@group(7) @binding(33)
+@group(6) @binding(33)
 var<storage,read_write> data33: array<i32>;
 
-@group(7) @binding(34)
+@group(6) @binding(34)
 var<storage,read_write> data34: array<i32>;
 
-@group(7) @binding(35)
+@group(6) @binding(35)
 var<storage,read_write> data35: array<i32>;
 
-@group(7) @binding(36)
+@group(6) @binding(36)
 var<storage,read_write> data36: array<i32>;
 
-@group(7) @binding(37)
+@group(6) @binding(37)
 var<storage,read_write> data37: array<i32>;
 
-@group(7) @binding(38)
+@group(6) @binding(38)
 var<storage,read_write> data38: array<i32>;
 
-@group(7) @binding(39)
+@group(6) @binding(39)
 var<storage,read_write> data39: array<i32>;
 
-@group(7) @binding(40)
+@group(6) @binding(40)
 var<storage,read_write> data40: array<i32>;
 
-@group(7) @binding(41)
+@group(6) @binding(41)
 var<storage,read_write> data41: array<i32>;
 
 @group(7) @binding(42)
@@ -3024,25 +3024,40 @@ fn testing(@builtin(global_invocation_id) index: vec3<u32>){
     let j: i32 = i32(index.y);
     let ix: i32 = idx(j, i);
 
-data6[ix]=ix;
-data7[ix]=ix;
-data7[ix]=ix;
-data8[ix]=ix;
-data9[ix]=ix;
-data10[ix]=ix;
-data11[ix]=ix;
-data12[ix]=ix;
-data13[ix]=ix;
-data14[ix]=ix;
-data15[ix]=data14[ix]+data13[ix];
-data16[ix]=ix;
-data17[ix]=ix;
-data18[ix]=ix;
-data19[ix]=ix;
-data20[ix]=ix;
-data21[ix]=ix;
-data22[ix]=ix;
-data23[ix]=data21[ix]+data22[ix];
-
+data6[ix]=3;
+data7[ix]=4;
+data8[ix]=5;
+data9[ix]=6;
+data10[ix]=7;
+data11[ix]=8;
+data12[ix]=9;
+data13[ix]=0;
+data14[ix]=1;
+data15[ix]=2;
+data16[ix]=3;
+data17[ix]=4;
+data18[ix]=5;
+data19[ix]=6;
+data20[ix]=7;
+data21[ix]=8;
+data22[ix]=1;
+data23[ix]=2;
+data24[ix]=3;
+data25[ix]=4;
+data26[ix]=5;
+data27[ix]=6;
+data28[ix]=7;
+data29[ix]=8;
+data30[ix]=9;
+data31[ix]=0;
+data32[ix]=1;
+data33[ix]=2;
+data34[ix]=3;
+data35[ix]=4;
+data36[ix]=5;
+data37[ix]=6;
+data38[ix]=7;
+data39[ix]=8;
+data40[ix]=9;
 
 }
