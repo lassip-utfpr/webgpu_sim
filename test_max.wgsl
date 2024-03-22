@@ -12,7 +12,7 @@ var<storage,read_write> data2 : array<i32>;
 var<storage,read_write> data3: array<i32>;
 
 @group(4) @binding(4)
-var<storage,read_write> data4: array<i32>;
+var<storage,read> data4: array<i32>;
 
 @group(5) @binding(5)
 var<storage,read_write> data5: array<i32>;

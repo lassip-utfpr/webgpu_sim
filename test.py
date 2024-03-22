@@ -52,7 +52,7 @@ max_bf7 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_DST |
                                                     wgpu.BufferUsage.COPY_SRC)
 
-max_bf8 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+max_bf8 = device.create_buffer(size=65536, usage=wgpu.BufferUsage.UNIFORM |
                                                     wgpu.BufferUsage.COPY_DST |
                                                     wgpu.BufferUsage.COPY_SRC)
 
@@ -180,17 +180,17 @@ b_layout_3 = [
 
 b_layout_4 = [
     {
-        "binding": 4,
+        "binding": 4,      #READ_ONLY BINDIG BUFFER
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer":{
-            "type": wgpu.BufferBindingType.storage,
+            "type": wgpu.BufferBindingType.read_only_storage,
         },
     },
 ]
 
 b_layout_5 = [
     {
-        "binding": 5,
+        "binding": 5,        #UNIFORM BINDING BUFFER
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer":{
             "type": wgpu.BufferBindingType.uniform,
@@ -198,7 +198,7 @@ b_layout_5 = [
     },
 ]
 
-b_layout_6 = [
+b_layout_6 = [            #BUFFER DINAMICO
     {"binding": nn,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
@@ -250,14 +250,14 @@ binding3 = [
 binding4 = [
     {
         "binding": 4,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": max_bf7, "offset": 0, "size": max_bf7.size},
     },
 ]
 
 binding5 = [
     {
         "binding": 5,
-        "resource": {"buffer": bf8, "offset": 0, "size": bf8.size},
+        "resource": {"buffer": max_bf8, "offset": 0, "size": max_bf8.size},
     },
 ]
 
@@ -398,7 +398,7 @@ t7_out = np.asarray(device.queue.read_buffer(bf5).cast("i"))
 t8_out = np.asarray(device.queue.read_buffer(bf6).cast("i"))
 t9_out = np.asarray(device.queue.read_buffer(bf7).cast("i"))
 
-ut_out = np.asarray(device.queue.read_buffer(bf8).cast("i"))
+# ut_out = np.asarray(device.queue.read_buffer(bf8).cast("i"))
 
 
 print(t_out)
@@ -411,4 +411,4 @@ print(t7_out)
 print(t8_out)
 print(t9_out)
 
-print(ut_out)
+# print(ut_out)
