@@ -3,6 +3,7 @@ import wgpu
 
 wsx=3
 wsy=3
+udata = np.array([[3,3,3]])
 data =  np.zeros((16), dtype=np.int32)
 datatest= np.zeros((wsx, wsy), dtype=np.int32)
 t_out = np.zeros(shape=data.shape, dtype= np.int32)
@@ -95,9 +96,8 @@ bf7 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE 
                                                          wgpu.BufferUsage.COPY_DST |
                                                          wgpu.BufferUsage.COPY_SRC)
 
-bf8 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
-                                                         wgpu.BufferUsage.COPY_DST |
-                                                         wgpu.BufferUsage.COPY_SRC)
+bf8 = device.create_buffer_with_data(data=udata, usage= wgpu.BufferUsage.UNIFORM |
+                                                        wgpu.BufferUsage.COPY_SRC)
 
 bf9 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
                                                          wgpu.BufferUsage.COPY_DST |
@@ -193,7 +193,7 @@ b_layout_5 = [
         "binding": 5,
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer":{
-            "type": wgpu.BufferBindingType.storage,
+            "type": wgpu.BufferBindingType.uniform,
         },
     },
 ]
@@ -203,8 +203,8 @@ b_layout_6 = [
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage,
-        # "has_dynamic_offset": True,  # optional
-        # "min_binding_size": 0  # optional
+        #  "has_dynamic_offset": True,  # optional
+        # "min_binding_size": 0  # optional   14.1
               }
      } for nn in range(6,22)
 ]
@@ -257,7 +257,7 @@ binding4 = [
 binding5 = [
     {
         "binding": 5,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf8, "offset": 0, "size": bf8.size},
     },
 ]
 
@@ -398,6 +398,8 @@ t7_out = np.asarray(device.queue.read_buffer(bf5).cast("i"))
 t8_out = np.asarray(device.queue.read_buffer(bf6).cast("i"))
 t9_out = np.asarray(device.queue.read_buffer(bf7).cast("i"))
 
+ut_out = np.asarray(device.queue.read_buffer(bf8).cast("i"))
+
 
 print(t_out)
 print(t2_out)
@@ -408,3 +410,5 @@ print(t6_out)
 print(t7_out)
 print(t8_out)
 print(t9_out)
+
+print(ut_out)
