@@ -65,64 +65,64 @@ var<storage,read_write> data20: array<i32>;
 @group(6) @binding(21)
 var<storage,read_write> data21: array<i32>;
 
-@group(6) @binding(22)
+@group(7) @binding(22)
 var<storage,read_write> data22: array<i32>;
 
-@group(6) @binding(23)
+@group(7) @binding(23)
 var<storage,read_write> data23: array<i32>;
 
-@group(6) @binding(24)
+@group(7) @binding(24)
 var<storage,read_write> data24: array<i32>;
 
-@group(6) @binding(25)
+@group(7) @binding(25)
 var<storage,read_write> data25: array<i32>;
 
-@group(6) @binding(26)
+@group(7) @binding(26)
 var<storage,read_write> data26: array<i32>;
 
-@group(6) @binding(27)
+@group(7) @binding(27)
 var<storage,read_write> data27: array<i32>;
 
-@group(6) @binding(28)
+@group(7) @binding(28)
 var<storage,read_write> data28: array<i32>;
 
-@group(6) @binding(29)
+@group(7) @binding(29)
 var<storage,read_write> data29: array<i32>;
 
-@group(6) @binding(30)
+@group(7) @binding(30)
 var<storage,read_write> data30: array<i32>;
 
-@group(6) @binding(31)
+@group(7) @binding(31)
 var<storage,read_write> data31: array<i32>;
 
-@group(6) @binding(32)
+@group(7) @binding(32)
 var<storage,read_write> data32: array<i32>;
 
-@group(6) @binding(33)
+@group(7) @binding(33)
 var<storage,read_write> data33: array<i32>;
 
-@group(6) @binding(34)
+@group(7) @binding(34)
 var<storage,read_write> data34: array<i32>;
 
-@group(6) @binding(35)
+@group(7) @binding(35)
 var<storage,read_write> data35: array<i32>;
 
-@group(6) @binding(36)
+@group(7) @binding(36)
 var<storage,read_write> data36: array<i32>;
 
-@group(6) @binding(37)
+@group(7) @binding(37)
 var<storage,read_write> data37: array<i32>;
 
-@group(6) @binding(38)
+@group(7) @binding(38)
 var<storage,read_write> data38: array<i32>;
 
-@group(6) @binding(39)
+@group(7) @binding(39)
 var<storage,read_write> data39: array<i32>;
 
-@group(6) @binding(40)
+@group(7) @binding(40)
 var<storage,read_write> data40: array<i32>;
 
-@group(6) @binding(41)
+@group(7) @binding(41)
 var<storage,read_write> data41: array<i32>;
 
 @group(7) @binding(42)
