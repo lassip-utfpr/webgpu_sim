@@ -12,7 +12,7 @@ var<storage,read_write> data2 : array<i32>;
 var<storage,read_write> data3: array<i32>;
 
 @group(4) @binding(4)
-var<storage,read_write> data4: array<i32>;
+var<storage,read> data4: array<i32>;
 
 @group(5) @binding(5)
 var<storage,read_write> data5: array<i32>;
@@ -20,49 +20,49 @@ var<storage,read_write> data5: array<i32>;
 @group(6) @binding(6)
 var<storage,read_write> data6: array<i32>;
 
-@group(7) @binding(7)
+@group(6) @binding(7)
 var<storage,read_write> data7: array<i32>;
 
-@group(7) @binding(8)
+@group(6) @binding(8)
 var<storage,read_write> data8: array<i32>;
 
-@group(7) @binding(9)
+@group(6) @binding(9)
 var<storage,read_write> data9: array<i32>;
 
-@group(7) @binding(10)
+@group(6) @binding(10)
 var<storage,read_write> data10: array<i32>;
 
-@group(7) @binding(11)
+@group(6) @binding(11)
 var<storage,read_write> data11: array<i32>;
 
-@group(7) @binding(12)
+@group(6) @binding(12)
 var<storage,read_write> data12: array<i32>;
 
-@group(7) @binding(13)
+@group(6) @binding(13)
 var<storage,read_write> data13: array<i32>;
 
-@group(7) @binding(14)
+@group(6) @binding(14)
 var<storage,read_write> data14: array<i32>;
 
-@group(7) @binding(15)
+@group(6) @binding(15)
 var<storage,read_write> data15: array<i32>;
 
-@group(7) @binding(16)
+@group(6) @binding(16)
 var<storage,read_write> data16: array<i32>;
 
-@group(7) @binding(17)
+@group(6) @binding(17)
 var<storage,read_write> data17: array<i32>;
 
-@group(7) @binding(18)
+@group(6) @binding(18)
 var<storage,read_write> data18: array<i32>;
 
-@group(7) @binding(19)
+@group(6) @binding(19)
 var<storage,read_write> data19: array<i32>;
 
-@group(7) @binding(20)
+@group(6) @binding(20)
 var<storage,read_write> data20: array<i32>;
 
-@group(7) @binding(21)
+@group(6) @binding(21)
 var<storage,read_write> data21: array<i32>;
 
 @group(7) @binding(22)
@@ -2999,7 +2999,15 @@ var<storage,read_write> data998: array<i32>;
 @group(7) @binding(999)
 var<storage,read_write> data999: array<i32>;
 
-//INCAPAZ DE PUXAR O BINDING 999
+@group(7) @binding(1000)
+var<storage,read_write> data1000: array<i32>;
+
+@group(7) @binding(1001)
+var<storage,read_write> data1001: array<i32>;
+
+@group(7) @binding(1002)
+var<storage,read_write> data1002: array<i32>;
+
 
 fn idx(j: i32, n: i32) -> i32 {{
         let j_sz: i32 = wsy;
@@ -3016,6 +3024,40 @@ fn testing(@builtin(global_invocation_id) index: vec3<u32>){
     let j: i32 = i32(index.y);
     let ix: i32 = idx(j, i);
 
-data998[ix]=ix;
+data6[ix]=3;
+data7[ix]=4;
+data8[ix]=5;
+data9[ix]=6;
+data10[ix]=7;
+data11[ix]=8;
+data12[ix]=9;
+data13[ix]=0;
+data14[ix]=1;
+data15[ix]=2;
+data16[ix]=3;
+data17[ix]=4;
+data18[ix]=5;
+data19[ix]=6;
+data20[ix]=7;
+data21[ix]=8;
+data22[ix]=1;
+data23[ix]=2;
+data24[ix]=3;
+data25[ix]=4;
+data26[ix]=5;
+data27[ix]=6;
+data28[ix]=7;
+data29[ix]=8;
+data30[ix]=9;
+data31[ix]=0;
+data32[ix]=1;
+data33[ix]=2;
+data34[ix]=3;
+data35[ix]=4;
+data36[ix]=5;
+data37[ix]=6;
+data38[ix]=7;
+data39[ix]=8;
+data40[ix]=9;
 
 }

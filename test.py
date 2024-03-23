@@ -1,10 +1,11 @@
 import numpy as np
 import wgpu
 
-wsx=2
+wsx=3
 wsy=3
-data =  np.zeros((wsx, wsy), dtype=np.int32)
-datatest= np.array([1])
+udata = np.array([[3,3,3]])
+data =  np.zeros((16), dtype=np.int32)
+datatest= np.zeros((wsx, wsy), dtype=np.int32)
 t_out = np.zeros(shape=data.shape, dtype= np.int32)
 
 device = wgpu.utils.get_default_device()
@@ -16,12 +17,121 @@ with open('test_max.wgsl') as shader_file:
     cshader = device.create_shader_module(code=cshader_str)
 
 #DECLARAÇÃO DE BUFFERS
-"""MAIOR TAMANHO DE UM BUFFER"""
-max_bf = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+"""
+MAIOR TAMANHO DE UM BUFFER
+"""
+max_bf0 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_DST |
                                                     wgpu.BufferUsage.COPY_SRC)
 
+max_bf1 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf2 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf3 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf4 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf5 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf6 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf7 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf8 = device.create_buffer(size=65536, usage=wgpu.BufferUsage.UNIFORM |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+max_bf9 = device.create_buffer(size=268435456, usage=wgpu.BufferUsage.STORAGE |
+                                                    wgpu.BufferUsage.COPY_DST |
+                                                    wgpu.BufferUsage.COPY_SRC)
+
+"""
+BUFFERS MENORES
+"""
+
 bf1x4 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf1 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf2 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf3= device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf4 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf5 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf6 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf7 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf8 = device.create_buffer_with_data(data=udata, usage= wgpu.BufferUsage.UNIFORM |
+                                                        wgpu.BufferUsage.COPY_SRC)
+
+bf9 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf10 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf11 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf12 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf13 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf14 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf15 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf16 = device.create_buffer_with_data(data=data, usage= wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+
+bf17 = device.create_buffer(size= 64,               usage= wgpu.BufferUsage.STORAGE |
                                                          wgpu.BufferUsage.COPY_DST |
                                                          wgpu.BufferUsage.COPY_SRC)
 
@@ -70,32 +180,33 @@ b_layout_3 = [
 
 b_layout_4 = [
     {
-        "binding": 4,
+        "binding": 4,      #READ_ONLY BINDIG BUFFER
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer":{
-            "type": wgpu.BufferBindingType.storage,
+            "type": wgpu.BufferBindingType.read_only_storage,
         },
     },
 ]
 
 b_layout_5 = [
     {
-        "binding": 5,
+        "binding": 5,        #UNIFORM BINDING BUFFER
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer":{
-            "type": wgpu.BufferBindingType.storage,
+            "type": wgpu.BufferBindingType.uniform,
         },
     },
 ]
 
-b_layout_6 = [
-    {
-        "binding": 6,
-        "visibility": wgpu.ShaderStage.COMPUTE,
-        "buffer":{
-            "type": wgpu.BufferBindingType.storage,
-        },
-    },
+b_layout_6 = [            #BUFFER DINAMICO
+    {"binding": nn,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage,
+        #  "has_dynamic_offset": True,  # optional
+        # "min_binding_size": 0  # optional   14.1
+              }
+     } for nn in range(6,22)
 ]
 
 b_layout_7 = [
@@ -103,7 +214,7 @@ b_layout_7 = [
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-     } for ii in range(7,999)
+     } for ii in range(22,1001)
 ]
 
 #LIGAÇÕES DOS BINDINGS
@@ -139,30 +250,93 @@ binding3 = [
 binding4 = [
     {
         "binding": 4,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": max_bf7, "offset": 0, "size": max_bf7.size},
     },
 ]
 
 binding5 = [
     {
         "binding": 5,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": max_bf8, "offset": 0, "size": max_bf8.size},
     },
 ]
 
 binding6 = [
     {
         "binding": 6,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
+        "resource": {"buffer": bf1x4, "offset": 0, "size": 32},
     },
+    {
+        "binding": 7,
+        "resource": {"buffer": bf1x4, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 8,
+        "resource": {"buffer": bf1, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 9,
+        "resource": {"buffer": bf1, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 10,
+        "resource": {"buffer": bf2, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 11,
+        "resource": {"buffer": bf2, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 12,
+        "resource": {"buffer": bf3, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 13,
+        "resource": {"buffer": bf3, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 14,
+        "resource": {"buffer": bf4, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 15,
+        "resource": {"buffer": bf4, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 16,
+        "resource": {"buffer": bf5, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 17,
+        "resource": {"buffer": bf5, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 18,
+        "resource": {"buffer": bf6, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 19,
+        "resource": {"buffer": bf6, "offset": 32, "size": 32},
+    },
+    {
+        "binding": 20,
+        "resource": {"buffer": bf7, "offset": 0, "size": 32},
+    },
+    {
+        "binding": 21,
+        "resource": {"buffer": bf7, "offset": 32, "size": 32},
+    },
+
 ]
 
 binding7 = [
     {
         "binding": jj,
-        "resource": {"buffer": bf1x4, "offset": 0, "size": bf1x4.size},
-    } for jj in range(7,999)
+        "resource": {"buffer": bf7, "offset": 0, "size": bf7.size},
+    } for jj in range(22, 1001)
+
 ]
+
 
 #Juntar estrutura dos binding e criar o layout da pipeline
 
@@ -205,6 +379,7 @@ compute_pass.set_bind_group(5,b_group_5,[],0,999999)
 compute_pass.set_bind_group(6,b_group_6,[],0,999999)
 compute_pass.set_bind_group(7,b_group_7,[],0,999999)
 
+
 for i in range(wsy):
     compute_pass.set_pipeline(compute_test)
     compute_pass.dispatch_workgroups(wsx,wsy)
@@ -213,5 +388,27 @@ for i in range(wsy):
 compute_pass.end()
 device.queue.submit([command_encoder.finish()])
 
-t_out = np.asarray(device.queue.read_buffer(bf1x4).cast("i")).reshape((wsx, wsy))
+t_out = np.asarray(device.queue.read_buffer(bf17).cast("i"))
+t2_out = np.asarray(device.queue.read_buffer(bf1x4).cast("i"))
+t3_out = np.asarray(device.queue.read_buffer(bf1).cast("i"))
+t4_out = np.asarray(device.queue.read_buffer(bf2).cast("i"))
+t5_out = np.asarray(device.queue.read_buffer(bf3).cast("i"))
+t6_out = np.asarray(device.queue.read_buffer(bf4).cast("i"))
+t7_out = np.asarray(device.queue.read_buffer(bf5).cast("i"))
+t8_out = np.asarray(device.queue.read_buffer(bf6).cast("i"))
+t9_out = np.asarray(device.queue.read_buffer(bf7).cast("i"))
+
+# ut_out = np.asarray(device.queue.read_buffer(bf8).cast("i"))
+
+
 print(t_out)
+print(t2_out)
+print(t3_out)
+print(t4_out)
+print(t5_out)
+print(t6_out)
+print(t7_out)
+print(t8_out)
+print(t9_out)
+
+# print(ut_out)
