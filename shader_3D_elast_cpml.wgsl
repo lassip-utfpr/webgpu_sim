@@ -139,8 +139,10 @@ fn ijkl(i: i32, j: i32, k: i32, l: i32, i_max: i32, j_max: i32, k_max: i32, l_ma
 // --- Force array access funtions ---
 // ------------------------------------
 // function to get a source_term array value
-fn get_source_term(n: i32) -> f32 {
-    return select(0.0, source_term[n], n >= 0 && n < sim_int_par.n_iter);
+fn get_source_term(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_src);
+
+    return select(0.0, source_term[index], index != -1);
 }
 
 // function to get a x index position of a source
@@ -1176,7 +1178,7 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     // Add the source force
     for(var s: i32 = 0; s < sim_int_par.n_src; s++) {
         if(x == get_sour_pos_x(s) && y == get_sour_pos_y(s) && z == get_sour_pos_z(s)) {
-            set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it) * dt_over_rho);
+            set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it, s) * dt_over_rho);
             break;
         }
     }
