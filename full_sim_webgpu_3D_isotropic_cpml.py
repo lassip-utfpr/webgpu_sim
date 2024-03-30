@@ -8,9 +8,9 @@ else:
     import wgpu.backends.rs  # Select backend 0.9.5
 
 import numpy as np
+import ast
 import matplotlib.pyplot as plt
 from time import time
-# from datetime import datetime
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageWidget
@@ -604,21 +604,21 @@ def sim_webgpu(device):
             "type": wgpu.BufferBindingType.storage,
         },
     },
-    {"binding": 22,
-     "visibility": wgpu.ShaderStage.COMPUTE,
-     "buffer": {
-         "type": wgpu.BufferBindingType.read_only_storage}
-     },
-    {"binding": 23,
-     "visibility": wgpu.ShaderStage.COMPUTE,
-     "buffer": {
-         "type": wgpu.BufferBindingType.read_only_storage}
-     },
-    {"binding": 24,
-     "visibility": wgpu.ShaderStage.COMPUTE,
-     "buffer": {
-         "type": wgpu.BufferBindingType.read_only_storage}
-     }
+        {"binding": 22,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 23,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 24,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         }
     ]
 
     # Arrays da simulacao
@@ -871,42 +871,43 @@ def sim_webgpu(device):
                                                                                                   ny + 2,
                                                                                                   nz + 2))
 
-            if show_debug:
-                print(f'Time step # {it} out of {NSTEP}')
-                print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}, Vz = {np.max(vzgpu)}')
-                print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}, Vz = {np.min(vzgpu)}')
-                print(f'Max norm velocity vector V (m/s) = {v_sol_n[it - 1]}')
-                # print(f'Total energy = {en[it - 1, 2]}')
+                if show_debug:
+                    print(f'Time step # {it} out of {NSTEP}')
+                    print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}, Vz = {np.max(vzgpu)}')
+                    print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}, Vz = {np.min(vzgpu)}')
+                    print(f'Max norm velocity vector V (m/s) = {v_sol_n[it - 1]}')
+                    # print(f'Total energy = {en[it - 1, 2]}')
 
-            if show_anim:
-                if show_xy:
-                    idx = 0
-                    windows_gpu[idx].imv.setImage(vxgpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
-                    windows_gpu[idx + 1].imv.setImage(vygpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
-                    windows_gpu[idx + 2].imv.setImage(vzgpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
-
-                if show_xz:
-                    if not show_xy:
+                if show_anim:
+                    if show_xy:
                         idx = 0
-                    else:
-                        idx = 3
+                        windows_gpu[idx].imv.setImage(vxgpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
+                        windows_gpu[idx + 1].imv.setImage(vygpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
+                        windows_gpu[idx + 2].imv.setImage(vzgpu[1:-1, 1:-1, z_plane_idx], levels=[v_min, v_max])
 
-                    windows_gpu[idx].imv.setImage(vxgpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
-                    windows_gpu[idx + 1].imv.setImage(vygpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
-                    windows_gpu[idx + 2].imv.setImage(vzgpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
+                    if show_xz:
+                        if not show_xy:
+                            idx = 0
+                        else:
+                            idx = 3
 
-                if show_yz:
-                    if not show_xy and not show_xz:
-                        idx = 0
-                    elif (show_xy and not show_xz) or (not show_xy and show_xz):
-                        idx = 3
-                    else:
-                        idx = 6
+                        windows_gpu[idx].imv.setImage(vxgpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
+                        windows_gpu[idx + 1].imv.setImage(vygpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
+                        windows_gpu[idx + 2].imv.setImage(vzgpu[1:-1, y_plane_idx, 1:-1], levels=[v_min, v_max])
 
-                    windows_gpu[idx].imv.setImage(vxgpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
-                    windows_gpu[idx + 1].imv.setImage(vygpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
-                    windows_gpu[idx + 2].imv.setImage(vzgpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
-                App.processEvents()
+                    if show_yz:
+                        if not show_xy and not show_xz:
+                            idx = 0
+                        elif (show_xy and not show_xz) or (not show_xy and show_xz):
+                            idx = 3
+                        else:
+                            idx = 6
+
+                        windows_gpu[idx].imv.setImage(vxgpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
+                        windows_gpu[idx + 1].imv.setImage(vygpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
+                        windows_gpu[idx + 2].imv.setImage(vzgpu[x_plane_idx, 1:-1, 1:-1], levels=[v_min, v_max])
+
+                    App.processEvents()
 
         # Verifica a estabilidade da simulacao
         if v_sol_n[it - 1] > STABILITY_THRESHOLD:
@@ -954,13 +955,19 @@ show_yz = False
 show_debug = False
 plot_results = True
 plot_sensors = True
-show_results = False
+show_results = True
 save_results = False
 gpu_type = "NVIDIA"
 
 # -----------------------
 # Inicializacao do WebGPU
 # -----------------------
+# Le as configuracoes do simulador de um arquivo JSON
+with open('config.json', 'r') as f:
+    configs= ast.literal_eval(f.read())
+    data_src = np.array(configs["sources"])
+    data_rec = np.array(configs["receivers"])
+
 device_gpu = None
 if do_sim_gpu:
     if gpu_type == "NVIDIA":
@@ -978,8 +985,8 @@ nx = 298  # colunas
 ny = 21  # linhas
 nz = 298  # altura
 
-# Tamanho do grid (aparentemente em metros)
-dx = dy = dz = 10.0
+# Tamanho do grid (em milimetros)
+dx = dy = dz = 0.001
 one_dx = one_dy = one_dz = 1.0 / dx
 
 # Constantes
@@ -1012,23 +1019,36 @@ lambdaplus2mu = rho * cp * cp
 NSTEP = 5000
 
 # Passo de tempo em segundos
-dt = 4.0e-4
+dt = 1.0e-8
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
 IT_DISPLAY = 10
 
+# Define a posicao das fontes
+NSRC = data_src.shape[0]
+ix_src = (data_src[:, 0] * one_dx).astype(np.int32)
+iy_src = (data_src[:, 1] * one_dy).astype(np.int32)
+iz_src = (data_src[:, 2] * one_dz).astype(np.int32)
+
 # Parametros da fonte
-f0 = 7.0  # frequencia
-t0 = 1.20 / f0  # delay
+f0 = 5.0e6  # frequencia
+t0_std = 1.20 / f0
+t0 = data_src[:, 3].reshape((1, NSRC))
 factor = 1.0e7
 a = PI ** 2 * f0 ** 2
-t = np.arange(NSTEP) * dt
+t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
 
 # First derivative of a Gaussian
 source_term = -(factor * 2.0 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
 
 # Funcao de Ricker (segunda derivada de uma gaussiana)
 # source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
+
+# Define a localizacao dos receptores
+NREC = data_rec.shape[0]
+ix_rec = (data_rec[:, 0] * one_dx).astype(np.int32)
+iy_rec = (data_rec[:, 1] * one_dy).astype(np.int32)
+iz_rec = (data_rec[:, 2] * one_dz).astype(np.int32)
 
 # for evolution of total energy in the medium
 v_2 = np.zeros((nx + 2, ny + 2, nz + 2), dtype=flt32)
@@ -1276,23 +1296,11 @@ a_z_half = np.zeros((1, 1, nz), dtype=flt32)
 k = np.where(d_z_half > 1e-6)
 a_z_half[k] = d_z_half[k] * (b_z_half[k] - 1.0) / (k_z_half[k] * (d_z_half[k] + k_z_half[k] * alpha_z_half[k]))
 
-# Define a posicao das fontes
-NSRC = 11
-# ix_src = np.array([int(nx/2), int(nx/4), int(3*nx/4)], dtype=np.int32)
-# iy_src = np.array([int(ny/2), int(3*ny/4), int(ny/4)], dtype=np.int32)
-# iz_src = np.array([int(nz/2), int(nz/2), int(nz/2)], dtype=np.int32)
-ix_src = np.array([px * int(nx/NSRC) + int(nx/2) for px in range(-int((NSRC-1)/2), int((NSRC-1)/2)+1)], dtype=np.int32)
-iy_src = np.array([int(ny/2) for py in range(-int((NSRC-1)/2), int((NSRC-1)/2)+1)], dtype=np.int32)
-iz_src = np.array([11 for pz in range(-int((NSRC-1)/2), int((NSRC-1)/2)+1)], dtype=np.int32)
+# Imprime a posicao das fontes e dos receptores
 print(f'Existem {NSRC} fontes')
 for isrc in range(NSRC):
     print(f'Fonte {isrc}: i = {ix_src[isrc]:3}, j = {iy_src[isrc]:3}, k = {iz_src[isrc]:3}')
 
-# Define a localizacao dos receptores
-NREC = 3
-ix_rec = np.array([-125, 0, 106], dtype=np.int32) + ix_src[0]
-iy_rec = np.array([0, 50, 106], dtype=np.int32) + iy_src[0]
-iz_rec = np.array([0, 0, 0], dtype=np.int32) + iz_src[0]
 print(f'\nExistem {NREC} receptores')
 for irec in range(NREC):
     print(f'Receptor {irec}: i = {ix_rec[irec]:3}, j = {iy_rec[irec]:3}, k = {iz_rec[irec]:3}')
@@ -1323,9 +1331,9 @@ sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 sisvz = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # Define os indices dos planos de visualizacao
-x_plane_idx = int(nx/2) if show_yz else 0
-y_plane_idx = int(ny/2) if show_xz else 0
-z_plane_idx = int(nz/2) if show_xy else 0
+x_plane_idx = int(nx / 2) if show_yz else 0
+y_plane_idx = int(ny / 2) if show_xz else 0
+z_plane_idx = int(nz / 2) if show_xy else 0
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
@@ -1394,6 +1402,8 @@ if show_anim:
         ]
         windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data
                        if data["show"]]
+else:
+    App = None
 
 # WebGPU
 if do_sim_gpu:
@@ -1472,41 +1482,81 @@ if do_sim_gpu and do_sim_cpu:
 
 if plot_results:
     if do_sim_gpu:
-        vx_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vx - Plane XY\n[{gpu_type}] ({nx}x{ny})')
-        plt.imshow(vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
-        plt.colorbar()
+        if show_xy:
+            vx_gpu_sim_xy_result = plt.figure()
+            plt.title(f'GPU simulation Vx - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+            plt.imshow(vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, z_plane_idx].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
 
-        vy_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vy - Plane XY\n[{gpu_type}] ({nx}x{ny})')
-        plt.imshow(vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
-        plt.colorbar()
+            vy_gpu_sim_xy_result = plt.figure()
+            plt.title(f'GPU simulation Vy - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+            plt.imshow(vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, z_plane_idx].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
 
-        vz_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vz - Plane XY\n[{gpu_type}] ({nx}x{ny})')
-        plt.imshow(vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
-        plt.colorbar()
+            vz_gpu_sim_xy_result = plt.figure()
+            plt.title(f'GPU simulation Vz - Plane XY\n[{gpu_type}] ({nx}x{ny})')
+            plt.imshow(vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, z_plane_idx].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
+
+        if show_xz:
+            vx_gpu_sim_xz_result = plt.figure()
+            plt.title(f'GPU simulation Vx - Plane XZ\n[{gpu_type}] ({nx}x{nz})')
+            plt.imshow(vx_gpu[1 + npoints_pml:-1 - npoints_pml, y_plane_idx, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            # plt.xlim((1 + npoints_pml)*dx, (nx - 1 - npoints_pml)*dx)
+            plt.colorbar()
+
+            vy_gpu_sim_xz_result = plt.figure()
+            plt.title(f'GPU simulation Vy - Plane XZ\n[{gpu_type}] ({nx}x{nz})')
+            plt.imshow(vy_gpu[1 + npoints_pml:-1 - npoints_pml, y_plane_idx, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
+
+            vz_gpu_sim_xz_result = plt.figure()
+            plt.title(f'GPU simulation Vz - Plane XZ\n[{gpu_type}] ({nx}x{nz})')
+            plt.imshow(vz_gpu[1 + npoints_pml:-1 - npoints_pml, y_plane_idx, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
+
+        if show_yz:
+            vx_gpu_sim_yz_result = plt.figure()
+            plt.title(f'GPU simulation Vx - Plane YZ\n[{gpu_type}] ({ny}x{nz})')
+            plt.imshow(vx_gpu[x_plane_idx, 1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
+
+            vy_gpu_sim_yz_result = plt.figure()
+            plt.title(f'GPU simulation Vy - Plane YZ\n[{gpu_type}] ({ny}x{nz})')
+            plt.imshow(vy_gpu[x_plane_idx, 1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
+
+            vz_gpu_sim_yz_result = plt.figure()
+            plt.title(f'GPU simulation Vz - Plane YZ\n[{gpu_type}] ({ny}x{nz})')
+            plt.imshow(vz_gpu[x_plane_idx, 1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml].T,
+                       aspect='auto', cmap='gray')
+            plt.colorbar()
 
     if do_sim_cpu:
         vx_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vx - Plane XY\n[CPU] ({nx}x{ny})')
         plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
         vy_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vy - Plane XY\n[CPU] ({nx}x{ny})')
         plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
         vz_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vz - Plane XY\n[CPU] ({nx}x{ny})')
         plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
@@ -1514,21 +1564,21 @@ if plot_results:
         plt.title(f'CPU vs GPU Vx - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
         plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
                    vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
         vy_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vy - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
         plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
                    vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
         vz_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vz - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
         plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
                    vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
-                   aspect='auto', cmap='turbo_r')
+                   aspect='auto', cmap='gray')
         plt.colorbar()
 
     if show_results:
@@ -1539,9 +1589,21 @@ if save_results:
     name = f'results/result_3D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_{nx}x{ny}x{nz}_{NSTEP}_iter_'
     if plot_results:
         if do_sim_gpu:
-            vx_gpu_sim_result.savefig(name + 'Vx_XY_gpu_' + gpu_type + '.png')
-            vy_gpu_sim_result.savefig(name + 'Vy_XY_gpu_' + gpu_type + '.png')
-            vz_gpu_sim_result.savefig(name + 'Vz_XY_gpu_' + gpu_type + '.png')
+            if show_xy:
+                vx_gpu_sim_xy_result.savefig(name + 'Vx_XY_gpu_' + gpu_type + '.png')
+                vy_gpu_sim_xy_result.savefig(name + 'Vy_XY_gpu_' + gpu_type + '.png')
+                vz_gpu_sim_xy_result.savefig(name + 'Vz_XY_gpu_' + gpu_type + '.png')
+
+            if show_xz:
+                vx_gpu_sim_xz_result.savefig(name + 'Vx_XZ_gpu_' + gpu_type + '.png')
+                vy_gpu_sim_xz_result.savefig(name + 'Vy_XZ_gpu_' + gpu_type + '.png')
+                vz_gpu_sim_xz_result.savefig(name + 'Vz_XZ_gpu_' + gpu_type + '.png')
+
+            if show_yz:
+                vx_gpu_sim_yz_result.savefig(name + 'Vx_YZ_gpu_' + gpu_type + '.png')
+                vy_gpu_sim_yz_result.savefig(name + 'Vy_YZ_gpu_' + gpu_type + '.png')
+                vz_gpu_sim_yz_result.savefig(name + 'Vz_YZ_gpu_' + gpu_type + '.png')
+
             for s in range(NREC):
                 sensor_gpu_result[s].savefig(name + f'_sensor_{s}_' + gpu_type + '.png')
 
