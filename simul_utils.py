@@ -37,6 +37,9 @@ class SimulationROI:
             Quantidade de pontos na dimensão de profundidade ROI. Por padrão, é 1
             (ROI de duas dimensões).
 
+        pad : int
+            Quantidade de pontos adicionais em cada lado da dimensao da ROI. Por padrão é 1.
+
     Attributes
     ----------
         coord_ref : :class:`np.ndarray`
@@ -81,6 +84,9 @@ class SimulationROI:
         depth : float
             Profundidade da ROI, em mm.
 
+        pad : int
+            Quantidade adicional de pontos em cada lado das dimensões da ROI.
+
     Raises
     ------
     TypeError
@@ -94,7 +100,8 @@ class SimulationROI:
     """
 
     def __init__(self, coord_ref=np.zeros((1, 3)), height=30.0, h_len=300, width=30.0, w_len=300, depth=0.0, d_len=1,
-                 len_pml_xmin=10, len_pml_xmax=10, len_pml_ymin=10, len_pml_ymax=10, len_pml_zmin=10, len_pml_zmax=10):
+                 len_pml_xmin=10, len_pml_xmax=10, len_pml_ymin=10, len_pml_ymax=10, len_pml_zmin=10, len_pml_zmax=10,
+                 pad=1):
         if type(coord_ref) is list:
             coord_ref = np.array(coord_ref)
 
@@ -152,14 +159,17 @@ class SimulationROI:
         self._pml_zmin_len = len_pml_zmin
         self._pml_zmax_len = len_pml_zmax
 
+        # Quantidade adicional de pontos em cada lado da ROI.
+        self._pad = pad
+
     def get_nx(self):
-        return self._w_len + self._pml_xmin_len + self._pml_xmax_len + 2
+        return self._w_len + self._pml_xmin_len + self._pml_xmax_len + 2 * self._pad
 
     def get_ny(self):
-        return self._d_len + self._pml_ymin_len + self._pml_ymax_len + 2
+        return self._d_len + self._pml_ymin_len + self._pml_ymax_len + 2 * self._pad
 
     def get_nz(self):
-        return self._h_len + self._pml_zmin_len + self._pml_zmax_len + 2
+        return self._h_len + self._pml_zmin_len + self._pml_zmax_len + 2 * self._pad
 
     def get_len_x(self):
         return self._w_len
@@ -171,22 +181,22 @@ class SimulationROI:
         return self._h_len
 
     def get_ix_min(self):
-        return self._pml_xmin_len + 1
+        return self._pml_xmin_len + self._pad
 
     def get_ix_max(self):
-        return self._w_len + self._pml_xmin_len + 1
+        return self._w_len + self._pml_xmin_len + self._pad
 
     def get_iy_min(self):
-        return self._pml_ymin_len + 1
+        return self._pml_ymin_len + self._pad
 
     def get_iy_max(self):
-        return self._d_len + self._pml_ymin_len + 1
+        return self._d_len + self._pml_ymin_len + self._pad
 
     def get_iz_min(self):
-        return self._pml_zmin_len + 1
+        return self._pml_zmin_len + self._pad
 
     def get_iz_max(self):
-        return self._h_len + self._pml_zmin_len + 1
+        return self._h_len + self._pml_zmin_len + self._pad
 
     def get_nearest_grid_idx(self, point):
         """Método para retornar os índices mais próximos da grade para o ponto da ROI fornecido."""
@@ -202,9 +212,9 @@ class SimulationROI:
         if not (self.h_points[0] <= point[2] <= self.h_points[-1]):
             raise IndexError(f"'z' = {point[2]} out of bounds")
 
-        ix = np.absolute(self.w_points - point[0]).argmin() + self._pml_xmin_len + 1
-        iy = np.absolute(self.d_points - point[1]).argmin() + self._pml_ymin_len + 1
-        iz = np.absolute(self.h_points - point[2]).argmin() + self._pml_zmin_len + 1
+        ix = np.absolute(self.w_points - point[0]).argmin() + self._pml_xmin_len + self._pad
+        iy = np.absolute(self.d_points - point[1]).argmin() + self._pml_ymin_len + self._pad
+        iz = np.absolute(self.h_points - point[2]).argmin() + self._pml_zmin_len + self._pad
         return [ix, iy, iz]
 
     # def get_coord(self):
