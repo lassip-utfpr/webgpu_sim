@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from simul_utils import SimulationROI
 
 
-def sim_cpu(c_n):
-    global source_term
+def sim_cpu():
+    global source_term, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global vx, sigmaxx
     global memory_dvx_dx
@@ -17,7 +17,7 @@ def sim_cpu(c_n):
     global v_2, v_solid_norm
 
     DELTAT_over_rho = dt / rho
-    _ord = c_n.shape[0]
+    _ord = coefs.shape[0]
     idx_i = np.array([[c + 1, -c] for c in range(_ord)]) + (_ord - 1)
     idx_f = np.array([[c + 1, -c] for c in range(_ord)]) - _ord
 
@@ -34,9 +34,9 @@ def sim_cpu(c_n):
             idx_ib = None if idx_i[c, 1] == 0 else idx_i[c, 1]
             idx_fb = None if idx_f[c, 1] == 0 else idx_f[c, 1]
             if c:
-                value_dvx_dx[idx_id:idx_fd] += c_n[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
+                value_dvx_dx[idx_id:idx_fd] += coefs[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
             else:
-                value_dvx_dx[idx_id:idx_fd] = c_n[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
+                value_dvx_dx[idx_id:idx_fd] = coefs[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
 
         memory_dvx_dx[idx_id:idx_fd] = (b_x_half[:-1] * memory_dvx_dx[idx_id:idx_fd] +
                                         a_x_half[:-1] * value_dvx_dx[idx_id:idx_fd])
@@ -56,9 +56,9 @@ def sim_cpu(c_n):
             idx_ib = None if idx_i[c, 1] == 0 else idx_i[c, 1]
             idx_fb = None if idx_f[c, 1] == 0 else idx_f[c, 1]
             if c:
-                value_dsigmaxx_dx[idx_id:idx_fd] += c_n[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
+                value_dsigmaxx_dx[idx_id:idx_fd] += coefs[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
             else:
-                value_dsigmaxx_dx[idx_id:idx_fd] = c_n[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
+                value_dsigmaxx_dx[idx_id:idx_fd] = coefs[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
 
         memory_dsigmaxx_dx[idx_id:idx_fd] = (b_x[1:] * memory_dsigmaxx_dx[idx_id:idx_fd] +
                                              a_x[1:] * value_dsigmaxx_dx[idx_id:idx_fd])
@@ -130,7 +130,7 @@ coefs_Lui = [
     [160083.0/131072.0, -12705.0/131072.0, 22869.0/1310720.0, -5445.0/1835008.0, 847.0/2359296.0, -63.0/2883584.0]
 ]
 beta_min = np.array([0.25, 0.5, 0.6, 0.75, 1.0])  # Valores de beta minimo. Avaliar Eq. (19) para valores melhores
-coefs = np.array(coefs_Lui[0])
+coefs = np.array(coefs_Lui[1])
 
 # -----------------------
 # Leitura da configuracao no formato JSON
@@ -140,17 +140,19 @@ with open('config.json', 'r') as f:
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
     source_term_cfg = configs["source_term"]
+    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
 
     # Verifica as condicoes para avaliacao da ordem de acuraria do calculo das derivadas, segundo Liu 2009
-    for b in range(len(beta_min)):
-        simul_roi = SimulationROI(**configs["roi"], pad=len(coefs_Lui[b]) - 1)
-        wavenumber_x = (2.0 * PI * source_term_cfg["freq"]) / configs["specimen_params"]["cp"]
-        beta = wavenumber_x * simul_roi.w_step / 2.0
-        if beta <= beta_min[b]:
-            coefs = np.array(coefs_Lui[b])
-            break
+    # for b in range(len(beta_min)):
+    #     simul_roi = SimulationROI(**configs["roi"], pad=len(coefs_Lui[b]) - 1)
+    #     wavenumber_x = (2.0 * PI * source_term_cfg["freq"]) / configs["specimen_params"]["cp"]
+    #     beta = wavenumber_x * simul_roi.w_step / 2.0
+    #     if beta <= beta_min[b]:
+    #         coefs = np.array(coefs_Lui[b])
+    #         break
 
-    print(f'Wavenumber_x: {wavenumber_x}\nBeta: {beta}\nOrdem da acuracia: {coefs.shape[0]*2}')
+    # print(f'Wavenumber_x: {wavenumber_x}\nBeta: {beta}\nOrdem da acuracia: {coefs.shape[0]*2}')
+    print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
 # Espessura da PML in pixels
 npoints_pml = configs["roi"]["len_pml_xmin"]  # pegando temporariamente
@@ -318,7 +320,7 @@ ax.set_xlim(0.0, dx * nx)
 ax.set_ylim(vx_min, vx_max)
 
 # Roda a simulacao
-sim_cpu(coefs)
+sim_cpu()
 print("Fim da simulação !!!!!")
 
 # Plota o sinal da fonte
@@ -335,9 +337,3 @@ for irec in range(NREC):
 
 plt.show()
 
-# Plota as velocidades tomadas no sensores
-# plt.figure()
-# plt.plot(sisvx[:, 0])
-# plt.title(f'Receptor {1}')
-#
-# plt.show()
