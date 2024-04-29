@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import wgpu
 
 if wgpu.version_info[1] > 11:
@@ -7,7 +5,9 @@ if wgpu.version_info[1] > 11:
 else:
     import wgpu.backends.rs  # Select backend 0.9.5
 
+from datetime import datetime
 import numpy as np
+from scipy.signal import gausspulse
 import ast
 import matplotlib.pyplot as plt
 from time import time
@@ -87,7 +87,7 @@ class Window(QMainWindow):
 # Funcao do simulador em CPU
 # --------------------------
 def sim_cpu():
-    global source_term
+    global source_term, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global a_z, a_z_half, b_z, b_z_half, k_z, k_z_half
@@ -103,17 +103,26 @@ def sim_cpu():
     global value_dsigmaxx_dx, value_dsigmaxy_dy, value_dsigmaxz_dz
     global value_dsigmaxy_dx, value_dsigmayy_dy, value_dsigmayz_dz
     global sisvx, sisvy, sisvz
-    global v_2, v_solid_norm
-    # global total_energy, total_energy_kinetic, total_energy_potential, v_solid_norm
-    # global epsilon_xx, epsilon_yy, epsilon_zz, epsilon_xy, epsilon_xz, epsilon_yz
+    global v_solid_norm, v_2
     global windows_cpu
 
     DELTAT_over_rho = dt / rho
-    # two_lambda_mu = np.float32(2.0 * (lambda_ + mu))
-    # denom = np.float32(2.0 * mu * (3.0 * lambda_ + 2.0 * mu))
+    _ord = coefs.shape[0]
+    idx_fd = np.array([[c + _ord,  # ini half grid
+                        -c + _ord - 1,  # ini full grid
+                        c - _ord + 1,  # fin half grid
+                        -c - _ord]  # fin full grid
+                       for c in range(_ord)], dtype=np.int32)
 
-    v_min = -1.0
-    v_max = - v_min
+    v_max = 10.0
+    v_min = - v_max
+    ix_min = simul_roi.get_ix_min()
+    ix_max = simul_roi.get_ix_max()
+    iy_min = simul_roi.get_iy_min()
+    iy_max = simul_roi.get_iy_max()
+    iz_min = simul_roi.get_iz_min()
+    iz_max = simul_roi.get_iz_max()
+
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
         # Calculo da tensao [stress] - {sigma} (equivalente a pressao nos gases-liquidos)
@@ -389,7 +398,7 @@ def sim_cpu():
 # Funcao do simulador em WebGPU
 # -----------------------------
 def sim_webgpu(device):
-    global source_term
+    global source_term, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global a_z, a_z_half, b_z, b_z_half, k_z, k_z_half
@@ -408,7 +417,8 @@ def sim_webgpu(device):
     global windows_gpu
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
-    params_i32 = np.array([nx, ny, nz, npoints_pml, NSTEP, NSRC, NREC, 0], dtype=np.int32)
+    _ord = coefs.shape[0]
+    params_i32 = np.array([nx, ny, nz, NSTEP, NSRC, NREC, _ord, 0], dtype=np.int32)
     params_f32 = np.array([cp, cs, dx, dy, dz, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
@@ -449,19 +459,34 @@ def sim_webgpu(device):
     # Coeficientes de absorcao
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 2
-    b_coef_x = device.create_buffer_with_data(data=np.column_stack((a_x, b_x, k_x, a_x_half, b_x_half, k_x_half)),
+    b_coef_x = device.create_buffer_with_data(data=np.column_stack((a_x.flatten(),
+                                                                    b_x.flatten(),
+                                                                    k_x.flatten(),
+                                                                    a_x_half.flatten(),
+                                                                    b_x_half.flatten(),
+                                                                    k_x_half.flatten())),
                                               usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_SRC)
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 3
-    b_coef_y = device.create_buffer_with_data(data=np.row_stack((a_y, b_y, k_y, a_y_half, b_y_half, k_y_half)),
+    b_coef_y = device.create_buffer_with_data(data=np.column_stack((a_y.flatten(),
+                                                                    b_y.flatten(),
+                                                                    k_y.flatten(),
+                                                                    a_y_half.flatten(),
+                                                                    b_y_half.flatten(),
+                                                                    k_y_half.flatten())),
                                               usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_SRC)
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 4
-    b_coef_z = device.create_buffer_with_data(data=np.row_stack((a_z, b_z, k_z, a_z_half, b_z_half, k_z_half)),
+    b_coef_z = device.create_buffer_with_data(data=np.column_stack((a_z.flatten(),
+                                                                    b_z.flatten(),
+                                                                    k_z.flatten(),
+                                                                    a_z_half.flatten(),
+                                                                    b_z_half.flatten(),
+                                                                    k_z_half.flatten())),
                                               usage=wgpu.BufferUsage.STORAGE |
                                                     wgpu.BufferUsage.COPY_SRC)
 
@@ -470,6 +495,18 @@ def sim_webgpu(device):
     # Binding 5
     b_param_int32 = device.create_buffer_with_data(data=params_i32, usage=wgpu.BufferUsage.STORAGE |
                                                                           wgpu.BufferUsage.COPY_SRC)
+
+    # Buffers com os indices para o calculo das derivadas com acuracia maior
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 25
+    idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(_ord)], dtype=np.int32)
+    b_idx_fd = device.create_buffer_with_data(data=idx_fd, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+
+    # Buffer com os coeficientes para ao calculo das derivadas
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 28
+    b_fd_coeffs = device.create_buffer_with_data(data=coefs, usage=wgpu.BufferUsage.STORAGE |
+                                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Buffers com os arrays de simulacao
     # Velocidades
@@ -603,6 +640,16 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 25,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 28,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
          }
     ]
 
@@ -687,6 +734,14 @@ def sim_webgpu(device):
             "binding": 24,
             "resource": {"buffer": b_sour_pos_z, "offset": 0, "size": b_sour_pos_z.size},
         },
+        {
+            "binding": 25,
+            "resource": {"buffer": b_idx_fd, "offset": 0, "size": b_idx_fd.size},
+        },
+        {
+            "binding": 28,
+            "resource": {"buffer": b_fd_coeffs, "offset": 0, "size": b_fd_coeffs.size},
+        },
     ]
     b_sim_arrays = [
         {
@@ -767,6 +822,8 @@ def sim_webgpu(device):
     bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
 
     # Cria os pipelines de execucao
+    compute_teste_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                          compute={"module": cshader, "entry_point": "teste_kernel"})
     compute_sigma_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                           compute={"module": cshader, "entry_point": "sigma_kernel"})
     compute_velocity_kernel = device.create_compute_pipeline(layout=pipeline_layout,
@@ -779,8 +836,8 @@ def sim_webgpu(device):
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
 
-    v_min = -1.0
-    v_max = - v_min
+    v_max = 100.0
+    v_min = - v_max
     v_sol_n = np.zeros(NSTEP, dtype=flt32)
     ix_min = simul_roi.get_ix_min()
     ix_max = simul_roi.get_ix_max()
@@ -801,7 +858,11 @@ def sim_webgpu(device):
         compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
         compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
 
-        # Ativa o pipeline de execucao do calculo dos es stresses
+        # Ativa o pipeline de teste
+        # compute_pass.set_pipeline(compute_teste_kernel)
+        # compute_pass.dispatch_workgroups(nx // wsx, ny // wsy, nz // wsz)
+
+        # Ativa o pipeline de execucao do calculo dos estresses
         compute_pass.set_pipeline(compute_sigma_kernel)
         compute_pass.dispatch_workgroups(nx // wsx, ny // wsy, nz // wsz)
 
@@ -909,6 +970,21 @@ def sim_webgpu(device):
 # ----------------------------------------------------------
 # Aqui comeca o codigo principal de execucao dos simuladores
 # ----------------------------------------------------------
+# Constantes
+PI = np.pi
+DEGREES_TO_RADIANS = PI / 180.0
+ZERO = 0.0
+STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
+
+# Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
+coefs_Lui = [
+    [9.0/8.0, -1.0/24.0],
+    [75.0/64.0, -25.0/384.0, 3.0/640.0],
+    [1225.0/1024.0, -245.0/3072.0, 49.0/5120.0, -5.0/7168.0],
+    [19845.0/16384.0, -735.0/8192.0, 567.0/40960.0, -405.0/229376.0, 35.0/294912.0],
+    [160083.0/131072.0, -12705.0/131072.0, 22869.0/1310720.0, -5445.0/1835008.0, 847.0/2359296.0, -63.0/2883584.0]
+]
+
 # Parametros dos ensaios
 flt32 = np.float32
 n_iter_gpu = 1
@@ -929,17 +1005,24 @@ save_results = False
 gpu_type = "NVIDIA"
 
 # -----------------------
-# Inicializacao do WebGPU
+# Leitura da configuracao no formato JSON
 # -----------------------
-# Le as configuracoes do simulador de um arquivo JSON
 with open('config.json', 'r') as f:
     configs = ast.literal_eval(f.read())
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
-    simul_roi = SimulationROI(**configs["roi"])
+    source_term_cfg = configs["source_term"]
+    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=np.float32)
+    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
+    print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
+# -----------------------
+# Inicializacao do WebGPU
+# -----------------------
 device_gpu = None
 if do_sim_gpu:
+    # =====================
+    # webgpu configurations
     if gpu_type == "NVIDIA":
         device_gpu = wgpu.utils.get_default_device()
     else:
@@ -951,40 +1034,36 @@ if do_sim_gpu:
         device_gpu = adapter.request_device()
 
 # Espessura da PML in pixels
-npoints_pml = configs["roi"]["len_pml_xmin"]  # pegando temporariamente
+npoints_pml_x = configs["roi"]["len_pml_xmin"]  # pegando temporariamente
+npoints_pml_y = configs["roi"]["len_pml_ymin"]  # pegando temporariamente
+npoints_pml_z = configs["roi"]["len_pml_zmin"]  # pegando temporariamente
 
 # Parametros da simulacao
 nx = simul_roi.get_nx()
 ny = simul_roi.get_ny()
 nz = simul_roi.get_nz()
 
-# Escala do grid (valor do passo no espaco em metros)
-dx = simul_roi.w_step * 0.001
-dy = simul_roi.d_step * 0.001
-dz = simul_roi.h_step * 0.001
+# Escala do grid (valor do passo no espaco em milimetros)
+dx = simul_roi.w_step
+dy = simul_roi.d_step
+dz = simul_roi.h_step
 one_dx = 1.0 / dx
 one_dy = 1.0 / dy
 one_dz = 1.0 / dz
 
-# Constantes
-PI = np.pi
-DEGREES_TO_RADIANS = PI / 180.0
-ZERO = 0.0
-STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
-
 # Velocidades do som e densidade do meio
-cp = 3300.0  # [m/s]
-cs = 1000.0  # [m/s]
-rho = 2800.0
+cp = configs["specimen_params"]["cp"]  # [mm/us]
+cs = configs["specimen_params"]["cs"]  # [mm/us]
+rho = configs["specimen_params"]["rho"]
 mu = rho * cs * cs
 lambda_ = rho * (cp * cp - 2.0 * cs * cs)
 lambdaplus2mu = rho * cp * cp
 
 # Numero total de passos de tempo
-NSTEP = 5000
+NSTEP = configs["simul_params"]["time_steps"]
 
-# Passo de tempo em segundos
-dt = 1.0e-8
+# Passo de tempo em microssegundos
+dt = configs["simul_params"]["dt"]
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
 IT_DISPLAY = 10
@@ -997,18 +1076,13 @@ iy_src = i_src[:, 1].astype(np.int32)
 iz_src = i_src[:, 2].astype(np.int32)
 
 # Parametros da fonte
-f0 = 5.0e6  # frequencia
-t0_std = 1.20 / f0
+f0 = source_term_cfg["freq"]  # frequencia [MHz]
 t0 = data_src[:, 3].reshape((1, NSRC))
-factor = 1.0e7
-a = PI ** 2 * f0 ** 2
+factor = flt32(source_term_cfg["gain"])
 t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
 
-# First derivative of a Gaussian
-source_term = -(factor * 2.0 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
-
-# Funcao de Ricker (segunda derivada de uma gaussiana)
-# source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
+# Gauss pulse
+source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
 
 # Define a localizacao dos receptores
 NREC = data_rec.shape[0]
@@ -1102,9 +1176,9 @@ value_dsigmayz_dy = np.zeros((nx, ny, nz), dtype=flt32)
 value_dsigmayz_dz = np.zeros((nx, ny, nz), dtype=flt32)
 
 # Inicializacao dos parametros da PML (definicao dos perfis de absorcao na regiao da PML)
-thickness_pml_x = npoints_pml * dx
-thickness_pml_y = npoints_pml * dy
-thickness_pml_z = npoints_pml * dz
+thickness_pml_x = npoints_pml_x * dx
+thickness_pml_y = npoints_pml_y * dy
+thickness_pml_z = npoints_pml_z * dz
 
 # Coeficiente de reflexao (INRIA report section 6.1) http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
 rcoef = 0.0001
@@ -1129,20 +1203,21 @@ print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')
 print(f'd0_z = {d0_z}\n')
 
+pad_deriv = 2*(coefs.shape[0] - 1)
 # Amortecimento na direcao "x" (horizontal)
 # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
 x_orig_left = thickness_pml_x
-x_orig_right = (nx - 3) * dx - thickness_pml_x
+x_orig_right = (nx - pad_deriv - 1) * dx - thickness_pml_x
 
 # Perfil de amortecimento na direcao "x" dentro do grid
-i = np.arange(nx - 2)
+i = np.arange(nx - pad_deriv)
 xval = dx * i
 xval_pml_left = x_orig_left - xval
 xval_pml_right = xval - x_orig_right
 x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
 x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
 x_mask = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-x_pml = np.zeros(nx - 2)
+x_pml = np.zeros(nx - pad_deriv)
 x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
 x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
 x_norm = x_pml / thickness_pml_x
@@ -1150,7 +1225,7 @@ d_x = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 k_x = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 alpha_x = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32), axis=(1, 2))
 b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-a_x = np.zeros((nx - 2, 1, 1), dtype=flt32)
+a_x = np.zeros((nx - pad_deriv, 1, 1), dtype=flt32)
 i = np.where(d_x > 1e-6)
 a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
 
@@ -1160,7 +1235,7 @@ xval_pml_right = (xval + dx / 2.0) - x_orig_right
 x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
 x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
 x_mask_half = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-x_pml = np.zeros(nx - 2)
+x_pml = np.zeros(nx - pad_deriv)
 x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
 x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
 x_norm = x_pml / thickness_pml_x
@@ -1168,24 +1243,24 @@ d_x_half = np.expand_dims((d0_x * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 k_x_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32), axis=(1, 2))
 alpha_x_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32), axis=(1, 2))
 b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
-a_x_half = np.zeros((nx - 2, 1, 1), dtype=flt32)
+a_x_half = np.zeros((nx - pad_deriv, 1, 1), dtype=flt32)
 i = np.where(d_x_half > 1e-6)
 a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
 
 # Amortecimento na direcao "y" (vertical)
 # Origem da PML (posicao das bordas superior e inferior menos a espessura, em unidades de distancia)
 y_orig_top = thickness_pml_y
-y_orig_bottom = (ny - 3) * dy - thickness_pml_y
+y_orig_bottom = (ny - pad_deriv - 1) * dy - thickness_pml_y
 
 # Perfil de amortecimento na direcao "y" dentro do grid
-j = np.arange(ny - 2)
+j = np.arange(ny - pad_deriv)
 yval = dy * j
 y_pml_top = y_orig_top - yval
 y_pml_bottom = yval - y_orig_bottom
 y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
 y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
 y_mask = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
-y_pml = np.zeros(ny - 2)
+y_pml = np.zeros(ny - pad_deriv)
 y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
 y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
 y_norm = y_pml / thickness_pml_y
@@ -1193,7 +1268,7 @@ d_y = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 k_y = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 alpha_y = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask, y_norm, 1.0))).astype(flt32), axis=(0, 2))
 b_y = np.exp(-(d_y / k_y + alpha_y) * dt).astype(flt32)
-a_y = np.zeros((1, ny - 2, 1), dtype=flt32)
+a_y = np.zeros((1, ny - pad_deriv, 1), dtype=flt32)
 j = np.where(d_y > 1e-6)
 a_y[j] = d_y[j] * (b_y[j] - 1.0) / (k_y[j] * (d_y[j] + k_y[j] * alpha_y[j]))
 
@@ -1203,7 +1278,7 @@ y_pml_bottom = (yval + dy / 2.0) - y_orig_bottom
 y_pml_mask_top = np.where(y_pml_top < 0.0, False, True)
 y_pml_mask_bottom = np.where(y_pml_bottom < 0.0, False, True)
 y_mask_half = np.logical_or(y_pml_mask_top, y_pml_mask_bottom)
-y_pml = np.zeros(ny - 2)
+y_pml = np.zeros(ny - pad_deriv)
 y_pml[y_pml_mask_top] = y_pml_top[y_pml_mask_top]
 y_pml[y_pml_mask_bottom] = y_pml_bottom[y_pml_mask_bottom]
 y_norm = y_pml / thickness_pml_y
@@ -1211,24 +1286,24 @@ d_y_half = np.expand_dims((d0_y * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 k_y_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * y_norm ** NPOWER).astype(flt32), axis=(0, 2))
 alpha_y_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(y_mask_half, y_norm, 1.0))).astype(flt32), axis=(0, 2))
 b_y_half = np.exp(-(d_y_half / k_y_half + alpha_y_half) * dt).astype(flt32)
-a_y_half = np.zeros((1, ny - 2, 1), dtype=flt32)
+a_y_half = np.zeros((1, ny - pad_deriv, 1), dtype=flt32)
 j = np.where(d_y_half > 1e-6)
 a_y_half[j] = d_y_half[j] * (b_y_half[j] - 1.0) / (k_y_half[j] * (d_y_half[j] + k_y_half[j] * alpha_y_half[j]))
 
 # Amortecimento na direcao "z" (profundidade)
 # Origem da PML (posicao das bordas frontal e fundos menos a espessura, em unidades de distancia)
 z_orig_front = thickness_pml_z
-z_orig_back = (nz - 3) * dz - thickness_pml_z
+z_orig_back = (nz - pad_deriv - 1) * dz - thickness_pml_z
 
 # Perfil de amortecimento na direcao "z" dentro do grid
-k = np.arange(nz - 2)
+k = np.arange(nz - pad_deriv)
 zval = dz * k
 z_pml_front = z_orig_front - zval
 z_pml_back = zval - z_orig_back
 z_pml_mask_front = np.where(z_pml_front < 0.0, False, True)
 z_pml_mask_back = np.where(z_pml_back < 0.0, False, True)
 z_mask = np.logical_or(z_pml_mask_front, z_pml_mask_back)
-z_pml = np.zeros(nz - 2)
+z_pml = np.zeros(nz - pad_deriv)
 z_pml[z_pml_mask_front] = z_pml_front[z_pml_mask_front]
 z_pml[z_pml_mask_back] = z_pml_back[z_pml_mask_back]
 z_norm = z_pml / thickness_pml_z
@@ -1236,7 +1311,7 @@ d_z = np.expand_dims((d0_z * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 k_z = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 alpha_z = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(z_mask, z_norm, 1.0))).astype(flt32), axis=(0, 1))
 b_z = np.exp(-(d_z / k_z + alpha_z) * dt).astype(flt32)
-a_z = np.zeros((1, 1, nz - 2), dtype=flt32)
+a_z = np.zeros((1, 1, nz - pad_deriv), dtype=flt32)
 k = np.where(d_z > 1e-6)
 a_z[k] = d_z[k] * (b_z[k] - 1.0) / (k_z[k] * (d_z[k] + k_z[k] * alpha_z[k]))
 
@@ -1246,7 +1321,7 @@ z_pml_back = (zval + dz / 2.0) - z_orig_back
 z_pml_mask_front = np.where(z_pml_front < 0.0, False, True)
 z_pml_mask_back = np.where(z_pml_back < 0.0, False, True)
 z_mask_half = np.logical_or(z_pml_mask_front, z_pml_mask_back)
-z_pml = np.zeros(nz - 2)
+z_pml = np.zeros(nz - pad_deriv)
 z_pml[z_pml_mask_front] = z_pml_front[z_pml_mask_front]
 z_pml[z_pml_mask_back] = z_pml_back[z_pml_mask_back]
 z_norm = z_pml / thickness_pml_z
@@ -1254,7 +1329,7 @@ d_z_half = np.expand_dims((d0_z * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 k_z_half = np.expand_dims((1.0 + (K_MAX_PML - 1.0) * z_norm ** NPOWER).astype(flt32), axis=(0, 1))
 alpha_z_half = np.expand_dims((ALPHA_MAX_PML * (1.0 - np.where(z_mask_half, z_norm, 1.0))).astype(flt32), axis=(0, 1))
 b_z_half = np.exp(-(d_z_half / k_z_half + alpha_z_half) * dt).astype(flt32)
-a_z_half = np.zeros((1, 1, nz - 2), dtype=flt32)
+a_z_half = np.zeros((1, 1, nz - pad_deriv), dtype=flt32)
 k = np.where(d_z_half > 1e-6)
 a_z_half[k] = d_z_half[k] * (b_z_half[k] - 1.0) / (k_z_half[k] * (d_z_half[k] + k_z_half[k] * alpha_z_half[k]))
 
@@ -1298,15 +1373,24 @@ if show_anim:
         x_pos = 800 + np.arange(3) * (nx + 10)
         y_pos = 100 + np.arange(3) * (ny + 50)
         windows_cpu_data = [
-            {"title": "Vx - Plano XY [CPU]", "geometry": (x_pos[0], y_pos[0], vx.shape[0] - 2, vx.shape[1] - 2)},
-            {"title": "Vy - Plano XY [CPU]", "geometry": (x_pos[1], y_pos[0], vy.shape[0] - 2, vy.shape[1] - 2)},
-            {"title": "Vz - Plano XY [CPU]", "geometry": (x_pos[2], y_pos[0], vz.shape[0] - 2, vz.shape[1] - 2)},
-            {"title": "Vx - Plano XZ [CPU]", "geometry": (x_pos[0], y_pos[1], vx.shape[0] - 2, vx.shape[2] - 2)},
-            {"title": "Vy - Plano XZ [CPU]", "geometry": (x_pos[1], y_pos[1], vy.shape[0] - 2, vy.shape[2] - 2)},
-            {"title": "Vz - Plano XZ [CPU]", "geometry": (x_pos[2], y_pos[1], vz.shape[0] - 2, vz.shape[2] - 2)},
-            {"title": "Vx - Plano YZ [CPU]", "geometry": (x_pos[0], y_pos[2], vx.shape[1] - 2, vx.shape[2] - 2)},
-            {"title": "Vy - Plano YZ [CPU]", "geometry": (x_pos[1], y_pos[2], vy.shape[1] - 2, vy.shape[2] - 2)},
-            {"title": "Vz - Plano YZ [CPU]", "geometry": (x_pos[2], y_pos[2], vz.shape[1] - 2, vz.shape[2] - 2)},
+            {"title": "Vx - Plano XY [CPU]", "geometry": (x_pos[0], y_pos[0],
+                                                          vx.shape[0] - pad_deriv, vx.shape[1] - pad_deriv)},
+            {"title": "Vy - Plano XY [CPU]", "geometry": (x_pos[1], y_pos[0],
+                                                          vy.shape[0] - pad_deriv, vy.shape[1] - pad_deriv)},
+            {"title": "Vz - Plano XY [CPU]", "geometry": (x_pos[2], y_pos[0],
+                                                          vz.shape[0] - pad_deriv, vz.shape[1] - pad_deriv)},
+            {"title": "Vx - Plano XZ [CPU]", "geometry": (x_pos[0], y_pos[1],
+                                                          vx.shape[0] - pad_deriv, vx.shape[2] - pad_deriv)},
+            {"title": "Vy - Plano XZ [CPU]", "geometry": (x_pos[1], y_pos[1],
+                                                          vy.shape[0] - pad_deriv, vy.shape[2] - pad_deriv)},
+            {"title": "Vz - Plano XZ [CPU]", "geometry": (x_pos[2], y_pos[1],
+                                                          vz.shape[0] - pad_deriv, vz.shape[2] - pad_deriv)},
+            {"title": "Vx - Plano YZ [CPU]", "geometry": (x_pos[0], y_pos[2],
+                                                          vx.shape[1] - pad_deriv, vx.shape[2] - pad_deriv)},
+            {"title": "Vy - Plano YZ [CPU]", "geometry": (x_pos[1], y_pos[2],
+                                                          vy.shape[1] - pad_deriv, vy.shape[2] - pad_deriv)},
+            {"title": "Vz - Plano YZ [CPU]", "geometry": (x_pos[2], y_pos[2],
+                                                          vz.shape[1] - pad_deriv, vz.shape[2] - pad_deriv)},
         ]
         windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
 
@@ -1529,41 +1613,41 @@ if plot_results:
     if do_sim_cpu:
         vx_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vx - Plane XY\n[CPU] ({nx}x{ny})')
-        plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vx[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
         vy_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vy - Plane XY\n[CPU] ({nx}x{ny})')
-        plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vy[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
         vz_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vz - Plane XY\n[CPU] ({nx}x{ny})')
-        plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vz[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
         vx_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vx - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
-        plt.imshow(vx[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
-                   vx_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vx[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]] -
+                   vx_gpu[1 + npoints_pml_x:-1 - npoints_pml_y, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
         vy_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vy - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
-        plt.imshow(vy[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
-                   vy_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vy[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]] -
+                   vy_gpu[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
         vz_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vz - Plane XY\n({gpu_type}) error simulation ({nx}x{ny})')
-        plt.imshow(vz[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]] -
-                   vz_gpu[1 + npoints_pml:-1 - npoints_pml, 1 + npoints_pml:-1 - npoints_pml, iz_src[0]],
+        plt.imshow(vz[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]] -
+                   vz_gpu[1 + npoints_pml_x:-1 - npoints_pml_x, 1 + npoints_pml_y:-1 - npoints_pml_y, iz_src[0]],
                    aspect='auto', cmap='gray')
         plt.colorbar()
 

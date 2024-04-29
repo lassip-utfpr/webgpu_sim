@@ -129,8 +129,6 @@ coefs_Lui = [
     [19845.0/16384.0, -735.0/8192.0, 567.0/40960.0, -405.0/229376.0, 35.0/294912.0],
     [160083.0/131072.0, -12705.0/131072.0, 22869.0/1310720.0, -5445.0/1835008.0, 847.0/2359296.0, -63.0/2883584.0]
 ]
-beta_min = np.array([0.25, 0.5, 0.6, 0.75, 1.0])  # Valores de beta minimo. Avaliar Eq. (19) para valores melhores
-coefs = np.array(coefs_Lui[1])
 
 # -----------------------
 # Leitura da configuracao no formato JSON
@@ -140,18 +138,8 @@ with open('config.json', 'r') as f:
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
     source_term_cfg = configs["source_term"]
+    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=np.float32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
-
-    # Verifica as condicoes para avaliacao da ordem de acuraria do calculo das derivadas, segundo Liu 2009
-    # for b in range(len(beta_min)):
-    #     simul_roi = SimulationROI(**configs["roi"], pad=len(coefs_Lui[b]) - 1)
-    #     wavenumber_x = (2.0 * PI * source_term_cfg["freq"]) / configs["specimen_params"]["cp"]
-    #     beta = wavenumber_x * simul_roi.w_step / 2.0
-    #     if beta <= beta_min[b]:
-    #         coefs = np.array(coefs_Lui[b])
-    #         break
-
-    # print(f'Wavenumber_x: {wavenumber_x}\nBeta: {beta}\nOrdem da acuracia: {coefs.shape[0]*2}')
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
 # Espessura da PML in pixels
@@ -191,13 +179,6 @@ f0 = source_term_cfg["freq"]  # frequencia [MHz]
 t0 = data_src[:, 3].reshape((1, NSRC))
 factor = flt32(source_term_cfg["gain"])
 t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
-
-# First derivative of a Gaussian
-# a = PI ** 2 * f0 ** 2
-# source_term = -(factor * 2.0 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
-
-# Funcao de Ricker (segunda derivada de uma gaussiana)
-# source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
 
 # Gauss pulse
 source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
