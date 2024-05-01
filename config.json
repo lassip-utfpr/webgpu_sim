@@ -34,7 +34,11 @@
   {
     "time_steps": 4000,
     "dt": 2.0e-3,
-    "ord": 4
+    "ord": 4,
+    "rcoef": 0.0001,
+    "it_display": 10,
+    "npower": 2.0,
+    "k_max_pml": 1.0
   },
   "specimen_params":
   {
