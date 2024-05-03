@@ -20,6 +20,8 @@ from simul_utils import SimulationROI
 # ==========================================================
 # Esse arquivo contem as simulacoes realizadas dentro da GPU.
 # ==========================================================
+flt32 = np.float32
+
 
 # -----------------------------------------------
 # Codigo para visualizacao da janela de simulacao
@@ -102,7 +104,7 @@ def sim_cpu():
     global v_solid_norm, v_2
     global windows_cpu
 
-    DELTAT_over_rho = dt / rho
+    DELTAT_over_rho = flt32(dt / rho)
     _ord = coefs.shape[0]
     idx_fd = np.array([[c + _ord,  # ini half grid
                         -c + _ord - 1,  # ini full grid
@@ -110,7 +112,7 @@ def sim_cpu():
                         -c - _ord]  # fin full grid
                        for c in range(_ord)], dtype=np.int32)
 
-    v_max = 10.0
+    v_max = 100.0
     v_min = - v_max
     ix_min = simul_roi.get_ix_min()
     ix_max = simul_roi.get_ix_max()
@@ -290,20 +292,20 @@ def sim_cpu():
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[:2, :] = ZERO
-        vy[:2, :] = ZERO
+        vx[:_ord, :] = ZERO
+        vy[:_ord, :] = ZERO
 
         # xmax
-        vx[-2:, :] = ZERO
-        vy[-2:, :] = ZERO
+        vx[-_ord:, :] = ZERO
+        vy[-_ord:, :] = ZERO
 
         # ymin
-        vx[:, :2] = ZERO
-        vy[:, :2] = ZERO
+        vx[:, :_ord] = ZERO
+        vy[:, :_ord] = ZERO
 
         # ymax
-        vx[:, -2:] = ZERO
-        vy[:, -2:] = ZERO
+        vx[:, -_ord:] = ZERO
+        vy[:, -_ord:] = ZERO
 
         # Store seismograms
         for _irec in range(NREC):
@@ -741,10 +743,10 @@ def sim_webgpu(device):
 # Aqui comeca o codigo principal de execucao dos simuladores
 # ----------------------------------------------------------
 # Constantes
-PI = np.pi
-DEGREES_TO_RADIANS = PI / 180.0
-ZERO = 0.0
-STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
+PI = flt32(np.pi)
+DEGREES_TO_RADIANS = flt32(PI / 180.0)
+ZERO = flt32(0.0)
+STABILITY_THRESHOLD = flt32(1.0e25)  # Limite para considerar que a simulacao esta instavel
 
 # Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
 coefs_Lui = [
@@ -757,7 +759,6 @@ coefs_Lui = [
 ]
 
 # Parametros dos ensaios
-flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
 do_sim_gpu = True
@@ -780,7 +781,7 @@ with open('config.json', 'r') as f:
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
     source_term_cfg = configs["source_term"]
-    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=np.float32)
+    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
@@ -810,24 +811,24 @@ nx = simul_roi.get_nx()
 ny = simul_roi.get_nz()
 
 # Escala do grid (valor do passo no espaco em milimetros)
-dx = simul_roi.w_step
-dy = simul_roi.h_step
-one_dx = 1.0 / dx
-one_dy = 1.0 / dy
+dx = flt32(simul_roi.w_step)
+dy = flt32(simul_roi.h_step)
+one_dx = flt32(1.0 / dx)
+one_dy = flt32(1.0 / dy)
 
 # Velocidades do som e densidade do meio
-cp = configs["specimen_params"]["cp"]  # [mm/us]
-cs = configs["specimen_params"]["cs"]  # [mm/us]
-rho = configs["specimen_params"]["rho"]
-mu = rho * cs * cs
-lambda_ = rho * (cp * cp - 2.0 * cs * cs)
-lambdaplus2mu = rho * cp * cp
+cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
+cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+rho = flt32(configs["specimen_params"]["rho"])
+mu = flt32(rho * cs * cs)
+lambda_ = flt32(rho * (cp * cp - 2.0 * cs * cs))
+lambdaplus2mu = flt32(rho * cp * cp)
 
 # Numero total de passos de tempo
 NSTEP = configs["simul_params"]["time_steps"]
 
 # Passo de tempo em microssegundos
-dt = configs["simul_params"]["dt"]
+dt = flt32(configs["simul_params"]["dt"])
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
 IT_DISPLAY = configs["simul_params"]["it_display"]
@@ -840,9 +841,9 @@ iy_src = i_src[:, 2].astype(np.int32)
 
 # Parametros da fonte
 f0 = source_term_cfg["freq"]  # frequencia [MHz]
-t0 = data_src[:, 3].reshape((1, NSRC))
+t0 = flt32(data_src[:, 3].reshape((1, NSRC)))
 factor = flt32(source_term_cfg["gain"])
-t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
+t = np.expand_dims(np.arange(NSTEP, dtype=flt32) * dt, axis=1)
 
 # Gauss pulse
 source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
@@ -893,23 +894,23 @@ print(f'Number of points of all the arrays = {nx * ny * N_ARRAYS}')
 print(f'Size in GB of all the arrays = {nx * ny * N_ARRAYS * 4 / (1024 * 1024 * 1024)}\n')
 
 # Valor da potencia para calcular "d0"
-NPOWER = configs["simul_params"]["npower"]
+NPOWER = flt32(configs["simul_params"]["npower"])
 if NPOWER < 1:
     raise ValueError('NPOWER deve ser maior que 1')
 
 # Coeficiente de reflexao e calculo de d0 do relatorio da INRIA section 6.1
 # http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-rcoef = configs["simul_params"]["rcoef"]
-d0_x = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x()
-d0_y = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z()
+rcoef = flt32(configs["simul_params"]["rcoef"])
+d0_x = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x())
+d0_y = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z())
 
 print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')
 
 # Calculo dos coeficientes de amortecimento para a PML
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
-K_MAX_PML = configs["simul_params"]["k_max_pml"]
-ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
+K_MAX_PML = flt32(configs["simul_params"]["k_max_pml"])
+ALPHA_MAX_PML = flt32(2.0 * PI * (f0 / 2.0))  # from Festa and Vilotte
 
 # Perfil de amortecimento na direcao "x" dentro do grid
 a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
@@ -954,7 +955,7 @@ sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-courant_number = cp * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2)
+courant_number = flt32(cp * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2))
 print(f'\nNumero de Courant e {courant_number}')
 if courant_number > 1:
     print("O passo de tempo e muito longo, a simulacao sera instavel")
@@ -970,8 +971,8 @@ sensor_cpu_result = list()
 if show_anim:
     App = pg.QtWidgets.QApplication([])
     if do_sim_cpu:
-        x_pos = 800 + np.arange(3) * (nx + 10)
-        y_pos = 100 + np.arange(3) * (ny + 50)
+        x_pos = 200 + np.arange(3) * (nx + 50)
+        y_pos = 500 + np.arange(3) * (ny + 50)
         windows_cpu_data = [
             {"title": "Vx [CPU]", "geometry": (x_pos[0], y_pos[0],
                                                simul_roi.get_nx(), simul_roi.get_nz())},
@@ -1022,7 +1023,7 @@ if do_sim_gpu:
                 sensor_gpu_result.append(fig)
 
             if show_results:
-                plt.show()
+                plt.show(block=False)
 
 # CPU
 if do_sim_cpu:
@@ -1047,7 +1048,7 @@ if do_sim_cpu:
                 ax[2].set_title(r'$V_x + V_y$')
 
             if show_results:
-                plt.show()
+                plt.show(block=False)
 
 if show_anim and App:
     App.exit()
@@ -1118,9 +1119,6 @@ if plot_results:
                    aspect='auto', cmap='gray')
         plt.colorbar()
 
-    if show_results:
-        plt.show()
-
 if save_results:
     now = datetime.now()
     name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
@@ -1173,3 +1171,6 @@ if save_results:
         if do_sim_gpu and do_sim_cpu:
             f.write(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}\n')
             f.write(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}\n')
+
+if show_results:
+    plt.show()
