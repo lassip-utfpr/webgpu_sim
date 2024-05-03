@@ -1246,23 +1246,6 @@ coefs_Lui = [
      -63.0 / 2883584.0]
 ]
 
-# Parametros dos ensaios
-n_iter_gpu = 1
-n_iter_cpu = 1
-do_sim_gpu = True
-do_sim_cpu = False
-do_comp_fig_cpu_gpu = True
-use_refletors = False
-show_anim = True
-show_xy = False
-show_xz = True
-show_yz = False
-show_debug = False
-plot_results = True
-plot_sensors = True
-show_results = True
-save_results = False
-gpu_type = "NVIDIA"
 
 # -----------------------
 # Leitura da configuracao no formato JSON
@@ -1275,6 +1258,24 @@ with open('config.json', 'r') as f:
     coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
+
+    # Configuracao dos ensaios
+    n_iter_gpu = configs["simul_configs"]["n_iter_gpu"]
+    n_iter_cpu = configs["simul_configs"]["n_iter_cpu"]
+    do_sim_gpu = bool(configs["simul_configs"]["do_sim_gpu"])
+    do_sim_cpu = bool(configs["simul_configs"]["do_sim_cpu"])
+    do_comp_fig_cpu_gpu = bool(configs["simul_configs"]["do_comp_fig_cpu_gpu"])
+    use_refletors = bool(configs["simul_configs"]["use_refletors"])
+    show_anim = bool(configs["simul_configs"]["show_anim"])
+    show_xy = bool(configs["simul_configs"]["show_xy"])
+    show_xz = bool(configs["simul_configs"]["show_xz"])
+    show_yz = bool(configs["simul_configs"]["show_yz"])
+    show_debug = bool(configs["simul_configs"]["show_debug"])
+    plot_results = bool(configs["simul_configs"]["plot_results"])
+    plot_sensors = bool(configs["simul_configs"]["plot_sensors"])
+    show_results = bool(configs["simul_configs"]["show_results"])
+    save_results = bool(configs["simul_configs"]["save_results"])
+    gpu_type = configs["simul_configs"]["gpu_type"]
 
 # -----------------------
 # Inicializacao do WebGPU
