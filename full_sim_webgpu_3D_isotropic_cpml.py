@@ -20,6 +20,8 @@ from simul_utils import SimulationROI
 # ==========================================================
 # Esse arquivo contem as simulacoes realizadas dentro da GPU.
 # ==========================================================
+flt32 = np.float32
+
 
 # -----------------------------------------------
 # Codigo para visualizacao da janela de simulacao
@@ -106,7 +108,7 @@ def sim_cpu():
     global v_solid_norm, v_2
     global windows_cpu
 
-    DELTAT_over_rho = dt / rho
+    DELTAT_over_rho = flt32(dt / rho)
     _ord = coefs.shape[0]
     idx_fd = np.array([[c + _ord,  # ini half grid
                         -c + _ord - 1,  # ini full grid
@@ -114,7 +116,7 @@ def sim_cpu():
                         -c - _ord]  # fin full grid
                        for c in range(_ord)], dtype=np.int32)
 
-    v_max = 10.0
+    v_max = 100.0
     v_min = - v_max
     ix_min = simul_roi.get_ix_min()
     ix_max = simul_roi.get_ix_max()
@@ -205,7 +207,7 @@ def sim_cpu():
         i_diy = idx_fd[0, 1]
         i_dfy = idx_fd[0, 3]
         i_diz = idx_fd[0, 1]
-        i_dfz = idx_fd[0, 3]
+        i_dfz = idx_fd[0, 3] + 1
         for c in range(_ord):
             # Eixo "x"
             i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
@@ -256,7 +258,7 @@ def sim_cpu():
         i_dix = idx_fd[0, 0]
         i_dfx = idx_fd[0, 2]
         i_diy = idx_fd[0, 1]
-        i_dfy = idx_fd[0, 3]
+        i_dfy = idx_fd[0, 3] + 1
         i_diz = idx_fd[0, 1]
         i_dfz = idx_fd[0, 3]
         for c in range(_ord):
@@ -306,7 +308,7 @@ def sim_cpu():
 
         # segunda parte:  i: 1,NX; j: 1,NY-1 -> [1:-1, 1:-2, 1:-2]
         i_dix = idx_fd[0, 1]
-        i_dfx = idx_fd[0, 3]
+        i_dfx = idx_fd[0, 3] + 1
         i_diy = idx_fd[0, 1]
         i_dfy = idx_fd[0, 3]
         i_diz = idx_fd[0, 1]
@@ -558,39 +560,39 @@ def sim_cpu():
 
         # add the source (force vector located at a given grid point)
         for _isrc in range(NSRC):
-            vz[ix_src[_isrc], iy_src[_isrc], iz_src[_isrc]] += source_term[it - 1] * dt / rho
+            vz[ix_src[_isrc], iy_src[_isrc], iz_src[_isrc]] += source_term[it - 1, _isrc] * dt / rho
 
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[:2, :, :] = ZERO
-        vy[:2, :, :] = ZERO
-        vz[:2, :, :] = ZERO
+        vx[:_ord, :, :] = ZERO
+        vy[:_ord, :, :] = ZERO
+        vz[:_ord, :, :] = ZERO
 
         # xmax
-        vx[-2:, :, :] = ZERO
-        vy[-2:, :, :] = ZERO
-        vz[-2:, :, :] = ZERO
+        vx[-_ord:, :, :] = ZERO
+        vy[-_ord:, :, :] = ZERO
+        vz[-_ord:, :, :] = ZERO
 
         # ymin
-        vx[:, :2, :] = ZERO
-        vy[:, :2, :] = ZERO
-        vz[:, :2, :] = ZERO
+        vx[:, :_ord, :] = ZERO
+        vy[:, :_ord, :] = ZERO
+        vz[:, :_ord, :] = ZERO
 
         # ymax
-        vx[:, -2:, :] = ZERO
-        vy[:, -2:, :] = ZERO
-        vz[:, -2:, :] = ZERO
+        vx[:, -_ord:, :] = ZERO
+        vy[:, -_ord:, :] = ZERO
+        vz[:, -_ord:, :] = ZERO
 
         # zmin
-        vx[:, :, :2] = ZERO
-        vy[:, :, :2] = ZERO
-        vz[:, :, :2] = ZERO
+        vx[:, :, :_ord] = ZERO
+        vy[:, :, :_ord] = ZERO
+        vz[:, :, :_ord] = ZERO
 
         # zmax
-        vx[:, :, -2:] = ZERO
-        vy[:, :, -2:] = ZERO
-        vz[:, :, -2:] = ZERO
+        vx[:, :, -_ord:] = ZERO
+        vy[:, :, -_ord:] = ZERO
+        vz[:, :, -_ord:] = ZERO
 
         # Store seismograms
         for _irec in range(NREC):
@@ -598,7 +600,7 @@ def sim_cpu():
             sisvy[it - 1, _irec] = vy[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
             sisvz[it - 1, _irec] = vz[ix_rec[_irec], iy_rec[_irec], iz_rec[_irec]]
 
-        v_2 = vx[:, :, 1: -1] ** 2 + vy[:, :, 1: -1] ** 2 + vz[:, :, 1: -1] ** 2
+        v_2 = vx[:, :, :] ** 2 + vy[:, :, :] ** 2 + vz[:, :, :] ** 2
         v_solid_norm[it - 1] = np.sqrt(np.max(v_2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug:
@@ -606,18 +608,44 @@ def sim_cpu():
                 print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}, Vz = {np.max(vz)}')
                 print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}, Vz = {np.min(vz)}')
                 print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
-                # print(f'Total energy = {total_energy[it - 1]}')
 
             if show_anim:
-                windows_cpu[0].imv.setImage(vx[1:-1, 1:-1, iz_src[0]], levels=[v_min / 10.0, v_max / 10.0])
-                windows_cpu[1].imv.setImage(vy[1:-1, 1:-1, iz_src[0]], levels=[v_min / 10.0, v_max / 10.0])
-                windows_cpu[2].imv.setImage(vz[1:-1, 1:-1, iz_src[0]], levels=[v_min, v_max])
-                windows_cpu[3].imv.setImage(vx[1:-1, iy_src[0], 1:-1], levels=[v_min, v_max])
-                windows_cpu[4].imv.setImage(vy[1:-1, iy_src[0], 1:-1], levels=[v_min / 10.0, v_max / 10.0])
-                windows_cpu[5].imv.setImage(vz[1:-1, iy_src[0], 1:-1], levels=[v_min, v_max])
-                windows_cpu[6].imv.setImage(vx[ix_src[0], 1:-1, 1:-1], levels=[v_min / 10.0, v_max / 10.0])
-                windows_cpu[7].imv.setImage(vy[ix_src[0], 1:-1, 1:-1], levels=[v_min, v_max])
-                windows_cpu[8].imv.setImage(vz[ix_src[0], 1:-1, 1:-1], levels=[v_min, v_max])
+                if show_xy:
+                    idx = 0
+                    windows_cpu[idx].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max, z_plane_idx],
+                                                  levels=[v_min, v_max])
+                    windows_cpu[idx + 1].imv.setImage(vy[ix_min:ix_max, iy_min:iy_max, z_plane_idx],
+                                                      levels=[v_min, v_max])
+                    windows_cpu[idx + 2].imv.setImage(vz[ix_min:ix_max, iy_min:iy_max, z_plane_idx],
+                                                      levels=[v_min, v_max])
+
+                if show_xz:
+                    if not show_xy:
+                        idx = 0
+                    else:
+                        idx = 3
+
+                    windows_cpu[idx].imv.setImage(vx[ix_min:ix_max, y_plane_idx, iz_min:iz_max],
+                                                  levels=[v_min, v_max])
+                    windows_cpu[idx + 1].imv.setImage(vy[ix_min:ix_max, y_plane_idx, iz_min:iz_max],
+                                                      levels=[v_min, v_max])
+                    windows_cpu[idx + 2].imv.setImage(vz[ix_min:ix_max, y_plane_idx, iz_min:iz_max],
+                                                      levels=[v_min, v_max])
+
+                if show_yz:
+                    if not show_xy and not show_xz:
+                        idx = 0
+                    elif (show_xy and not show_xz) or (not show_xy and show_xz):
+                        idx = 3
+                    else:
+                        idx = 6
+
+                    windows_cpu[idx].imv.setImage(vx[x_plane_idx, iy_min:iy_max, iz_min:iz_max],
+                                                  levels=[v_min, v_max])
+                    windows_cpu[idx + 1].imv.setImage(vy[x_plane_idx, iy_min:iy_max, iz_min:iz_max],
+                                                      levels=[v_min, v_max])
+                    windows_cpu[idx + 2].imv.setImage(vz[x_plane_idx, iy_min:iy_max, iz_min:iz_max],
+                                                      levels=[v_min, v_max])
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -1203,22 +1231,22 @@ def sim_webgpu(device):
 # Aqui comeca o codigo principal de execucao dos simuladores
 # ----------------------------------------------------------
 # Constantes
-PI = np.pi
-DEGREES_TO_RADIANS = PI / 180.0
-ZERO = 0.0
-STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
+PI = flt32(np.pi)
+DEGREES_TO_RADIANS = flt32(PI / 180.0)
+ZERO = flt32(0.0)
+STABILITY_THRESHOLD = flt32(1.0e25)  # Limite para considerar que a simulacao esta instavel
 
 # Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
 coefs_Lui = [
-    [9.0/8.0, -1.0/24.0],
-    [75.0/64.0, -25.0/384.0, 3.0/640.0],
-    [1225.0/1024.0, -245.0/3072.0, 49.0/5120.0, -5.0/7168.0],
-    [19845.0/16384.0, -735.0/8192.0, 567.0/40960.0, -405.0/229376.0, 35.0/294912.0],
-    [160083.0/131072.0, -12705.0/131072.0, 22869.0/1310720.0, -5445.0/1835008.0, 847.0/2359296.0, -63.0/2883584.0]
+    [9.0 / 8.0, -1.0 / 24.0],
+    [75.0 / 64.0, -25.0 / 384.0, 3.0 / 640.0],
+    [1225.0 / 1024.0, -245.0 / 3072.0, 49.0 / 5120.0, -5.0 / 7168.0],
+    [19845.0 / 16384.0, -735.0 / 8192.0, 567.0 / 40960.0, -405.0 / 229376.0, 35.0 / 294912.0],
+    [160083.0 / 131072.0, -12705.0 / 131072.0, 22869.0 / 1310720.0, -5445.0 / 1835008.0, 847.0 / 2359296.0,
+     -63.0 / 2883584.0]
 ]
 
 # Parametros dos ensaios
-flt32 = np.float32
 n_iter_gpu = 1
 n_iter_cpu = 1
 do_sim_gpu = True
@@ -1244,7 +1272,7 @@ with open('config.json', 'r') as f:
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
     source_term_cfg = configs["source_term"]
-    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=np.float32)
+    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
@@ -1276,26 +1304,26 @@ ny = simul_roi.get_ny()
 nz = simul_roi.get_nz()
 
 # Escala do grid (valor do passo no espaco em milimetros)
-dx = simul_roi.w_step
-dy = simul_roi.d_step
-dz = simul_roi.h_step
-one_dx = 1.0 / dx
-one_dy = 1.0 / dy
-one_dz = 1.0 / dz
+dx = flt32(simul_roi.w_step)
+dy = flt32(simul_roi.d_step)
+dz = flt32(simul_roi.h_step)
+one_dx = flt32(1.0 / dx)
+one_dy = flt32(1.0 / dy)
+one_dz = flt32(1.0 / dz)
 
 # Velocidades do som e densidade do meio
-cp = configs["specimen_params"]["cp"]  # [mm/us]
-cs = configs["specimen_params"]["cs"]  # [mm/us]
-rho = configs["specimen_params"]["rho"]
-mu = rho * cs * cs
-lambda_ = rho * (cp * cp - 2.0 * cs * cs)
-lambdaplus2mu = rho * cp * cp
+cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
+cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+rho = flt32(configs["specimen_params"]["rho"])
+mu = flt32(rho * cs * cs)
+lambda_ = flt32(rho * (cp * cp - 2.0 * cs * cs))
+lambdaplus2mu = flt32(rho * cp * cp)
 
 # Numero total de passos de tempo
 NSTEP = configs["simul_params"]["time_steps"]
 
 # Passo de tempo em microssegundos
-dt = configs["simul_params"]["dt"]
+dt = flt32(configs["simul_params"]["dt"])
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
 IT_DISPLAY = configs["simul_params"]["it_display"]
@@ -1309,9 +1337,9 @@ iz_src = i_src[:, 2].astype(np.int32)
 
 # Parametros da fonte
 f0 = source_term_cfg["freq"]  # frequencia [MHz]
-t0 = data_src[:, 3].reshape((1, NSRC))
+t0 = flt32(data_src[:, 3].reshape((1, NSRC)))
 factor = flt32(source_term_cfg["gain"])
-t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
+t = np.expand_dims(np.arange(NSTEP, dtype=flt32) * dt, axis=1)
 
 # Gauss pulse
 source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
@@ -1388,16 +1416,16 @@ print(f'Number of points of all the arrays = {nx * ny * nz * N_ARRAYS}')
 print(f'Size in GB of all the arrays = {nx * ny * nz * N_ARRAYS * 4 / (1024 * 1024 * 1024)}\n')
 
 # Valor da potencia para calcular "d0"
-NPOWER = configs["simul_params"]["npower"]
+NPOWER = flt32(configs["simul_params"]["npower"])
 if NPOWER < 1:
     raise ValueError('NPOWER deve ser maior que 1')
 
 # Coeficiente de reflexao e calculo de d0 do relatorio da INRIA section 6.1
 # http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-rcoef = configs["simul_params"]["rcoef"]
-d0_x = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x()
-d0_y = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_y()
-d0_z = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z()
+rcoef = flt32(configs["simul_params"]["rcoef"])
+d0_x = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x())
+d0_y = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_y())
+d0_z = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z())
 
 print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')
@@ -1405,8 +1433,8 @@ print(f'd0_z = {d0_z}\n')
 
 # Calculo dos coeficientes de amortecimento para a PML
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
-K_MAX_PML = configs["simul_params"]["k_max_pml"]
-ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
+K_MAX_PML = flt32(configs["simul_params"]["k_max_pml"])
+ALPHA_MAX_PML = flt32(2.0 * PI * (f0 / 2.0))  # from Festa and Vilotte
 
 # Perfil de amortecimento na direcao "x" dentro do grid
 a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
@@ -1471,7 +1499,7 @@ z_plane_idx = int(nz / 2) if show_xy else 0
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-courant_number = cp * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2)
+courant_number = flt32(cp * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2 + 1.0 / dz ** 2))
 print(f'\nNumero de Courant e {courant_number}')
 if courant_number > 1:
     print("O passo de tempo e muito longo, a simulacao sera instavel")
@@ -1488,7 +1516,7 @@ if show_anim:
     App = pg.QtWidgets.QApplication([])
     if do_sim_cpu:
         x_pos = 200 + np.arange(3) * (nx + 50)
-        y_pos = 100 + np.arange(3) * (ny + 50)
+        y_pos = 500 + np.arange(3) * (ny + 50)
         windows_cpu_data = [
             {"title": "Vx - Plano XY [CPU]",
              "geometry": (x_pos[0], y_pos[0], simul_roi.get_nx(), simul_roi.get_ny()),
@@ -1518,7 +1546,8 @@ if show_anim:
              "geometry": (x_pos[2], y_pos[2], simul_roi.get_ny(), simul_roi.get_nz()),
              "show": show_yz},
         ]
-        windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
+        windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data
+                       if data["show"]]
 
     if do_sim_gpu:
         x_pos = 200 + np.arange(3) * (nx + 50)
@@ -1585,7 +1614,7 @@ if do_sim_gpu:
                 sensor_gpu_result.append(fig)
 
             if show_results:
-                plt.show()
+                plt.show(block=False)
 
 # CPU
 if do_sim_cpu:
@@ -1613,7 +1642,7 @@ if do_sim_cpu:
                 sensor_cpu_result.append(fig)
 
             if show_results:
-                plt.show()
+                plt.show(block=False)
 
 if show_anim and App:
     App.exit()
@@ -1981,9 +2010,6 @@ if plot_results:
                        )
             plt.colorbar()
 
-    if show_results:
-        plt.show()
-
 if save_results:
     now = datetime.now()
     name = (f'results/result_3D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
@@ -2075,3 +2101,6 @@ if save_results:
             f.write(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}\n')
             f.write(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}\n')
             f.write(f'MSE entre as simulacoes [Vz]: {np.sum((vz_gpu - vz) ** 2) / vz.size}\n')
+
+if show_results:
+    plt.show()
