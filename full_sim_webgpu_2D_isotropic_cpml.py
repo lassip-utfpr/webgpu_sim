@@ -792,7 +792,7 @@ device_gpu = None
 if do_sim_gpu:
     # =====================
     # webgpu configurations
-    if gpu_type == "NVIDIA":
+    if gpu_type == "high-perf":
         device_gpu = wgpu.utils.get_default_device()
     else:
         if wgpu.version_info[1] > 11:

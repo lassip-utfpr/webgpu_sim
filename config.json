@@ -57,7 +57,7 @@
     "plot_sensors": 1,
     "show_results": 1,
     "save_results": 0,
-    "gpu_type": "NVIDIA"
+    "gpu_type": "high-perf"
   },
   "specimen_params":
   {
