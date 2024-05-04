@@ -75,10 +75,10 @@ def sim_cpu():
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[:2] = np.float32(0.0)
+        vx[:_ord] = np.float32(0.0)
 
         # xmax
-        vx[-2:] = np.float32(0.0)
+        vx[-_ord:] = np.float32(0.0)
 
         # Store seismograms
         for _irec in range(NREC):
