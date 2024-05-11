@@ -14,8 +14,7 @@ from time import time
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageWidget
-from simul_utils import SimulationROI
-
+from simul_utils import SimulationROI, SimulationProbeLinearArray
 
 # ==========================================================
 # Esse arquivo contem as simulacoes realizadas dentro da GPU.
@@ -55,7 +54,7 @@ class Window(QMainWindow):
         self.isAnimated()
 
         # setting image
-        self.image = np.random.normal(size=(300, 300))
+        self.image = np.random.normal(size=(geometry[2], geometry[3]))
 
         # showing all the widgets
         self.show()
@@ -89,7 +88,7 @@ class Window(QMainWindow):
 # Funcao do simulador em CPU
 # --------------------------
 def sim_cpu():
-    global source_term, coefs
+    global simul_probe, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
@@ -118,6 +117,9 @@ def sim_cpu():
     ix_max = simul_roi.get_ix_max()
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
+
+    # Source terms
+    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
 
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
@@ -287,7 +289,7 @@ def sim_cpu():
 
         # add the source (force vector located at a given grid point)
         for _isrc in range(NSRC):
-            vy[ix_src[_isrc], iy_src[_isrc]] += source_term[it - 1, _isrc] * dt / rho
+            vy[ix_src[_isrc], iy_src[_isrc]] += source_term[it - 1, idx_src[_isrc]] * dt / rho
 
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
@@ -339,7 +341,7 @@ def sim_cpu():
 # Funcao do simulador em WebGPU
 # -----------------------------
 def sim_webgpu(device):
-    global source_term, coefs
+    global simul_probe, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
@@ -358,8 +360,11 @@ def sim_webgpu(device):
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     _ord = coefs.shape[0]
-    params_i32 = np.array([nx, ny, NSTEP, NSRC, NREC, _ord, 0], dtype=np.int32)
+    params_i32 = np.array([nx, ny, NSTEP, simul_probe.num_elem, NSRC, NREC, _ord, 0], dtype=np.int32)
     params_f32 = np.array([cp, cs, dx, dy, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
+
+    # Source terms
+    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_2D_elast_cpml.wgsl') as shader_file:
@@ -390,6 +395,10 @@ def sim_webgpu(device):
     # Binding 23
     b_sour_pos_y = device.create_buffer_with_data(data=iy_src, usage=wgpu.BufferUsage.STORAGE |
                                                                      wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 24
+    b_idx_src = device.create_buffer_with_data(data=idx_src, usage=wgpu.BufferUsage.STORAGE |
+                                                                   wgpu.BufferUsage.COPY_SRC)
 
     # Coeficientes de absorcao
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -503,6 +512,11 @@ def sim_webgpu(device):
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
          },
+        {"binding": 24,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
         {"binding": 25,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
@@ -579,6 +593,10 @@ def sim_webgpu(device):
             "resource": {"buffer": b_sour_pos_y, "offset": 0, "size": b_sour_pos_y.size},
         },
         {
+            "binding": 24,
+            "resource": {"buffer": b_idx_src, "offset": 0, "size": b_idx_src.size},
+        },
+        {
             "binding": 25,
             "resource": {"buffer": b_idx_fd, "offset": 0, "size": b_idx_fd.size},
         },
@@ -639,6 +657,9 @@ def sim_webgpu(device):
     compute_velocity_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                              compute={"module": cshader,
                                                                       "entry_point": "velocity_kernel"})
+    compute_sources_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                            compute={"module": cshader,
+                                                                     "entry_point": "sources_kernel"})
     compute_finish_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                               compute={"module": cshader,
                                                                        "entry_point": "finish_it_kernel"})
@@ -670,12 +691,16 @@ def sim_webgpu(device):
         # compute_pass.set_pipeline(compute_teste_kernel)
         # compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
 
-        # Ativa o pipeline de execucao do calculo dos es stresses
+        # Ativa o pipeline de execucao do calculo dos estresses
         compute_pass.set_pipeline(compute_sigma_kernel)
         compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
 
         # Ativa o pipeline de execucao do calculo das velocidades
         compute_pass.set_pipeline(compute_velocity_kernel)
+        compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
+
+        # Ativa o pipeline de adicao dos termos de fonte
+        compute_pass.set_pipeline(compute_sources_kernel)
         compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
 
         # Ativa o pipeline de execucao dos procedimentos finais da iteracao
@@ -763,11 +788,11 @@ coefs_Lui = [
 # -----------------------
 with open('config.json', 'r') as f:
     configs = ast.literal_eval(f.read())
-    data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
-    source_term_cfg = configs["source_term"]
     coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
+    if "linear" in configs["probe"]:
+        simul_probe = SimulationProbeLinearArray(**configs["probe"]["linear"])
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
     # Configuracao dos ensaios
@@ -834,19 +859,10 @@ dt = flt32(configs["simul_params"]["dt"])
 IT_DISPLAY = configs["simul_params"]["it_display"]
 
 # Define a posicao das fontes
-NSRC = data_src.shape[0]
-i_src = np.array([simul_roi.get_nearest_grid_idx(p[0:3]) for p in data_src])
+i_src = simul_probe.get_points_roi(simul_roi, simul_type="2d")
 ix_src = i_src[:, 0].astype(np.int32)
 iy_src = i_src[:, 2].astype(np.int32)
-
-# Parametros da fonte
-f0 = source_term_cfg["freq"]  # frequencia [MHz]
-t0 = flt32(data_src[:, 3].reshape((1, NSRC)))
-factor = flt32(source_term_cfg["gain"])
-t = np.expand_dims(np.arange(NSTEP, dtype=flt32) * dt, axis=1)
-
-# Gauss pulse
-source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
+NSRC = i_src.shape[0]
 
 # Define a localizacao dos receptores
 NREC = data_rec.shape[0]
@@ -910,7 +926,7 @@ print(f'd0_y = {d0_y}')
 # Calculo dos coeficientes de amortecimento para a PML
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
 K_MAX_PML = flt32(configs["simul_params"]["k_max_pml"])
-ALPHA_MAX_PML = flt32(2.0 * PI * (f0 / 2.0))  # from Festa and Vilotte
+ALPHA_MAX_PML = flt32(2.0 * PI * (simul_probe.get_freq() / 2.0))  # from Festa and Vilotte
 
 # Perfil de amortecimento na direcao "x" dentro do grid
 a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
@@ -940,14 +956,9 @@ a_y_half = np.expand_dims(a_y_half.astype(flt32), axis=0)
 b_y_half = np.expand_dims(b_y_half.astype(flt32), axis=0)
 k_y_half = np.expand_dims(k_y_half.astype(flt32), axis=0)
 
-# Imprime a posicao das fontes e dos receptores
+# Imprime a quantidade de fontes e receptores
 print(f'Existem {NSRC} fontes')
-for isrc in range(NSRC):
-    print(f'Fonte {isrc}: i = {ix_src[isrc]:3}, j = {iy_src[isrc]:3}')
-
-print(f'\nExistem {NREC} receptores')
-for irec in range(NREC):
-    print(f'Receptor {irec}: i = {ix_rec[irec]:3}, j = {iy_rec[irec]:3}')
+print(f'Existem {NREC} receptores')
 
 # Arrays para armazenamento dos sinais dos sensores
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
@@ -1072,51 +1083,65 @@ if do_sim_gpu and do_sim_cpu:
 if plot_results:
     if do_sim_gpu:
         vx_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vx ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+        plt.title(f'GPU simulation Vx\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0]))
         plt.colorbar()
 
         vy_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vy ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+        plt.title(f'GPU simulation Vy\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0])
+                   )
         plt.colorbar()
 
     if do_sim_cpu:
         vx_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vx ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0])
+                   )
         plt.colorbar()
 
         vy_cpu_sim_result = plt.figure()
         plt.title(f'CPU simulation Vy ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0]))
         plt.colorbar()
 
     if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
         vx_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vx ({gpu_type}) error simulation ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()] -
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T -
                    vx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0]))
         plt.colorbar()
 
         vy_comp_sim_result = plt.figure()
         plt.title(f'CPU vs GPU Vy ({gpu_type}) error simulation ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
         plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()] -
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T -
                    vy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()],
-                   aspect='auto', cmap='gray')
+                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                   aspect='auto', cmap='gray',
+                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                           simul_roi.h_points[-1], simul_roi.h_points[0]))
         plt.colorbar()
 
 if save_results:

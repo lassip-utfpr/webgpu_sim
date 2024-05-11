@@ -3,8 +3,9 @@ struct SimIntValues {
     y_sz: i32,          // y field size
     z_sz: i32,          // z field size
     n_iter: i32,        // num iterations
-    n_src: i32,         // num sources
-    n_rec: i32,         // num receptors
+    n_probe_elem: i32,  // num probe elements
+    n_src: i32,         // num sources points
+    n_rec: i32,         // num receptors points
     fd_coeff: i32,      // num fd coefficients
     it: i32             // time iteraction
 };
@@ -37,6 +38,9 @@ var<storage,read> sources_pos_y: array<i32>;
 
 @group(0) @binding(24) // source positions
 var<storage,read> sources_pos_z: array<i32>;
+
+@group(0) @binding(27) // source term index
+var<storage,read> idx_src: array<i32>;
 
 @group(0) @binding(2) // a_x, b_x, k_x, a_x_h, b_x_h, k_x_h
 var<storage,read> coef_x: array<f32>;
@@ -136,8 +140,8 @@ fn ijkl(i: i32, j: i32, k: i32, l: i32, i_max: i32, j_max: i32, k_max: i32, l_ma
 // --- Force array access funtions ---
 // ------------------------------------
 // function to get a source_term array value
-fn get_source_term(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_src);
+fn get_source_term(n: i32, e: i32) -> f32 {
+    let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_probe_elem);
 
     return select(0.0, source_term[index], index != -1);
 }
@@ -155,6 +159,11 @@ fn get_sour_pos_y(s: i32) -> i32 {
 // function to get a z index position of a source
 fn get_sour_pos_z(s: i32) -> i32 {
     return select(-1, sources_pos_z[s], s >= 0 && s < sim_int_par.n_src);
+}
+
+// function to get a source term index of a source
+fn get_idx_src(p: i32) -> i32 {
+    return select(-1, idx_src[p], p >= 0 && p < sim_int_par.n_src);
 }
 
 // -------------------------------------------------
@@ -1108,6 +1117,26 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     }
 }
 
+// Kernel to add the sources forces
+@compute
+@workgroup_size(wsx, wsy, wsz)
+fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
+    let x: i32 = i32(index.x);          // x thread index
+    let y: i32 = i32(index.y);          // y thread index
+    let z: i32 = i32(index.z);          // y thread index
+    let dt_over_rho: f32 = sim_flt_par.dt / sim_flt_par.rho;
+    let it: i32 = sim_int_par.it;
+
+    // Add the source force
+    for(var s: i32 = 0; s < sim_int_par.n_src; s++) {
+        var idx_src_term: i32 = get_idx_src(s);
+        if(x == get_sour_pos_x(s) && y == get_sour_pos_y(s) && z == get_sour_pos_z(s)) {
+            set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it, idx_src_term) * dt_over_rho);
+            break;
+        }
+    }
+}
+
 // Kernel to finish iteration term
 @compute
 @workgroup_size(wsx, wsy, wsz)
@@ -1115,7 +1144,6 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
     let z: i32 = i32(index.z);          // y thread index
-    let dt_over_rho: f32 = sim_flt_par.dt / sim_flt_par.rho;
     let it: i32 = sim_int_par.it;
     let last: i32 = sim_int_par.fd_coeff - 1;
     let id_x_i: i32 = -get_idx_fh(last);
@@ -1125,13 +1153,6 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let id_z_i: i32 = -get_idx_fh(last);
     let id_z_f: i32 = sim_int_par.z_sz - get_idx_ih(last);
 
-    // Add the source force
-    for(var s: i32 = 0; s < sim_int_par.n_src; s++) {
-        if(x == get_sour_pos_x(s) && y == get_sour_pos_y(s) && z == get_sour_pos_z(s)) {
-            set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it, s) * dt_over_rho);
-            break;
-        }
-    }
 
     // Apply Dirichlet conditions
     if(x <= id_x_i || x >= id_x_f || y <= id_y_i || y >= id_y_f || z <= id_z_i || z >= id_z_f) {
