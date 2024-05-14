@@ -28,12 +28,6 @@ var<storage,read> sim_flt_par: SimFltValues;
 @group(0) @binding(1) // source term
 var<storage,read> source_term: array<f32>;
 
-@group(0) @binding(22) // source positions
-var<storage,read> sources_pos_x: array<i32>;
-
-@group(0) @binding(23) // source positions
-var<storage,read> sources_pos_y: array<i32>;
-
 @group(0) @binding(24) // source term index
 var<storage,read> idx_src: array<i32>;
 
@@ -104,19 +98,11 @@ fn get_source_term(n: i32, e: i32) -> f32 {
     return select(0.0, source_term[index], index != -1);
 }
 
-// function to get a x index position of a source
-fn get_sour_pos_x(s: i32) -> i32 {
-    return select(-1, sources_pos_x[s], s >= 0 && s < sim_int_par.n_src);
-}
-
-// function to get a y index position of a source
-fn get_sour_pos_y(s: i32) -> i32 {
-    return select(-1, sources_pos_y[s], s >= 0 && s < sim_int_par.n_src);
-}
-
 // function to get a source term index of a source
-fn get_idx_src(p: i32) -> i32 {
-    return select(-1, idx_src[p], p >= 0 && p < sim_int_par.n_src);
+fn get_idx_source_term(x: i32, y: i32) -> i32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(-1, idx_src[index], index != -1);
 }
 
 // -------------------------------------------------
@@ -680,12 +666,9 @@ fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let it: i32 = sim_int_par.it;
 
     // Add the source force
-    for(var s: i32 = 0; s < sim_int_par.n_src; s++) {
-        var idx_src_term: i32 = get_idx_src(s);
-        if(x == get_sour_pos_x(s) && y == get_sour_pos_y(s)) {
-            set_vy(x, y, get_vy(x, y) + get_source_term(it, idx_src_term) * dt_over_rho);
-            break;
-        }
+    let idx_src_term: i32 = get_idx_source_term(x, y);
+    if(idx_src_term != -1) {
+        set_vy(x, y, get_vy(x, y) + get_source_term(it, idx_src_term) * dt_over_rho);
     }
 }
 

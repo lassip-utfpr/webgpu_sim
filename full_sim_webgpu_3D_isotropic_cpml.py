@@ -684,6 +684,8 @@ def sim_webgpu(device):
 
     # Source terms
     source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+    pos_sources = -np.ones((nx, ny, nz), dtype=np.int32)
+    pos_sources[ix_src, iy_src, iz_src] = idx_src.astype(np.int32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_3D_elast_cpml.wgsl') as shader_file:
@@ -708,21 +710,9 @@ def sim_webgpu(device):
                                              usage=wgpu.BufferUsage.STORAGE |
                                                    wgpu.BufferUsage.COPY_SRC)
 
-    # Binding 22
-    b_sour_pos_x = device.create_buffer_with_data(data=ix_src, usage=wgpu.BufferUsage.STORAGE |
-                                                                     wgpu.BufferUsage.COPY_SRC)
-
-    # Binding 23
-    b_sour_pos_y = device.create_buffer_with_data(data=iy_src, usage=wgpu.BufferUsage.STORAGE |
-                                                                     wgpu.BufferUsage.COPY_SRC)
-
-    # Binding 24
-    b_sour_pos_z = device.create_buffer_with_data(data=iz_src, usage=wgpu.BufferUsage.STORAGE |
-                                                                     wgpu.BufferUsage.COPY_SRC)
-
-    # Binding XX
-    b_idx_src = device.create_buffer_with_data(data=idx_src, usage=wgpu.BufferUsage.STORAGE |
-                                                                   wgpu.BufferUsage.COPY_SRC)
+    # Binding 27
+    b_idx_src = device.create_buffer_with_data(data=pos_sources, usage=wgpu.BufferUsage.STORAGE |
+                                                                       wgpu.BufferUsage.COPY_SRC)
 
     # Coeficientes de absorcao
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -892,22 +882,7 @@ def sim_webgpu(device):
         "visibility": wgpu.ShaderStage.COMPUTE,
         "buffer": {
             "type": wgpu.BufferBindingType.storage}
-    },
-        {"binding": 22,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 23,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 24,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
+        },
         {"binding": 25,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
@@ -993,18 +968,6 @@ def sim_webgpu(device):
         {
             "binding": 5,
             "resource": {"buffer": b_param_int32, "offset": 0, "size": b_param_int32.size},
-        },
-        {
-            "binding": 22,
-            "resource": {"buffer": b_sour_pos_x, "offset": 0, "size": b_sour_pos_x.size},
-        },
-        {
-            "binding": 23,
-            "resource": {"buffer": b_sour_pos_y, "offset": 0, "size": b_sour_pos_y.size},
-        },
-        {
-            "binding": 24,
-            "resource": {"buffer": b_sour_pos_z, "offset": 0, "size": b_sour_pos_z.size},
         },
         {
             "binding": 27,
@@ -1391,19 +1354,6 @@ memory_dsigmaxz_dz = np.zeros((nx, ny, nz), dtype=flt32)
 memory_dsigmayz_dy = np.zeros((nx, ny, nz), dtype=flt32)
 memory_dsigmayz_dz = np.zeros((nx, ny, nz), dtype=flt32)
 
-vx = np.zeros((nx, ny, nz), dtype=flt32)
-vy = np.zeros((nx, ny, nz), dtype=flt32)
-vz = np.zeros((nx, ny, nz), dtype=flt32)
-sigmaxx = np.zeros((nx, ny, nz), dtype=flt32)
-sigmayy = np.zeros((nx, ny, nz), dtype=flt32)
-sigmazz = np.zeros((nx, ny, nz), dtype=flt32)
-sigmaxy = np.zeros((nx, ny, nz), dtype=flt32)
-sigmaxz = np.zeros((nx, ny, nz), dtype=flt32)
-sigmayz = np.zeros((nx, ny, nz), dtype=flt32)
-
-# Total de arrays para o campo de simulacao (ROI) na GPU
-N_ARRAYS = 3 + 6 + 2 * 9 + 1
-
 value_dvx_dx = np.zeros((nx, ny, nz), dtype=flt32)
 value_dvx_dy = np.zeros((nx, ny, nz), dtype=flt32)
 value_dvx_dz = np.zeros((nx, ny, nz), dtype=flt32)
@@ -1422,6 +1372,19 @@ value_dsigmaxz_dx = np.zeros((nx, ny, nz), dtype=flt32)
 value_dsigmaxz_dz = np.zeros((nx, ny, nz), dtype=flt32)
 value_dsigmayz_dy = np.zeros((nx, ny, nz), dtype=flt32)
 value_dsigmayz_dz = np.zeros((nx, ny, nz), dtype=flt32)
+
+vx = np.zeros((nx, ny, nz), dtype=flt32)
+vy = np.zeros((nx, ny, nz), dtype=flt32)
+vz = np.zeros((nx, ny, nz), dtype=flt32)
+sigmaxx = np.zeros((nx, ny, nz), dtype=flt32)
+sigmayy = np.zeros((nx, ny, nz), dtype=flt32)
+sigmazz = np.zeros((nx, ny, nz), dtype=flt32)
+sigmaxy = np.zeros((nx, ny, nz), dtype=flt32)
+sigmaxz = np.zeros((nx, ny, nz), dtype=flt32)
+sigmayz = np.zeros((nx, ny, nz), dtype=flt32)
+
+# Total de arrays para o campo de simulacao (ROI) na GPU
+N_ARRAYS = 3 + 6 + 2 * 9
 
 print(f'3D elastic finite-difference code in velocity and stress formulation with C-PML')
 print(f'NX = {nx}')
@@ -1601,6 +1564,7 @@ else:
 if do_sim_gpu:
     for n in range(n_iter_gpu):
         print(f'Simulacao WEBGPU')
+        print(f'wsx = {wsx}, wsy = {wsy}, wsz = {wsz}')
         print(f'Iteracao {n}')
         t_gpu = time()
         (vx_gpu, vy_gpu, vz_gpu, sensor_vx_gpu, sensor_vy_gpu, sensor_vz_gpu,

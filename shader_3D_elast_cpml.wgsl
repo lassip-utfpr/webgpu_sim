@@ -30,15 +30,6 @@ var<storage,read> sim_flt_par: SimFltValues;
 @group(0) @binding(1) // source term
 var<storage,read> source_term: array<f32>;
 
-@group(0) @binding(22) // source positions
-var<storage,read> sources_pos_x: array<i32>;
-
-@group(0) @binding(23) // source positions
-var<storage,read> sources_pos_y: array<i32>;
-
-@group(0) @binding(24) // source positions
-var<storage,read> sources_pos_z: array<i32>;
-
 @group(0) @binding(27) // source term index
 var<storage,read> idx_src: array<i32>;
 
@@ -146,24 +137,11 @@ fn get_source_term(n: i32, e: i32) -> f32 {
     return select(0.0, source_term[index], index != -1);
 }
 
-// function to get a x index position of a source
-fn get_sour_pos_x(s: i32) -> i32 {
-    return select(-1, sources_pos_x[s], s >= 0 && s < sim_int_par.n_src);
-}
-
-// function to get a y index position of a source
-fn get_sour_pos_y(s: i32) -> i32 {
-    return select(-1, sources_pos_y[s], s >= 0 && s < sim_int_par.n_src);
-}
-
-// function to get a z index position of a source
-fn get_sour_pos_z(s: i32) -> i32 {
-    return select(-1, sources_pos_z[s], s >= 0 && s < sim_int_par.n_src);
-}
-
 // function to get a source term index of a source
-fn get_idx_src(p: i32) -> i32 {
-    return select(-1, idx_src[p], p >= 0 && p < sim_int_par.n_src);
+fn get_idx_source_term(x: i32, y: i32, z: i32) -> i32 {
+    let index: i32 = ijkl(x, y, z, 0, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.z_sz, 1);
+
+    return select(-1, idx_src[index], index != -1);
 }
 
 // -------------------------------------------------
@@ -848,28 +826,9 @@ fn teste_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
     let z: i32 = i32(index.z);          // z thread index
-    let dx: f32 = sim_flt_par.dx;
-    let dy: f32 = sim_flt_par.dy;
-    let dz: f32 = sim_flt_par.dz;
-    let dt: f32 = sim_flt_par.dt;
-    let lambda: f32 = sim_flt_par.lambda;
-    let mu: f32 = sim_flt_par.mu;
-    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
-    let last: i32 = sim_int_par.fd_coeff - 1;
-    let offset: i32 = sim_int_par.fd_coeff - 1;
 
-    // Normal stresses
-    var id_x_i: i32 = -get_idx_fh(last);
-    var id_x_f: i32 = sim_int_par.x_sz - get_idx_ih(last);
-    var id_y_i: i32 = -get_idx_ff(last);
-    var id_y_f: i32 = sim_int_par.y_sz - get_idx_if(last);
-    var id_z_i: i32 = -get_idx_ff(last);
-    var id_z_f: i32 = sim_int_par.z_sz - get_idx_if(last);
-    if(x >= id_x_i && x < id_x_f && y >= id_y_i && y < id_y_f && z >= id_z_i && z < id_z_f) {
-        set_vx(x, y, z, get_b_x_h(x - offset));
-        set_vy(x, y, z, get_a_x_h(x - offset));
-        set_vz(x, y, z, f32(x));
-    }
+   let idx_src_term: i32 = get_idx_source_term(x, y, z);
+   set_vz(x, y, z, f32(idx_src_term));
 }
 
 // Kernel to calculate stresses [sigmaxx, sigmayy, sigmaxy]
@@ -1128,12 +1087,9 @@ fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let it: i32 = sim_int_par.it;
 
     // Add the source force
-    for(var s: i32 = 0; s < sim_int_par.n_src; s++) {
-        var idx_src_term: i32 = get_idx_src(s);
-        if(x == get_sour_pos_x(s) && y == get_sour_pos_y(s) && z == get_sour_pos_z(s)) {
-            set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it, idx_src_term) * dt_over_rho);
-            break;
-        }
+    let idx_src_term: i32 = get_idx_source_term(x, y, z);
+    if(idx_src_term != -1) {
+        set_vz(x, y, z, get_vz(x, y, z) + get_source_term(it, idx_src_term) * dt_over_rho);
     }
 }
 
