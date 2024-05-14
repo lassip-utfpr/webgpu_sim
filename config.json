@@ -8,10 +8,10 @@
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 60.0,
-      "h_len" : 600,
-      "width" : 80.0,
-      "w_len" : 800,
+      "height" : 57.4,
+      "h_len" : 574,
+      "width" : 77.4,
+      "w_len" : 774,
       "depth" : 0.0,
       "d_len" : 1,
       "len_pml_xmin" : 10,
