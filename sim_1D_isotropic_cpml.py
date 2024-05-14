@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from simul_utils import SimulationROI
 
 
-def sim_cpu(c_n):
-    global source_term
+def sim_cpu():
+    global source_term, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global vx, sigmaxx
     global memory_dvx_dx
@@ -17,7 +17,7 @@ def sim_cpu(c_n):
     global v_2, v_solid_norm
 
     DELTAT_over_rho = dt / rho
-    _ord = c_n.shape[0]
+    _ord = coefs.shape[0]
     idx_i = np.array([[c + 1, -c] for c in range(_ord)]) + (_ord - 1)
     idx_f = np.array([[c + 1, -c] for c in range(_ord)]) - _ord
 
@@ -34,9 +34,9 @@ def sim_cpu(c_n):
             idx_ib = None if idx_i[c, 1] == 0 else idx_i[c, 1]
             idx_fb = None if idx_f[c, 1] == 0 else idx_f[c, 1]
             if c:
-                value_dvx_dx[idx_id:idx_fd] += c_n[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
+                value_dvx_dx[idx_id:idx_fd] += coefs[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
             else:
-                value_dvx_dx[idx_id:idx_fd] = c_n[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
+                value_dvx_dx[idx_id:idx_fd] = coefs[c] * (vx[idx_ia:idx_fa] - vx[idx_ib:idx_fb]) * one_dx
 
         memory_dvx_dx[idx_id:idx_fd] = (b_x_half[:-1] * memory_dvx_dx[idx_id:idx_fd] +
                                         a_x_half[:-1] * value_dvx_dx[idx_id:idx_fd])
@@ -56,9 +56,9 @@ def sim_cpu(c_n):
             idx_ib = None if idx_i[c, 1] == 0 else idx_i[c, 1]
             idx_fb = None if idx_f[c, 1] == 0 else idx_f[c, 1]
             if c:
-                value_dsigmaxx_dx[idx_id:idx_fd] += c_n[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
+                value_dsigmaxx_dx[idx_id:idx_fd] += coefs[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
             else:
-                value_dsigmaxx_dx[idx_id:idx_fd] = c_n[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
+                value_dsigmaxx_dx[idx_id:idx_fd] = coefs[c] * (sigmaxx[idx_ia: idx_fa] - sigmaxx[idx_ib:idx_fb]) * one_dx
 
         memory_dsigmaxx_dx[idx_id:idx_fd] = (b_x[1:] * memory_dsigmaxx_dx[idx_id:idx_fd] +
                                              a_x[1:] * value_dsigmaxx_dx[idx_id:idx_fd])
@@ -75,10 +75,10 @@ def sim_cpu(c_n):
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[:2] = np.float32(0.0)
+        vx[:_ord] = np.float32(0.0)
 
         # xmax
-        vx[-2:] = np.float32(0.0)
+        vx[-_ord:] = np.float32(0.0)
 
         # Store seismograms
         for _irec in range(NREC):
@@ -114,13 +114,6 @@ def sim_cpu(c_n):
 PI = np.pi
 STABILITY_THRESHOLD = 1.0e25  # Limite para considerar que a simulacao esta instavel
 
-# Parametros dos ensaios
-flt32 = np.float32
-show_debug = False
-show_anim = True
-vx_min = -100000.0
-vx_max = 100000.0
-
 # Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
 coefs_Lui = [
     [9.0/8.0, -1.0/24.0],
@@ -129,8 +122,13 @@ coefs_Lui = [
     [19845.0/16384.0, -735.0/8192.0, 567.0/40960.0, -405.0/229376.0, 35.0/294912.0],
     [160083.0/131072.0, -12705.0/131072.0, 22869.0/1310720.0, -5445.0/1835008.0, 847.0/2359296.0, -63.0/2883584.0]
 ]
-beta_min = np.array([0.25, 0.5, 0.6, 0.75, 1.0])  # Valores de beta minimo. Avaliar Eq. (19) para valores melhores
-coefs = np.array(coefs_Lui[0])
+
+# Parametros dos ensaios
+flt32 = np.float32
+show_debug = False
+show_anim = True
+vx_min = -100000.0
+vx_max = 100000.0
 
 # -----------------------
 # Leitura da configuracao no formato JSON
@@ -140,20 +138,9 @@ with open('config.json', 'r') as f:
     data_src = np.array(configs["sources"])
     data_rec = np.array(configs["receivers"])
     source_term_cfg = configs["source_term"]
-
-    # Verifica as condicoes para avaliacao da ordem de acuraria do calculo das derivadas, segundo Liu 2009
-    for b in range(len(beta_min)):
-        simul_roi = SimulationROI(**configs["roi"], pad=len(coefs_Lui[b]) - 1)
-        wavenumber_x = (2.0 * PI * source_term_cfg["freq"]) / configs["specimen_params"]["cp"]
-        beta = wavenumber_x * simul_roi.w_step / 2.0
-        if beta <= beta_min[b]:
-            coefs = np.array(coefs_Lui[b])
-            break
-
-    print(f'Wavenumber_x: {wavenumber_x}\nBeta: {beta}\nOrdem da acuracia: {coefs.shape[0]*2}')
-
-# Espessura da PML in pixels
-npoints_pml = configs["roi"]["len_pml_xmin"]  # pegando temporariamente
+    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=np.float32)
+    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
+    print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
 # Parametros da simulacao
 nx = simul_roi.get_nx()
@@ -177,7 +164,7 @@ NSTEP = configs["simul_params"]["time_steps"]
 dt = configs["simul_params"]["dt"]
 
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
-IT_DISPLAY = 10
+IT_DISPLAY = configs["simul_params"]["it_display"]
 
 # Define a posicao das fontes
 NSRC = data_src.shape[0]
@@ -190,13 +177,6 @@ t0 = data_src[:, 3].reshape((1, NSRC))
 factor = flt32(source_term_cfg["gain"])
 t = np.expand_dims(np.arange(NSTEP) * dt, axis=1)
 
-# First derivative of a Gaussian
-# a = PI ** 2 * f0 ** 2
-# source_term = -(factor * 2.0 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
-
-# Funcao de Ricker (segunda derivada de uma gaussiana)
-# source_term = (factor * (1.0 - 2.0 * a * (t - t0) ** 2) * np.exp(-a * (t - t0) ** 2)).astype(flt32)
-
 # Gauss pulse
 source_term = factor * flt32(gausspulse((t - t0), fc=f0, bw=source_term_cfg["bw"]))
 
@@ -208,13 +188,6 @@ ix_rec = i_rec[:, 0].astype(np.int32)
 # for evolution of total energy in the medium
 v_2 = np.zeros(nx, dtype=flt32)
 v_solid_norm = np.zeros(NSTEP, dtype=flt32)
-
-# Valor da potencia para calcular "d0"
-NPOWER = 2.0
-
-# from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
-K_MAX_PML = 1.0
-ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
 
 # Arrays para as variaveis de memoria do calculo
 memory_dvx_dx = np.zeros(nx, dtype=flt32)
@@ -229,65 +202,34 @@ sigmaxx_nx = np.zeros(nx, dtype=flt32)
 value_dvx_dx = np.zeros(nx, dtype=flt32)
 value_dsigmaxx_dx = np.zeros(nx, dtype=flt32)
 
-# Inicializacao dos parametros da PML (definicao dos perfis de absorcao na regiao da PML)
-thickness_pml_x = npoints_pml * dx
-
-# Coeficiente de reflexao (INRIA report section 6.1) http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-rcoef = 0.0001
-
 print(f'1D elastic finite-difference code in velocity and stress formulation with C-PML')
 print(f'NX = {nx}')
 
+# Valor da potencia para calcular "d0"
+NPOWER = configs["simul_params"]["npower"]
 if NPOWER < 1:
     raise ValueError('NPOWER deve ser maior que 1')
 
-# Calculo de d0 do relatorio da INRIA section 6.1 http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
-d0_x = -(NPOWER + 1) * cp * np.log(rcoef) / (2.0 * thickness_pml_x)
+# Coeficiente de reflexao e calculo de d0 do relatorio da INRIA section 6.1
+# http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
+rcoef = configs["simul_params"]["rcoef"]
+d0_x = -(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x()
+
 print(f'd0_x = {d0_x}')
 
-pad_deriv = 2*(coefs.shape[0] - 1)
-# Amortecimento na direcao "x" (horizontal)
-# Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
-x_orig_left = thickness_pml_x
-x_orig_right = (nx - pad_deriv - 1) * dx - thickness_pml_x
+# Calculo dos coeficientes de amortecimento para a PML
+# from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
+K_MAX_PML = configs["simul_params"]["k_max_pml"]
+ALPHA_MAX_PML = 2.0 * PI * (f0 / 2.0)  # from Festa and Vilotte
+
 
 # Perfil de amortecimento na direcao "x" dentro do grid
-i = np.arange(nx - pad_deriv)
-xval = dx * i
-xval_pml_left = x_orig_left - xval
-xval_pml_right = xval - x_orig_right
-x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
-x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
-x_mask = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-x_pml = np.zeros(nx - pad_deriv)
-x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
-x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
-x_norm = x_pml / thickness_pml_x
-d_x = (d0_x * x_norm ** NPOWER).astype(flt32)
-k_x = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
-alpha_x = (ALPHA_MAX_PML * (1.0 - np.where(x_mask, x_norm, 1.0))).astype(flt32)
-b_x = np.exp(-(d_x / k_x + alpha_x) * dt).astype(flt32)
-a_x = np.zeros(nx - pad_deriv, dtype=flt32)
-i = np.where(d_x > 1e-6)
-a_x[i] = d_x[i] * (b_x[i] - 1.0) / (k_x[i] * (d_x[i] + k_x[i] * alpha_x[i]))
+a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
+                                         npower=NPOWER, k_max=K_MAX_PML, alpha_max=ALPHA_MAX_PML)
 
 # Perfil de amortecimento na direcao "x" dentro do meio grid (staggered grid)
-xval_pml_left = x_orig_left - (xval + dx / 2.0)
-xval_pml_right = (xval + dx / 2.0) - x_orig_right
-x_pml_mask_left = np.where(xval_pml_left < 0.0, False, True)
-x_pml_mask_right = np.where(xval_pml_right < 0.0, False, True)
-x_mask_half = np.logical_or(x_pml_mask_left, x_pml_mask_right)
-x_pml = np.zeros(nx - pad_deriv)
-x_pml[x_pml_mask_left] = xval_pml_left[x_pml_mask_left]
-x_pml[x_pml_mask_right] = xval_pml_right[x_pml_mask_right]
-x_norm = x_pml / thickness_pml_x
-d_x_half = (d0_x * x_norm ** NPOWER).astype(flt32)
-k_x_half = (1.0 + (K_MAX_PML - 1.0) * x_norm ** NPOWER).astype(flt32)
-alpha_x_half = (ALPHA_MAX_PML * (1.0 - np.where(x_mask_half, x_norm, 1.0))).astype(flt32)
-b_x_half = np.exp(-(d_x_half / k_x_half + alpha_x_half) * dt).astype(flt32)
-a_x_half = np.zeros(nx - pad_deriv, dtype=flt32)
-i = np.where(d_x_half > 1e-6)
-a_x_half[i] = d_x_half[i] * (b_x_half[i] - 1.0) / (k_x_half[i] * (d_x_half[i] + k_x_half[i] * alpha_x_half[i]))
+a_x_half, b_x_half, k_x_half = simul_roi.calc_pml_array(axis='x', grid='h', dt=dt, d0=d0_x,
+                                                        npower=NPOWER, k_max=K_MAX_PML, alpha_max=ALPHA_MAX_PML)
 
 # Imprime a posicao das fontes e dos receptores
 print(f'Existem {NSRC} fontes')
@@ -318,7 +260,7 @@ ax.set_xlim(0.0, dx * nx)
 ax.set_ylim(vx_min, vx_max)
 
 # Roda a simulacao
-sim_cpu(coefs)
+sim_cpu()
 print("Fim da simulação !!!!!")
 
 # Plota o sinal da fonte
@@ -327,17 +269,11 @@ plt.plot(t, source_term)
 plt.title('Sinal da fonte')
 
 # Plota as velocidades tomadas no sensores
-for irec in range(NREC):
+for r in range(NREC):
     fig, ax = plt.subplots(1, sharex=True, sharey=True)
-    fig.suptitle(f'Receptor {irec + 1} [CPU]')
-    ax.plot(sisvx[:, irec])
+    fig.suptitle(f'Receptor {r + 1} [CPU]')
+    ax.plot(sisvx[:, r])
     ax.set_title(r'$V_x$')
 
 plt.show()
 
-# Plota as velocidades tomadas no sensores
-# plt.figure()
-# plt.plot(sisvx[:, 0])
-# plt.title(f'Receptor {1}')
-#
-# plt.show()
