@@ -362,8 +362,9 @@ class ElementRect:
                 Quantidade de pontos ativos (fontes) do elemento transdutor.
 
         """
+        dim_p = min(self.elem_dim_p, sim_roi.depth)
         num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
-        num_pt_p = int(np.round(self.elem_dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
         simul_type = simul_type.lower()
         num_coord = num_pt_a
         if simul_type == "3d":
@@ -384,8 +385,9 @@ class ElementRect:
                 Cada linha dessa matriz e o indice 3D de um ponto na ROI.
 
         """
+        dim_p = min(self.elem_dim_p, sim_roi.depth)
         num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
-        num_pt_p = int(np.round(self.elem_dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
         simul_type = simul_type.lower()
         num_coord = num_pt_a
         if simul_type == "3d":
@@ -395,7 +397,7 @@ class ElementRect:
         for p in range(num_coord):
             x_coord = np.float32((p % num_pt_a) * sim_roi.w_step - self.elem_dim_a / 2.0)
             y_coord = np.float32(0.0 if simul_type == "2d"
-                                 else ((p // num_pt_a) % num_pt_p) * sim_roi.d_step - self.elem_dim_p / 2.0)
+                                 else ((p // num_pt_a) % num_pt_p) * sim_roi.d_step - dim_p / 2.0)
             list_out.append([np.round(x_coord + self.coord_center[0], decimals=sim_roi.dec_w),
                              np.round(y_coord + self.coord_center[1], decimals=sim_roi.dec_d),
                              np.round(self.coord_center[2], decimals=sim_roi.dec_h)])
@@ -603,7 +605,6 @@ class SimulationProbeLinearArray(SimulationProbe):
         source_term = np.zeros((samples, self.num_elem), dtype=np.float32)
         idx_src = list()
         for idx_st, e in enumerate(self.elem_list):
-            # idx_st = self.elem_list.index(e)
             source_term[:, idx_st] = e.get_element_exc_fn(t)
             idx_src.append([idx_st for _ in range(e.get_num_points_roi(sim_roi=sim_roi, simul_type=simul_type))])
 
