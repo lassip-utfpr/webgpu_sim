@@ -364,7 +364,7 @@ class ElementRect:
         """
         dim_p = min(self.elem_dim_p, sim_roi.depth)
         num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
-        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d)) if dim_p != 0.0 else 1
         simul_type = simul_type.lower()
         num_coord = num_pt_a
         if simul_type == "3d":
@@ -387,7 +387,7 @@ class ElementRect:
         """
         dim_p = min(self.elem_dim_p, sim_roi.depth)
         num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
-        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d))
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d)) if dim_p != 0.0 else 1
         simul_type = simul_type.lower()
         num_coord = num_pt_a
         if simul_type == "3d":

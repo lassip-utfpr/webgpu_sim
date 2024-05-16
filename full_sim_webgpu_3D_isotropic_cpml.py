@@ -124,7 +124,7 @@ def sim_cpu():
     iz_max = simul_roi.get_iz_max()
 
     # Source terms
-    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="3D")
 
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
@@ -683,7 +683,7 @@ def sim_webgpu(device):
     params_f32 = np.array([cp, cs, dx, dy, dz, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
 
     # Source terms
-    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="3D")
     pos_sources = -np.ones((nx, ny, nz), dtype=np.int32)
     pos_sources[ix_src, iy_src, iz_src] = idx_src.astype(np.int32)
 
@@ -1317,7 +1317,7 @@ dt = flt32(configs["simul_params"]["dt"])
 IT_DISPLAY = configs["simul_params"]["it_display"]
 
 # Define a posicao das fontes
-i_src = simul_probe.get_points_roi(simul_roi, simul_type="2d")
+i_src = simul_probe.get_points_roi(simul_roi, simul_type="3D")
 ix_src = i_src[:, 0].astype(np.int32)
 iy_src = i_src[:, 1].astype(np.int32)
 iz_src = i_src[:, 2].astype(np.int32)
