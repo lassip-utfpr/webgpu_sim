@@ -87,7 +87,7 @@ class Window(QMainWindow):
 # Funcao do simulador em CPU
 # --------------------------
 def sim_cpu():
-    global simul_probe, coefs
+    global simul_probes, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
@@ -101,8 +101,9 @@ def sim_cpu():
     global sisvx, sisvy
     global v_solid_norm, v_2
     global windows_cpu
+    global rho, mu, lambda_
 
-    DELTAT_over_rho = flt32(dt / rho)
+    # DELTAT_over_rho = flt32(dt / rho)
     _ord = coefs.shape[0]
     idx_fd = np.array([[c + _ord,  # ini half grid
                         -c + _ord - 1,  # ini full grid
@@ -117,8 +118,27 @@ def sim_cpu():
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
 
+    # Obtem fontes e receptores dos transdutores
+    source_term = list()
+    idx_src = list()
+    idx_rec = list()
+    idx_src_offset = 0
+    idx_rec_offset = 0
+    for _pr in simul_probes:
+        st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+        if len(i_src) > 0:
+            source_term.append(st)
+            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
+            idx_src_offset += len(i_src)
+
+        i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
+        if len(i_rec) > 0:
+            idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
+            idx_rec_offset += len(i_rec)
+
     # Source terms
-    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+    source_term = np.concatenate(source_term, axis=1)
+    idx_src = np.array(idx_src).astype(np.int32).flatten()
 
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
@@ -162,8 +182,8 @@ def sim_cpu():
                                                   memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
         # compute the stress using the Lame parameters
-        sigmaxx = sigmaxx + (lambdaplus2mu * value_dvx_dx + lambda_ * value_dvy_dy) * dt
-        sigmayy = sigmayy + (lambda_ * value_dvx_dx + lambdaplus2mu * value_dvy_dy) * dt
+        sigmaxx = sigmaxx + (lambdaplus2mu_xx_yy * value_dvx_dx + lambda_xx_yy * value_dvy_dy) * dt
+        sigmayy = sigmayy + (lambda_xx_yy * value_dvx_dx + lambdaplus2mu_xx_yy * value_dvy_dy) * dt
 
         # Segundo "laco" i: 2,NX; j: 1,NY-1 -> [2:-1, 1:-2]
         i_dix = idx_fd[0, 0]
@@ -203,7 +223,7 @@ def sim_cpu():
                                                   memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
 
         # compute the stress using the Lame parameters
-        sigmaxy = sigmaxy + dt * mu * (value_dvx_dy + value_dvy_dx)
+        sigmaxy = sigmaxy + dt * mu_xy * (value_dvx_dy + value_dvy_dx)
 
         # Calculo da velocidade
         # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
@@ -243,7 +263,7 @@ def sim_cpu():
         value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
                                                        memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
-        vx = DELTAT_over_rho * (value_dsigmaxx_dx + value_dsigmaxy_dy) + vx
+        vx = dt * (value_dsigmaxx_dx + value_dsigmaxy_dy) / rho_vx + vx
 
         # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
         i_dix = idx_fd[0, 1]
@@ -284,7 +304,7 @@ def sim_cpu():
         value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
                                                        memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
-        vy = DELTAT_over_rho * (value_dsigmaxy_dx + value_dsigmayy_dy) + vy
+        vy = dt * (value_dsigmaxy_dx + value_dsigmayy_dy) / rho_vy + vy
 
         # add the source (force vector located at a given grid point)
         for _isrc in range(NSRC):
@@ -325,9 +345,6 @@ def sim_cpu():
             if show_anim:
                 windows_cpu[0].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                 windows_cpu[1].imv.setImage(vy[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                windows_cpu[2].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max] + vy[ix_min:ix_max, iy_min:iy_max],
-                                            levels=[2.0 * v_min, 2.0 * v_max])
-
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -340,7 +357,7 @@ def sim_cpu():
 # Funcao do simulador em WebGPU
 # -----------------------------
 def sim_webgpu(device):
-    global simul_probe, coefs
+    global simul_probes, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
@@ -357,15 +374,37 @@ def sim_webgpu(device):
     global simul_roi
     global windows_gpu
 
-    # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
-    _ord = coefs.shape[0]
-    params_i32 = np.array([nx, ny, NSTEP, simul_probe.num_elem, NSRC, NREC, _ord, 0], dtype=np.int32)
-    params_f32 = np.array([cp, cs, dx, dy, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
+    # Obtem fontes e receptores dos transdutores
+    source_term = list()
+    idx_src = list()
+    idx_rec = list()
+    idx_src_offset = 0
+    idx_rec_offset = 0
+    for _pr in simul_probes:
+        st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+        if len(i_src) > 0:
+            source_term.append(st)
+            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
+            idx_src_offset += len(i_src)
+
+        i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
+        if len(i_rec) > 0:
+            idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
+            idx_rec_offset += len(i_rec)
 
     # Source terms
-    source_term, idx_src = simul_probe.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+    source_term = np.concatenate(source_term, axis=1)
     pos_sources = -np.ones((nx, ny), dtype=np.int32)
-    pos_sources[ix_src, iy_src] = idx_src.astype(np.int32)
+    pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()
+
+    # Receivers
+    pos_recv = -np.ones((nx, ny), dtype=np.int32)
+    pos_recv[ix_rec, iy_rec] = np.array(idx_rec).astype(np.int32).flatten()
+
+    # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
+    _ord = coefs.shape[0]
+    params_i32 = np.array([nx, ny, NSTEP, idx_src_offset, idx_rec_offset, _ord, 0], dtype=np.int32)
+    params_f32 = np.array([cp, cs, dx, dy, dt, cp * cp - 2.0 * cs * cs, cs * cs], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_2D_elast_cpml.wgsl') as shader_file:
@@ -427,6 +466,15 @@ def sim_webgpu(device):
     idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(_ord)], dtype=np.int32)
     b_idx_fd = device.create_buffer_with_data(data=idx_fd, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
 
+    # Buffer com o mapa de densidades da ROI
+    # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
+    # Binding 26
+    rho_map = rho * np.ones((nx, ny), dtype=np.float32)
+    # rho_map = (plt.imread("rho_maps/SDH.png")[:, :, :-1].mean(axis=2, dtype=np.float32) * np.float32(rho - 1225.0) +
+    #            np.float32(1225.0))
+    # rho_map[390:411, 300] = np.float32(1225.0)
+    b_rho_map = device.create_buffer_with_data(data=rho_map, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+
     # Buffer com os coeficientes para ao calculo das derivadas
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     # Binding 28
@@ -471,13 +519,13 @@ def sim_webgpu(device):
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
 
-    # Binding 10
-    b_sens_pos_x = device.create_buffer_with_data(data=ix_rec, usage=wgpu.BufferUsage.STORAGE |
-                                                                     wgpu.BufferUsage.COPY_SRC)
-
     # Binding 11
-    b_sens_pos_y = device.create_buffer_with_data(data=iy_rec, usage=wgpu.BufferUsage.STORAGE |
-                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_delay_rec = device.create_buffer_with_data(data=delay_recv, usage=wgpu.BufferUsage.STORAGE |
+                                                                        wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 12
+    b_idx_rec = device.create_buffer_with_data(data=pos_recv, usage=wgpu.BufferUsage.STORAGE |
+                                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
@@ -501,6 +549,11 @@ def sim_webgpu(device):
              "type": wgpu.BufferBindingType.read_only_storage}
          },
         {"binding": 25,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 26,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
@@ -533,16 +586,16 @@ def sim_webgpu(device):
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
          },
-        {"binding": 10,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
         {"binding": 11,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         }
+         },
+        {"binding": 12,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
     ]
 
     # Configuracao das amarracoes (bindings)
@@ -576,6 +629,10 @@ def sim_webgpu(device):
             "resource": {"buffer": b_idx_fd, "offset": 0, "size": b_idx_fd.size},
         },
         {
+            "binding": 26,
+            "resource": {"buffer": b_rho_map, "offset": 0, "size": b_rho_map.size},
+        },
+        {
             "binding": 28,
             "resource": {"buffer": b_fd_coeffs, "offset": 0, "size": b_fd_coeffs.size},
         },
@@ -604,12 +661,12 @@ def sim_webgpu(device):
             "resource": {"buffer": b_sens_y, "offset": 0, "size": b_sens_y.size},
         },
         {
-            "binding": 10,
-            "resource": {"buffer": b_sens_pos_x, "offset": 0, "size": b_sens_pos_x.size},
+            "binding": 11,
+            "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
         },
         {
-            "binding": 11,
-            "resource": {"buffer": b_sens_pos_y, "offset": 0, "size": b_sens_pos_y.size},
+            "binding": 12,
+            "resource": {"buffer": b_idx_rec, "offset": 0, "size": b_idx_rec.size},
         },
     ]
 
@@ -715,10 +772,6 @@ def sim_webgpu(device):
                 if show_anim:
                     windows_gpu[0].imv.setImage(vxgpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     windows_gpu[1].imv.setImage(vygpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                    windows_gpu[2].imv.setImage(
-                        vxgpu[ix_min:ix_max, iy_min:iy_max] + vygpu[ix_min:ix_max, iy_min:iy_max],
-                        levels=[2.0 * v_min, 2.0 * v_max])
-
                     App.processEvents()
 
         # Verifica a estabilidade da simulacao
@@ -763,11 +816,13 @@ coefs_Lui = [
 # -----------------------
 with open('config.json', 'r') as f:
     configs = ast.literal_eval(f.read())
-    data_rec = np.array(configs["receivers"])
     coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
-    if "linear" in configs["probe"]:
-        simul_probe = SimulationProbeLinearArray(**configs["probe"]["linear"])
+    simul_probes = list()
+    probes_cfg = configs["probes"]
+    for p in probes_cfg:
+        if p["linear"]:
+            simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
     # Configuracao dos ensaios
@@ -781,6 +836,7 @@ with open('config.json', 'r') as f:
     show_debug = bool(configs["simul_configs"]["show_debug"])
     plot_results = bool(configs["simul_configs"]["plot_results"])
     plot_sensors = bool(configs["simul_configs"]["plot_sensors"])
+    plot_bscan = bool(configs["simul_configs"]["plot_bscan"])
     show_results = bool(configs["simul_configs"]["show_results"])
     save_results = bool(configs["simul_configs"]["save_results"])
     gpu_type = configs["simul_configs"]["gpu_type"]
@@ -820,9 +876,27 @@ one_dy = flt32(1.0 / dy)
 cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
 cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
 rho = flt32(configs["specimen_params"]["rho"])
+
+# Inicializa os mapas de densidade do meio
+rho_vx = np.ones((nx, ny), dtype=flt32) * rho
+rho_vy = np.ones((nx, ny), dtype=flt32) * rho
+rho_vy[:-1, :-1] = flt32(0.25) * (rho_vx[:-1, :-1] + rho_vx[1:, :-1] + rho_vx[1:, 1:] + rho_vx[:-1, 1:])
+
+# Inicializa os mapas dos parametros de Lame
 mu = flt32(rho * cs * cs)
 lambda_ = flt32(rho * (cp * cp - 2.0 * cs * cs))
 lambdaplus2mu = flt32(rho * cp * cp)
+
+mu_a = np.ones((nx, ny), dtype=flt32) * mu
+lambda_a = np.ones((nx, ny), dtype=flt32) * lambda_
+mu_xx_yy = np.ones((nx, ny), dtype=flt32) * mu
+lambda_xx_yy = np.ones((nx, ny), dtype=flt32) * lambda_
+mu_xx_yy[:-1, :-1] = flt32(0.5) * (mu_a[1:, :-1] + mu_a[:-1, :-1])
+lambda_xx_yy[:-1, :-1] = flt32(0.5) * (lambda_a[1:, :-1] + lambda_a[:-1, :-1])
+lambdaplus2mu_xx_yy = lambda_xx_yy + flt32(2.0) * mu_xx_yy
+
+mu_xy = np.ones((nx, ny), dtype=flt32) * mu
+mu_xy[:-1, :-1] = flt32(0.5) * (mu_a[:-1, 1:] + mu_a[:-1, :-1])
 
 # Numero total de passos de tempo
 NSTEP = configs["simul_params"]["time_steps"]
@@ -833,17 +907,30 @@ dt = flt32(configs["simul_params"]["dt"])
 # Numero de iteracoes de tempo para apresentar e armazenar informacoes
 IT_DISPLAY = configs["simul_params"]["it_display"]
 
+# Pega as listas de todos os pontos transmissores e receptores de todos os transdutores configurados
+i_probe_tx_ptos = list()
+i_probe_rx_ptos = list()
+delay_recv = list()
+NREC = 0
+for pr in simul_probes:
+    i_probe_tx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="e")
+    i_probe_rx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="r")
+    delay_recv += pr.get_delay_rx()
+    NREC += pr.receivers.count(True)
+
 # Define a posicao das fontes
-i_src = simul_probe.get_points_roi(simul_roi, simul_type="2d")
-ix_src = i_src[:, 0].astype(np.int32)
-iy_src = i_src[:, 2].astype(np.int32)
-NSRC = i_src.shape[0]
+i_probe_tx_ptos = np.array(i_probe_tx_ptos, dtype=np.int32).reshape(-1, 3)
+ix_src = i_probe_tx_ptos[:, 0].astype(np.int32)
+iy_src = i_probe_tx_ptos[:, 2].astype(np.int32)
+NSRC = i_probe_tx_ptos.shape[0]
 
 # Define a localizacao dos receptores
-NREC = data_rec.shape[0]
-i_rec = np.array([simul_roi.get_nearest_grid_idx(p[0:3]) for p in data_rec])
-ix_rec = i_rec[:, 0].astype(np.int32)
-iy_rec = i_rec[:, 2].astype(np.int32)
+i_probe_rx_ptos = np.array(i_probe_rx_ptos, dtype=np.int32).reshape(-1, 3)
+ix_rec = i_probe_rx_ptos[:, 0].astype(np.int32)
+iy_rec = i_probe_rx_ptos[:, 2].astype(np.int32)
+
+# Calcula o delay de recepcao dos receptores
+delay_recv = (np.array(delay_recv) / dt + 1.0).astype(np.int32)
 
 # for evolution of total energy in the medium
 v_2 = np.zeros((nx, ny), dtype=flt32)
@@ -902,7 +989,7 @@ print(f'd0_y = {d0_y}')
 # Calculo dos coeficientes de amortecimento para a PML
 # from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-11
 K_MAX_PML = flt32(configs["simul_params"]["k_max_pml"])
-ALPHA_MAX_PML = flt32(2.0 * PI * (simul_probe.get_freq() / 2.0))  # from Festa and Vilotte
+ALPHA_MAX_PML = flt32(2.0 * PI * (simul_probes[0].get_freq() / 2.0))  # from Festa and Vilotte
 
 # Perfil de amortecimento na direcao "x" dentro do grid
 a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
@@ -965,8 +1052,6 @@ if show_anim:
                                                simul_roi.get_nx(), simul_roi.get_nz())},
             {"title": "Vy [CPU]", "geometry": (x_pos[1], y_pos[0],
                                                simul_roi.get_nx(), simul_roi.get_nz())},
-            {"title": "Vx + Vy [CPU]", "geometry": (x_pos[2], y_pos[0],
-                                                    simul_roi.get_nx(), simul_roi.get_nz())},
         ]
         windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
 
@@ -978,8 +1063,6 @@ if show_anim:
                                                simul_roi.get_nx(), simul_roi.get_nz())},
             {"title": "Vy [GPU]", "geometry": (x_pos[1], y_pos[0],
                                                simul_roi.get_nx(), simul_roi.get_nz())},
-            {"title": "Vx + Vy [GPU]", "geometry": (x_pos[2], y_pos[0],
-                                                    simul_roi.get_nx(), simul_roi.get_nz())},
         ]
         windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data]
 else:
@@ -1009,6 +1092,16 @@ if do_sim_gpu:
                 ax[2].plot(sensor_vx_gpu[:, r] + sensor_vy_gpu[:, r], 'tab:orange')
                 ax[2].set_title(r'$V_x + V_y$')
                 sensor_gpu_result.append(fig)
+
+            if show_results:
+                plt.show(block=False)
+
+        if plot_results and plot_bscan:
+            gpu_bscan_sim_result = plt.figure()
+            plt.title(f'GPU simulation B-scan\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+            plt.imshow(sensor_vx_gpu + sensor_vy_gpu,
+                       aspect='auto', cmap='viridis')
+            plt.colorbar()
 
             if show_results:
                 plt.show(block=False)
