@@ -2,9 +2,8 @@ struct SimIntValues {
     x_sz: i32,          // x field size
     y_sz: i32,          // y field size
     n_iter: i32,        // num iterations
-    n_probe_elem: i32,  // num probe elements
-    n_src: i32,         // num sources points
-    n_rec: i32,         // num receptors points
+    n_src: i32,         // num probes tx elements
+    n_rec: i32,         // num probes rx elements
     fd_coeff: i32,      // num fd coefficients
     it: i32             // time iteraction
 };
@@ -15,10 +14,8 @@ struct SimFltValues {
     dx: f32,            // delta x
     dy: f32,            // delta y
     dt: f32,            // delta t
-    rho: f32,           // density
-    lambda: f32,        // Lame parameter
-    mu : f32,           // Lame parameter
-    lambdaplus2mu: f32  // Lame parameter
+    lambda_cte: f32,    // constant to calculate lambda
+    mu_cte: f32         // constant to calculate mu
 };
 
 // Group 0 - parameters
@@ -43,6 +40,9 @@ var<storage,read_write> sim_int_par: SimIntValues;
 @group(0) @binding(25) // idx_fd
 var<storage,read> idx_fd: array<i32>;
 
+@group(0) @binding(26) // rho
+var<storage,read> rho_map: array<f32>;
+
 @group(0) @binding(28) // fd_coeff
 var<storage,read> fd_coeffs: array<f32>;
 
@@ -65,11 +65,11 @@ var<storage,read_write> sensors_vx: array<f32>;
 @group(2) @binding(9) // sensors signals vy
 var<storage,read_write> sensors_vy: array<f32>;
 
-@group(2) @binding(10) // sensors positions
-var<storage,read> sensors_pos_x: array<i32>;
+@group(2) @binding(11) // delay sensor
+var<storage,read> delay_rec: array<i32>;
 
-@group(2) @binding(11) // sensors positions
-var<storage,read> sensors_pos_y: array<i32>;
+@group(2) @binding(12) // sensors index
+var<storage,read> idx_rec: array<i32>;
 
 // -------------------------------
 // --- Index access functions ----
@@ -88,12 +88,12 @@ fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {
     return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
 }
 
-// ------------------------------------
+// -----------------------------------
 // --- Force array access funtions ---
-// ------------------------------------
+// -----------------------------------
 // function to get a source_term array value
 fn get_source_term(n: i32, e: i32) -> f32 {
-    let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_probe_elem);
+    let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_src);
 
     return select(0.0, source_term[index], index != -1);
 }
@@ -105,47 +105,63 @@ fn get_idx_source_term(x: i32, y: i32) -> i32 {
     return select(-1, idx_src[index], index != -1);
 }
 
+// ---------------------------------
+// --- Rho map access funtions ---
+// ---------------------------------
+// function to get a rho value
+fn get_rho(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, rho_map[index], index != -1);
+}
+
 // -------------------------------------------------
 // --- CPML X coefficients array access funtions ---
 // -------------------------------------------------
 // function to get a a_x array value
 fn get_a_x(n: i32) -> f32 {
-    let index: i32 = ij(n, 0, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 0, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
 
 // function to get a a_x_h array value
 fn get_a_x_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 3, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 3, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
 
 // function to get a b_x array value
 fn get_b_x(n: i32) -> f32 {
-    let index: i32 = ij(n, 1, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 1, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
 
 // function to get a b_x_h array value
 fn get_b_x_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 4, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 4, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
 
 // function to get a k_x array value
 fn get_k_x(n: i32) -> f32 {
-    let index: i32 = ij(n, 2, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 2, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
 
 // function to get a k_x_h array value
 fn get_k_x_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 5, sim_int_par.x_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 5, sim_int_par.x_sz - pad, 6);
 
     return select(0.0, coef_x[index], index != -1);
 }
@@ -155,42 +171,48 @@ fn get_k_x_h(n: i32) -> f32 {
 // -------------------------------------------------
 // function to get a a_y array value
 fn get_a_y(n: i32) -> f32 {
-    let index: i32 = ij(n, 0, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 0, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
 
 // function to get a a_y_h array value
 fn get_a_y_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 3, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 3, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
 
 // function to get a b_y array value
 fn get_b_y(n: i32) -> f32 {
-    let index: i32 = ij(n, 1, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 1, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
 
 // function to get a b_y_h array value
 fn get_b_y_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 4, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 4, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
 
 // function to get a k_y array value
 fn get_k_y(n: i32) -> f32 {
-    let index: i32 = ij(n, 2, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 2, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
 
 // function to get a k_y_h array value
 fn get_k_y_h(n: i32) -> f32 {
-    let index: i32 = ij(n, 5, sim_int_par.y_sz - 2, 6);
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+    let index: i32 = ij(n, 5, sim_int_par.y_sz - pad, 6);
 
     return select(0.0, coef_y[index], index != -1);
 }
@@ -440,6 +462,13 @@ fn set_sens_vx(n: i32, s: i32, val : f32) {
     }
 }
 
+// function to get a sens_vx array value
+fn get_sens_vx(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+
+    return select(0.0, sensors_vx[index], index != -1);
+}
+
 // function to set a sens_vy array value
 fn set_sens_vy(n: i32, s: i32, val : f32) {
     let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
@@ -449,16 +478,26 @@ fn set_sens_vy(n: i32, s: i32, val : f32) {
     }
 }
 
-// function to get a x index position of a sensor
-fn get_sens_pos_x(s: i32) -> i32 {
-    return select(-1, sensors_pos_x[s], s >= 0 && s < sim_int_par.n_rec);
+// function to get a sens_vy array value
+fn get_sens_vy(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+
+    return select(0.0, sensors_vy[index], index != -1);
 }
 
-// function to get a y index position of a sensor
-fn get_sens_pos_y(s: i32) -> i32 {
-    return select(-1, sensors_pos_y[s], s >= 0 && s < sim_int_par.n_rec);
+// function to get a delay receiver value
+fn get_delay_rec(s: i32) -> i32 {
+   let index: i32 = ij(s, 0, sim_int_par.n_rec, 1);
+
+    return select(0, delay_rec[index], index != -1);
 }
 
+// function to get a sensor index of a receiver point
+fn get_idx_sensor(x: i32, y: i32) -> i32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(-1, idx_rec[index], index != -1);
+}
 
 // -------------------------------------------------------------
 // --- Finite difference index limits arrays access funtions ---
@@ -507,9 +546,6 @@ fn teste_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let dx: f32 = sim_flt_par.dx;
     let dy: f32 = sim_flt_par.dy;
     let dt: f32 = sim_flt_par.dt;
-    let lambda: f32 = sim_flt_par.lambda;
-    let mu: f32 = sim_flt_par.mu;
-    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
     let last: i32 = sim_int_par.fd_coeff - 1;
     let offset_x: i32 = sim_int_par.fd_coeff - 1;
     let offset_y: i32 = sim_int_par.fd_coeff - 1;
@@ -520,8 +556,8 @@ fn teste_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     var id_y_i: i32 = -get_idx_ff(last);
     var id_y_f: i32 = sim_int_par.y_sz - get_idx_if(last);
     if(x >= id_x_i && x < id_x_f && y >= id_y_i && y < id_y_f) {
-        set_vx(x, y, get_b_x_h(x - offset_x));
-        set_vy(x, y, get_b_y(y - offset_y));
+        set_vx(x, y, get_rho(x, y));
+        set_vy(x, y, sim_flt_par.mu_cte);
     }
 }
 
@@ -534,9 +570,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let dx: f32 = sim_flt_par.dx;
     let dy: f32 = sim_flt_par.dy;
     let dt: f32 = sim_flt_par.dt;
-    let lambda: f32 = sim_flt_par.lambda;
-    let mu: f32 = sim_flt_par.mu;
-    let lambdaplus2mu: f32 = lambda + 2.0 * mu;
+    let lambda_cte: f32 = sim_flt_par.lambda_cte;
+    let mu_cte: f32 = sim_flt_par.mu_cte;
     let last: i32 = sim_int_par.fd_coeff - 1;
     let offset: i32 = sim_int_par.fd_coeff - 1;
 
@@ -561,6 +596,11 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         set_mdvx_dx(x, y, mdvx_dx_new);
         set_mdvy_dy(x, y, mdvy_dy_new);
+
+        let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
+        let lambda: f32 = rho_h_x * lambda_cte;
+        let mu: f32 = rho_h_x * lambda_cte;
+        let lambdaplus2mu: f32 = lambda + 2.0 * mu;
 
         set_sigmaxx(x, y, get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt);
         set_sigmayy(x, y, get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt);
@@ -589,6 +629,9 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvy_dx(x, y, mdvy_dx_new);
         set_mdvx_dy(x, y, mdvx_dy_new);
 
+        let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
+        let mu: f32 = rho_h_y * lambda_cte;
+
         set_sigmaxy(x, y, get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt);
     }
 }
@@ -599,7 +642,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
-    let dt_over_rho: f32 = sim_flt_par.dt / sim_flt_par.rho;
+    let dt: f32 = sim_flt_par.dt;
     let dx: f32 = sim_flt_par.dx;
     let dy: f32 = sim_flt_par.dy;
     let last: i32 = sim_int_par.fd_coeff - 1;
@@ -627,7 +670,10 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdsxx_dx(x, y, mdsxx_dx_new);
         set_mdsxy_dy(x, y, mdsxy_dy_new);
 
-        set_vx(x, y, dt_over_rho * (vdsigmaxx_dx + vdsigmaxy_dy) + get_vx(x, y));
+        let rho: f32 = get_rho(x, y);
+        if(rho > 0.0) {
+            set_vx(x, y, (vdsigmaxx_dx + vdsigmaxy_dy) * dt / rho + get_vx(x, y));
+        }
     }
 
     // Vy
@@ -652,7 +698,10 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdsxy_dx(x, y, mdsxy_dx_new);
         set_mdsyy_dy(x, y, mdsyy_dy_new);
 
-        set_vy(x, y, dt_over_rho * (vdsigmaxy_dx + vdsigmayy_dy) + get_vy(x, y));
+        let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
+        if(rho > 0.0) {
+            set_vy(x, y, (vdsigmaxy_dx + vdsigmayy_dy) * dt / rho + get_vy(x, y));
+        }
     }
 }
 
@@ -662,13 +711,14 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
-    let dt_over_rho: f32 = sim_flt_par.dt / sim_flt_par.rho;
+    let dt: f32 = sim_flt_par.dt;
     let it: i32 = sim_int_par.it;
 
     // Add the source force
     let idx_src_term: i32 = get_idx_source_term(x, y);
-    if(idx_src_term != -1) {
-        set_vy(x, y, get_vy(x, y) + get_source_term(it, idx_src_term) * dt_over_rho);
+    let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
+    if(idx_src_term != -1 && rho > 0.0) {
+        set_vy(x, y, get_vy(x, y) + get_source_term(it, idx_src_term) * dt / rho);
     }
 }
 
@@ -692,12 +742,10 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     }
 
     // Store sensors velocities
-    for(var s: i32 = 0; s < sim_int_par.n_rec; s++) {
-        if(x == get_sens_pos_x(s) && y == get_sens_pos_y(s)) {
-            set_sens_vx(it, s, get_vx(x, y));
-            set_sens_vy(it, s, get_vy(x, y));
-            break;
-        }
+    let idx_sensor: i32 = get_idx_sensor(x, y);
+    if(idx_sensor != -1 && it >= get_delay_rec(idx_sensor)) {
+        set_sens_vx(it, idx_sensor, get_vx(x, y) + get_sens_vx(it, idx_sensor));
+        set_sens_vy(it, idx_sensor, get_vy(x, y) + get_sens_vy(it, idx_sensor));
     }
 
     // Compute velocity norm L2
