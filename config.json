@@ -8,8 +8,8 @@
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 57.4,
-      "h_len" : 574,
+      "height" : 58.2,
+      "h_len" : 582,
       "width" : 77.4,
       "w_len" : 774,
       "depth" : 0.0,
@@ -86,17 +86,20 @@
     "do_sim_cpu": 0,
     "do_comp_fig_cpu_gpu": 1,
     "use_refletors": 0,
-    "show_anim": 1,
+    "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
-    "show_debug": 0,
+    "show_debug": 1,
     "plot_results": 1,
     "plot_sensors": 0,
     "plot_bscan": 1,
     "show_results": 1,
     "save_results": 0,
-    "gpu_type": "high-perf"
+    "save_bscan": 1,
+    "save_sources": 1,
+    "gpu_type": "high-perf",
+    "sim_interactive": 0
   },
   "specimen_params":
   {

@@ -601,9 +601,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let lambda: f32 = rho_h_x * lambda_cte;
         let mu: f32 = rho_h_x * lambda_cte;
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
-
-        set_sigmaxx(x, y, get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt);
-        set_sigmayy(x, y, get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt);
+        let sigmaxx: f32 = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
+        let sigmayy: f32 = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
+        set_sigmaxx(x, y, sigmaxx);
+        set_sigmayy(x, y, sigmayy);
     }
 
     // Shear stresses
@@ -620,8 +621,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             vdvx_dy += get_fdc(c) * (get_vx(x, y + get_idx_ih(c)) - get_vx(x, y + get_idx_fh(c))) / dy;
         }
 
-        var mdvy_dx_new: f32 = get_b_x(x - offset) * get_mdvy_dx(x, y) + get_a_x(x - offset) * vdvy_dx;
-        var mdvx_dy_new: f32 = get_b_y_h(y - offset) * get_mdvx_dy(x, y) + get_a_y_h(y - offset) * vdvx_dy;
+        let mdvy_dx_new: f32 = get_b_x(x - offset) * get_mdvy_dx(x, y) + get_a_x(x - offset) * vdvy_dx;
+        let mdvx_dy_new: f32 = get_b_y_h(y - offset) * get_mdvx_dy(x, y) + get_a_y_h(y - offset) * vdvx_dy;
 
         vdvy_dx = vdvy_dx/get_k_x(x - offset)   + mdvy_dx_new;
         vdvx_dy = vdvx_dy/get_k_y_h(y - offset) + mdvx_dy_new;
@@ -631,8 +632,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
         let mu: f32 = rho_h_y * lambda_cte;
-
-        set_sigmaxy(x, y, get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt);
+        let sigmaxy: f32 = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
+        set_sigmaxy(x, y, sigmaxy);
     }
 }
 
@@ -661,8 +662,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             vdsigmaxy_dy += get_fdc(c) * (get_sigmaxy(x, y + get_idx_if(c)) - get_sigmaxy(x, y + get_idx_ff(c))) / dy;
         }
 
-        var mdsxx_dx_new: f32 = get_b_x(x - offset) * get_mdsxx_dx(x, y) + get_a_x(x - offset) * vdsigmaxx_dx;
-        var mdsxy_dy_new: f32 = get_b_y(y - offset) * get_mdsxy_dy(x, y) + get_a_y(y - offset) * vdsigmaxy_dy;
+        let mdsxx_dx_new: f32 = get_b_x(x - offset) * get_mdsxx_dx(x, y) + get_a_x(x - offset) * vdsigmaxx_dx;
+        let mdsxy_dy_new: f32 = get_b_y(y - offset) * get_mdsxy_dy(x, y) + get_a_y(y - offset) * vdsigmaxy_dy;
 
         vdsigmaxx_dx = vdsigmaxx_dx/get_k_x(x - offset) + mdsxx_dx_new;
         vdsigmaxy_dy = vdsigmaxy_dy/get_k_y(y - offset) + mdsxy_dy_new;
@@ -672,7 +673,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho: f32 = get_rho(x, y);
         if(rho > 0.0) {
-            set_vx(x, y, (vdsigmaxx_dx + vdsigmaxy_dy) * dt / rho + get_vx(x, y));
+            let vx: f32 = (vdsigmaxx_dx + vdsigmaxy_dy) * dt / rho + get_vx(x, y);
+            set_vx(x, y, vx);
         }
     }
 
@@ -689,8 +691,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             vdsigmayy_dy += get_fdc(c) * (get_sigmayy(x, y + get_idx_ih(c)) - get_sigmayy(x, y + get_idx_fh(c))) / dy;
         }
 
-        var mdsxy_dx_new: f32 = get_b_x_h(x - offset) * get_mdsxy_dx(x, y) + get_a_x_h(x - offset) * vdsigmaxy_dx;
-        var mdsyy_dy_new: f32 = get_b_y_h(y - offset) * get_mdsyy_dy(x, y) + get_a_y_h(y - offset) * vdsigmayy_dy;
+        let mdsxy_dx_new: f32 = get_b_x_h(x - offset) * get_mdsxy_dx(x, y) + get_a_x_h(x - offset) * vdsigmaxy_dx;
+        let mdsyy_dy_new: f32 = get_b_y_h(y - offset) * get_mdsyy_dy(x, y) + get_a_y_h(y - offset) * vdsigmayy_dy;
 
         vdsigmaxy_dx = vdsigmaxy_dx/get_k_x_h(x - offset) + mdsxy_dx_new;
         vdsigmayy_dy = vdsigmayy_dy/get_k_y_h(y - offset) + mdsyy_dy_new;
@@ -700,7 +702,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
         if(rho > 0.0) {
-            set_vy(x, y, (vdsigmaxy_dx + vdsigmayy_dy) * dt / rho + get_vy(x, y));
+            let vy: f32 = (vdsigmaxy_dx + vdsigmayy_dy) * dt / rho + get_vy(x, y);
+            set_vy(x, y, vy);
         }
     }
 }
@@ -718,7 +721,8 @@ fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let idx_src_term: i32 = get_idx_source_term(x, y);
     let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
     if(idx_src_term != -1 && rho > 0.0) {
-        set_vy(x, y, get_vy(x, y) + get_source_term(it, idx_src_term) * dt / rho);
+        let vy: f32 = get_vy(x, y) + get_source_term(it, idx_src_term) * dt / rho;
+        set_vy(x, y, vy);
     }
 }
 
@@ -744,8 +748,10 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     // Store sensors velocities
     let idx_sensor: i32 = get_idx_sensor(x, y);
     if(idx_sensor != -1 && it >= get_delay_rec(idx_sensor)) {
-        set_sens_vx(it, idx_sensor, get_vx(x, y) + get_sens_vx(it, idx_sensor));
-        set_sens_vy(it, idx_sensor, get_vy(x, y) + get_sens_vy(it, idx_sensor));
+        let value_sens_vx: f32 = get_vx(x, y) + get_sens_vx(it, idx_sensor);
+        let value_sens_vy: f32 = get_vy(x, y) + get_sens_vy(it, idx_sensor);
+        set_sens_vx(it, idx_sensor, value_sens_vx);
+        set_sens_vy(it, idx_sensor, value_sens_vy);
     }
 
     // Compute velocity norm L2
