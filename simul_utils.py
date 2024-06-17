@@ -356,10 +356,15 @@ class ElementRect:
         # Tipo do pulso de excitacao. O unico tipo possivel e: ``gaussian``.
         self.pulse_type = pulse_type
 
-    def get_element_exc_fn(self, t):
+    def get_element_exc_fn(self, t, out='r'):
         dt = t[1] - t[0]
-        return np.diff(self.gain * np.float32(gausspulse((t - self.t0), fc=self.freq, bw=self.bw)) / dt,
-                       append=0.0).astype(np.float32)
+        gp, _, egp = gausspulse((t - self.t0), fc=self.freq, bw=self.bw, retquad=True, retenv=True)
+        if out == 'e':
+            ss = egp
+        else:
+            ss = gp
+
+        return np.diff(self.gain * np.float32(ss) / dt, append=0.0).astype(np.float32)
 
     def get_num_points_roi(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
@@ -643,12 +648,13 @@ class SimulationProbeLinearArray(SimulationProbe):
         arr_out = [sim_roi.get_nearest_grid_idx(p + self.coord_center) for p in arr_elem]
         return arr_out
 
-    def get_source_term(self, samples=1000, dt=1.0, sim_roi=SimulationROI(), simul_type="2D"):
+    def get_source_term(self, samples=1000, dt=1.0, sim_roi=SimulationROI(), simul_type="2D", out='r'):
         """
         Metodo que retorna os sinais dos termos de fonte do transdutor. Além de retornar um
         array com os sinais dos termos de fonte de cada elemento ativo do transdutor, esta função
         também retorna uma lista com o índice do termo de fonte para cada ponto da ROI que é
         um ponto emissor.
+        :param out:
         :param simul_type:
         :param sim_roi:
         :param samples: int
@@ -665,7 +671,7 @@ class SimulationProbeLinearArray(SimulationProbe):
         idx_src = list()
         for idx_st, e in enumerate(self.elem_list):
             if e.tx_en:
-                source_term[:, idx_st] = e.get_element_exc_fn(t)
+                source_term[:, idx_st] = e.get_element_exc_fn(t, out)
                 idx_src.append([idx_st for _ in range(e.get_num_points_roi(sim_roi=sim_roi, simul_type=simul_type))])
 
         return source_term, idx_src
