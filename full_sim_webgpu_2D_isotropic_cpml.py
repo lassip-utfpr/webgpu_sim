@@ -408,12 +408,18 @@ def sim_webgpu(device):
     pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()
 
     # Receivers
-    pos_recv = -np.ones((nx, ny), dtype=np.int32)
-    pos_recv[ix_rec, iy_rec] = np.array(idx_rec).astype(np.int32).flatten()
+    info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(idx_rec).flatten())).astype(np.int32)
+    numbers = list(np.array(idx_rec, dtype=np.int32).flatten())
+    offset_sensors = [ numbers[0] ]
+    for i in range(1, len(numbers)):
+        if numbers[i] != numbers[i - 1]:
+            offset_sensors.append(np.int32(i))
+    offset_sensors = np.array(offset_sensors, dtype=np.int32)
+    n_pto_rec = np.int32(len(numbers))
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     _ord = coefs.shape[0]
-    params_i32 = np.array([nx, ny, NSTEP, idx_src_offset, idx_rec_offset, _ord, 0], dtype=np.int32)
+    params_i32 = np.array([nx, ny, NSTEP, idx_src_offset, idx_rec_offset, n_pto_rec, _ord, 0], dtype=np.int32)
     params_f32 = np.array([cp, cs, dx, dy, dt, cp * cp - 2.0 * cs * cs, cs * cs], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
@@ -421,6 +427,7 @@ def sim_webgpu(device):
         cshader_string = shader_file.read()
         cshader_string = cshader_string.replace('wsx', f'{wsx}')
         cshader_string = cshader_string.replace('wsy', f'{wsy}')
+        cshader_string = cshader_string.replace('idx_rec_offset', f'{idx_rec_offset}')
         cshader = device.create_shader_module(code=cshader_string)
 
     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
@@ -534,8 +541,12 @@ def sim_webgpu(device):
                                                                         wgpu.BufferUsage.COPY_SRC)
 
     # Binding 12
-    b_idx_rec = device.create_buffer_with_data(data=pos_recv, usage=wgpu.BufferUsage.STORAGE |
-                                                                    wgpu.BufferUsage.COPY_SRC)
+    b_info_rec_pt = device.create_buffer_with_data(data=info_rec_pt, usage=wgpu.BufferUsage.STORAGE |
+                                                                           wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 13
+    b_offset_sensors = device.create_buffer_with_data(data=offset_sensors, usage=wgpu.BufferUsage.STORAGE |
+                                                                                 wgpu.BufferUsage.COPY_SRC)
 
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
@@ -602,6 +613,11 @@ def sim_webgpu(device):
              "type": wgpu.BufferBindingType.read_only_storage}
          },
         {"binding": 12,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 13,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
@@ -676,7 +692,11 @@ def sim_webgpu(device):
         },
         {
             "binding": 12,
-            "resource": {"buffer": b_idx_rec, "offset": 0, "size": b_idx_rec.size},
+            "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
+        },
+        {
+            "binding": 13,
+            "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
         },
     ]
 
@@ -705,6 +725,9 @@ def sim_webgpu(device):
     compute_finish_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                               compute={"module": cshader,
                                                                        "entry_point": "finish_it_kernel"})
+    compute_store_sensors_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                                  compute={"module": cshader,
+                                                                           "entry_point": "store_sensors_kernel"})
     compute_incr_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
@@ -749,6 +772,10 @@ def sim_webgpu(device):
         # Ativa o pipeline de execucao dos procedimentos finais da iteracao
         compute_pass.set_pipeline(compute_finish_it_kernel)
         compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
+
+        # Ativa o pipeline de execucao do armazenamento dos sensores
+        compute_pass.set_pipeline(compute_store_sensors_kernel)
+        compute_pass.dispatch_workgroups(idx_rec_offset)
 
         # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_it_kernel)

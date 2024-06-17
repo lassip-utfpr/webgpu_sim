@@ -2,8 +2,9 @@ struct SimIntValues {
     x_sz: i32,          // x field size
     y_sz: i32,          // y field size
     n_iter: i32,        // num iterations
-    n_src: i32,         // num probes tx elements
-    n_rec: i32,         // num probes rx elements
+    n_src_el: i32,      // num probes tx elements
+    n_rec_el: i32,      // num probes rx elements
+    n_rec_pt: i32,      // num rec pto
     fd_coeff: i32,      // num fd coefficients
     it: i32             // time iteraction
 };
@@ -68,8 +69,11 @@ var<storage,read_write> sensors_vy: array<f32>;
 @group(2) @binding(11) // delay sensor
 var<storage,read> delay_rec: array<i32>;
 
-@group(2) @binding(12) // sensors index
-var<storage,read> idx_rec: array<i32>;
+@group(2) @binding(12) // info rec ptos
+var<storage,read> info_rec_pt: array<i32>;
+
+@group(2) @binding(13) // info rec ptos
+var<storage,read> offset_sensors: array<i32>;
 
 // -------------------------------
 // --- Index access functions ----
@@ -93,7 +97,7 @@ fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {
 // -----------------------------------
 // function to get a source_term array value
 fn get_source_term(n: i32, e: i32) -> f32 {
-    let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_src);
+    let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_src_el);
 
     return select(0.0, source_term[index], index != -1);
 }
@@ -455,7 +459,7 @@ fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
 // --------------------------------------
 // function to set a sens_vx array value
 fn set_sens_vx(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
     if(index != -1) {
         sensors_vx[index] = val;
@@ -464,14 +468,14 @@ fn set_sens_vx(n: i32, s: i32, val : f32) {
 
 // function to get a sens_vx array value
 fn get_sens_vx(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
     return select(0.0, sensors_vx[index], index != -1);
 }
 
 // function to set a sens_vy array value
 fn set_sens_vy(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
     if(index != -1) {
         sensors_vy[index] = val;
@@ -480,23 +484,42 @@ fn set_sens_vy(n: i32, s: i32, val : f32) {
 
 // function to get a sens_vy array value
 fn get_sens_vy(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec);
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
     return select(0.0, sensors_vy[index], index != -1);
 }
 
 // function to get a delay receiver value
 fn get_delay_rec(s: i32) -> i32 {
-   let index: i32 = ij(s, 0, sim_int_par.n_rec, 1);
+   let index: i32 = ij(s, 0, sim_int_par.n_rec_el, 1);
 
     return select(0, delay_rec[index], index != -1);
 }
 
-// function to get a sensor index of a receiver point
-fn get_idx_sensor(x: i32, y: i32) -> i32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+// function to get a x-index of a receiver point
+fn get_idx_x_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 0, sim_int_par.n_rec_pt, 3);
 
-    return select(-1, idx_rec[index], index != -1);
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// function to get a y-index of a receiver point
+fn get_idx_y_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 1, sim_int_par.n_rec_pt, 3);
+
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// function to get a sensor-index of a receiver point
+fn get_idx_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 2, sim_int_par.n_rec_pt, 3);
+
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// function to get the offset of a sensor receiver in info_rec_pt table
+fn get_offset_sensor(s: i32) -> i32 {
+    return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
 }
 
 // -------------------------------------------------------------
@@ -732,7 +755,6 @@ fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
-    let it: i32 = sim_int_par.it;
     let last: i32 = sim_int_par.fd_coeff - 1;
     let id_x_i: i32 = -get_idx_fh(last);
     let id_x_f: i32 = sim_int_par.x_sz - get_idx_ih(last);
@@ -745,17 +767,29 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_vy(x, y, 0.0);
     }
 
-    // Store sensors velocities
-    let idx_sensor: i32 = get_idx_sensor(x, y);
-    if(idx_sensor != -1 && it >= get_delay_rec(idx_sensor)) {
-        let value_sens_vx: f32 = get_vx(x, y) + get_sens_vx(it, idx_sensor);
-        let value_sens_vy: f32 = get_vy(x, y) + get_sens_vy(it, idx_sensor);
-        set_sens_vx(it, idx_sensor, value_sens_vx);
-        set_sens_vy(it, idx_sensor, value_sens_vy);
-    }
-
     // Compute velocity norm L2
-    set_v_2(x, y, get_vx(x, y)*get_vx(x, y) + get_vy(x, y)*get_vy(x, y));
+    let v_2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
+    set_v_2(x, y, v_2);
+}
+
+// Kernel to store sensors velocity
+@compute
+@workgroup_size(idx_rec_offset)
+fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
+    let sensor: i32 = i32(index.x);          // x thread index
+    let it: i32 = sim_int_par.it;
+
+    // Store sensors velocities
+    for(var pt: i32 = get_offset_sensor(sensor); get_idx_sensor(pt) == sensor; pt++) {
+        if(it >= get_delay_rec(sensor)) {
+            let x: i32 = get_idx_x_sensor(pt);
+            let y: i32 = get_idx_y_sensor(pt);
+            let value_sens_vx: f32 = get_sens_vx(it, sensor) + get_vx(x, y);
+            let value_sens_vy: f32 = get_sens_vy(it, sensor) + get_vy(x, y);
+            set_sens_vx(it, sensor, value_sens_vx);
+            set_sens_vy(it, sensor, value_sens_vy);
+        }
+    }
 }
 
 // Kernel to increase time iteraction [it]

@@ -96,8 +96,8 @@
     "plot_bscan": 1,
     "show_results": 1,
     "save_results": 0,
-    "save_bscan": 1,
-    "save_sources": 1,
+    "save_bscan": 0,
+    "save_sources": 0,
     "gpu_type": "high-perf",
     "sim_interactive": 0
   },
