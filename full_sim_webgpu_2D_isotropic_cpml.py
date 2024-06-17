@@ -125,7 +125,10 @@ def sim_cpu():
     idx_src_offset = 0
     idx_rec_offset = 0
     for _pr in simul_probes:
-        st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+        if source_env:
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D", out='e')
+        else:
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
@@ -388,16 +391,19 @@ def sim_webgpu(device):
     idx_src_offset = 0
     idx_rec_offset = 0
     for _pr in simul_probes:
-        st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+        if source_env:
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D", out='e')
+        else:
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += len(i_src)
+            idx_src_offset += _pr.num_elem
 
         i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
         if len(i_rec) > 0:
             idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
-            idx_rec_offset += len(i_rec)
+            idx_rec_offset += _pr.num_elem
 
     # Source terms
     source_term = np.concatenate(source_term, axis=1)
@@ -405,11 +411,17 @@ def sim_webgpu(device):
         np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
 
     pos_sources = -np.ones((nx, ny), dtype=np.int32)
-    pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()
+    tmp_src = list()
+    for _i in idx_src:
+        tmp_src += list(_i)
+    pos_sources[ix_src, iy_src] = np.array(tmp_src).astype(np.int32).flatten()
 
     # Receivers
-    info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(idx_rec).flatten())).astype(np.int32)
-    numbers = list(np.array(idx_rec, dtype=np.int32).flatten())
+    tmp_rec = list()
+    for _i in idx_rec:
+        tmp_rec += list(_i)
+    info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(tmp_rec).flatten())).astype(np.int32)
+    numbers = list(np.array(tmp_rec, dtype=np.int32).flatten())
     offset_sensors = [ numbers[0] ]
     for i in range(1, len(numbers)):
         if numbers[i] != numbers[i - 1]:
@@ -419,7 +431,8 @@ def sim_webgpu(device):
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     _ord = coefs.shape[0]
-    params_i32 = np.array([nx, ny, NSTEP, idx_src_offset, idx_rec_offset, n_pto_rec, _ord, 0], dtype=np.int32)
+    params_i32 = np.array([nx, ny, NSTEP, source_term.shape[1], sisvx.shape[1], n_pto_rec, _ord, 0],
+                          dtype=np.int32)
     params_f32 = np.array([cp, cs, dx, dy, dt, cp * cp - 2.0 * cs * cs, cs * cs], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
@@ -900,6 +913,7 @@ with open('config.json', 'r') as f:
     save_results = bool(configs["simul_configs"]["save_results"])
     gpu_type = configs["simul_configs"]["gpu_type"]
     sim_interactive = bool(configs["simul_configs"]["sim_interactive"])
+    source_env = bool(configs["simul_configs"]["source_env"])
 
 # -----------------------
 # Inicializacao do WebGPU
