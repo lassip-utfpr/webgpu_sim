@@ -447,58 +447,59 @@ def sim_webgpu(device):
     # ------- Buffers para o binding de parametros -------------
     # Buffer de parametros com valores em ponto flutuante
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 0
     b_param_flt32 = device.create_buffer_with_data(data=params_f32, usage=wgpu.BufferUsage.STORAGE |
                                                                           wgpu.BufferUsage.COPY_SRC)
 
     # Forcas da fonte
-    # Binding 1
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     b_force = device.create_buffer_with_data(data=source_term,
                                              usage=wgpu.BufferUsage.STORAGE |
                                                    wgpu.BufferUsage.COPY_SRC)
 
-    # Binding 24
+    # Indices das fontes na ROI
     b_idx_src = device.create_buffer_with_data(data=pos_sources, usage=wgpu.BufferUsage.STORAGE |
                                                                        wgpu.BufferUsage.COPY_SRC)
 
     # Coeficientes de absorcao
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 2
-    b_coef_x = device.create_buffer_with_data(data=np.column_stack((a_x.flatten(),
-                                                                    b_x.flatten(),
-                                                                    k_x.flatten(),
-                                                                    a_x_half.flatten(),
-                                                                    b_x_half.flatten(),
-                                                                    k_x_half.flatten())),
-                                              usage=wgpu.BufferUsage.STORAGE |
-                                                    wgpu.BufferUsage.COPY_SRC)
+    b_a_x = device.create_buffer_with_data(data=a_x.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_b_x = device.create_buffer_with_data(data=b_x.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_k_x = device.create_buffer_with_data(data=k_x.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_a_x_h = device.create_buffer_with_data(data=a_x_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+    b_b_x_h = device.create_buffer_with_data(data=b_x_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+    b_k_x_h = device.create_buffer_with_data(data=k_x_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 3
-    b_coef_y = device.create_buffer_with_data(data=np.column_stack((a_y.flatten(),
-                                                                    b_y.flatten(),
-                                                                    k_y.flatten(),
-                                                                    a_y_half.flatten(),
-                                                                    b_y_half.flatten(),
-                                                                    k_y_half.flatten())),
-                                              usage=wgpu.BufferUsage.STORAGE |
-                                                    wgpu.BufferUsage.COPY_SRC)
+    b_a_y = device.create_buffer_with_data(data=a_y.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_b_y = device.create_buffer_with_data(data=b_y.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_k_y = device.create_buffer_with_data(data=k_y.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_a_y_h = device.create_buffer_with_data(data=a_y_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+    b_b_y_h = device.create_buffer_with_data(data=b_y_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+    b_k_y_h = device.create_buffer_with_data(data=k_y_half.flatten(), usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 4
     b_param_int32 = device.create_buffer_with_data(data=params_i32, usage=wgpu.BufferUsage.STORAGE |
                                                                           wgpu.BufferUsage.COPY_SRC)
 
     # Buffers com os indices para o calculo das derivadas com acuracia maior
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 25
     idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(_ord)], dtype=np.int32)
     b_idx_fd = device.create_buffer_with_data(data=idx_fd, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
 
     # Buffer com o mapa de densidades da ROI
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 26
     rho_map = rho * np.ones((nx, ny), dtype=np.float32)
     # rho_map = (plt.imread("rho_maps/SDH.png")[:, :, :-1].mean(axis=2, dtype=np.float32) * np.float32(rho - 1225.0) +
     #            np.float32(1225.0))
@@ -507,96 +508,87 @@ def sim_webgpu(device):
 
     # Buffer com os coeficientes para ao calculo das derivadas
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 28
     b_fd_coeffs = device.create_buffer_with_data(data=coefs, usage=wgpu.BufferUsage.STORAGE |
                                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Buffers com os arrays de simulacao
     # Velocidades
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 5
-    b_vel = device.create_buffer_with_data(data=np.vstack((vx, vy, v_2)), usage=wgpu.BufferUsage.STORAGE |
-                                                                                wgpu.BufferUsage.COPY_DST |
-                                                                                wgpu.BufferUsage.COPY_SRC)
+    b_vx = device.create_buffer_with_data(data=vx, usage=wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+    b_vy = device.create_buffer_with_data(data=vy, usage=wgpu.BufferUsage.STORAGE |
+                                                         wgpu.BufferUsage.COPY_DST |
+                                                         wgpu.BufferUsage.COPY_SRC)
+    b_v_2 = device.create_buffer_with_data(data=v_2, usage=wgpu.BufferUsage.STORAGE |
+                                                           wgpu.BufferUsage.COPY_DST |
+                                                           wgpu.BufferUsage.COPY_SRC)
 
     # Estresses
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 6
-    b_sig = device.create_buffer_with_data(data=np.vstack((sigmaxx, sigmayy, sigmaxy)),
-                                           usage=wgpu.BufferUsage.STORAGE |
-                                                 wgpu.BufferUsage.COPY_DST |
-                                                 wgpu.BufferUsage.COPY_SRC)
+    b_sigmaxx = device.create_buffer_with_data(data=sigmaxx, usage=wgpu.BufferUsage.STORAGE |
+                                                                   wgpu.BufferUsage.COPY_DST |
+                                                                   wgpu.BufferUsage.COPY_SRC)
+    b_sigmayy = device.create_buffer_with_data(data=sigmayy, usage=wgpu.BufferUsage.STORAGE |
+                                                                   wgpu.BufferUsage.COPY_DST |
+                                                                   wgpu.BufferUsage.COPY_SRC)
+    b_sigmaxy = device.create_buffer_with_data(data=sigmaxy, usage=wgpu.BufferUsage.STORAGE |
+                                                                   wgpu.BufferUsage.COPY_DST |
+                                                                   wgpu.BufferUsage.COPY_SRC)
 
     # Arrays de memoria do simulador
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    # Binding 7
-    b_memo = device.create_buffer_with_data(data=np.vstack((memory_dvx_dx, memory_dvx_dy,
-                                                            memory_dvy_dx, memory_dvy_dy,
-                                                            memory_dsigmaxx_dx, memory_dsigmayy_dy,
-                                                            memory_dsigmaxy_dx, memory_dsigmaxy_dy)),
-                                            usage=wgpu.BufferUsage.STORAGE |
-                                                  wgpu.BufferUsage.COPY_SRC)
+    b_memory_dvx_dx = device.create_buffer_with_data(data=memory_dvx_dx, usage=wgpu.BufferUsage.STORAGE |
+                                                                               wgpu.BufferUsage.COPY_SRC)
+    b_memory_dvx_dy = device.create_buffer_with_data(data=memory_dvx_dy, usage=wgpu.BufferUsage.STORAGE |
+                                                                               wgpu.BufferUsage.COPY_SRC)
+    b_memory_dvy_dx = device.create_buffer_with_data(data=memory_dvy_dx, usage=wgpu.BufferUsage.STORAGE |
+                                                                               wgpu.BufferUsage.COPY_SRC)
+    b_memory_dvy_dy = device.create_buffer_with_data(data=memory_dvy_dy, usage=wgpu.BufferUsage.STORAGE |
+                                                                               wgpu.BufferUsage.COPY_SRC)
+    b_memory_dsigmaxx_dx = device.create_buffer_with_data(data=memory_dsigmaxx_dx, usage=wgpu.BufferUsage.STORAGE |
+                                                                                         wgpu.BufferUsage.COPY_SRC)
+    b_memory_dsigmayy_dy = device.create_buffer_with_data(data=memory_dsigmayy_dy, usage=wgpu.BufferUsage.STORAGE |
+                                                                                         wgpu.BufferUsage.COPY_SRC)
+    b_memory_dsigmaxy_dx = device.create_buffer_with_data(data=memory_dsigmaxy_dx, usage=wgpu.BufferUsage.STORAGE |
+                                                                                         wgpu.BufferUsage.COPY_SRC)
+    b_memory_dsigmaxy_dy = device.create_buffer_with_data(data=memory_dsigmaxy_dy, usage=wgpu.BufferUsage.STORAGE |
+                                                                                         wgpu.BufferUsage.COPY_SRC)
 
     # Sinal do sensor
     # [STORAGE | COPY_DST | COPY_SRC] pois sao valores passados para a GPU e tambem retornam a CPU [COPY_DST]
-    # Binding 8
     b_sens_x = device.create_buffer_with_data(data=sisvx, usage=wgpu.BufferUsage.STORAGE |
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
-
-    # Binding 9
     b_sens_y = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
 
-    # Binding 11
+    # Tempo de espera para recepcao nos sensores
     b_delay_rec = device.create_buffer_with_data(data=delay_recv, usage=wgpu.BufferUsage.STORAGE |
                                                                         wgpu.BufferUsage.COPY_SRC)
 
-    # Binding 12
+    # Informacoes dos pontos receptores
     b_info_rec_pt = device.create_buffer_with_data(data=info_rec_pt, usage=wgpu.BufferUsage.STORAGE |
                                                                            wgpu.BufferUsage.COPY_SRC)
-
-    # Binding 13
     b_offset_sensors = device.create_buffer_with_data(data=offset_sensors, usage=wgpu.BufferUsage.STORAGE |
                                                                                  wgpu.BufferUsage.COPY_SRC)
 
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
     bl_params = [
+        {"binding": 0,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+            "type": wgpu.BufferBindingType.storage}
+         }
+    ]
+    bl_params += [
         {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         } for ii in range(4)
-    ]
-    # b_param_i32
-    bl_params += [{
-        "binding": 4,
-        "visibility": wgpu.ShaderStage.COMPUTE,
-        "buffer": {
-            "type": wgpu.BufferBindingType.storage}
-        },
-        {"binding": 24,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 25,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 26,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 28,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         }
+         } for ii in range(1, 19)
     ]
 
     # Arrays da simulacao
@@ -605,110 +597,181 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(5, 8)
+         } for ii in range(0, 14)
     ]
 
     # Sensores
     bl_sensors = [
-        {"binding": 8,
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 9,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 11,
+         } for ii in range(0, 2)
+    ]
+    bl_sensors += [
+        {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 12,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 13,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
+         } for ii in range(2, 5)
     ]
 
     # Configuracao das amarracoes (bindings)
     b_params = [
         {
             "binding": 0,
-            "resource": {"buffer": b_param_flt32, "offset": 0, "size": b_param_flt32.size},
-        },
-        {
-            "binding": 1,
-            "resource": {"buffer": b_force, "offset": 0, "size": b_force.size},
-        },
-        {
-            "binding": 2,
-            "resource": {"buffer": b_coef_x, "offset": 0, "size": b_coef_x.size},
-        },
-        {
-            "binding": 3,
-            "resource": {"buffer": b_coef_y, "offset": 0, "size": b_coef_y.size},
-        },
-        {
-            "binding": 4,
             "resource": {"buffer": b_param_int32, "offset": 0, "size": b_param_int32.size},
         },
         {
-            "binding": 24,
+            "binding": 1,
+            "resource": {"buffer": b_param_flt32, "offset": 0, "size": b_param_flt32.size},
+        },
+        {
+            "binding": 2,
+            "resource": {"buffer": b_force, "offset": 0, "size": b_force.size},
+        },
+        {
+            "binding": 3,
             "resource": {"buffer": b_idx_src, "offset": 0, "size": b_idx_src.size},
         },
         {
-            "binding": 25,
+            "binding": 4,
+            "resource": {"buffer": b_a_x, "offset": 0, "size": b_a_x.size},
+        },
+        {
+            "binding": 5,
+            "resource": {"buffer": b_b_x, "offset": 0, "size": b_b_x.size},
+        },
+        {
+            "binding": 6,
+            "resource": {"buffer": b_k_x, "offset": 0, "size": b_k_x.size},
+        },
+        {
+            "binding": 7,
+            "resource": {"buffer": b_a_x_h, "offset": 0, "size": b_a_x_h.size},
+        },
+        {
+            "binding": 8,
+            "resource": {"buffer": b_b_x_h, "offset": 0, "size": b_b_x_h.size},
+        },
+        {
+            "binding": 9,
+            "resource": {"buffer": b_k_x_h, "offset": 0, "size": b_k_x_h.size},
+        },
+        {
+            "binding": 10,
+            "resource": {"buffer": b_a_y, "offset": 0, "size": b_a_y.size},
+        },
+        {
+            "binding": 11,
+            "resource": {"buffer": b_b_y, "offset": 0, "size": b_b_y.size},
+        },
+        {
+            "binding": 12,
+            "resource": {"buffer": b_k_y, "offset": 0, "size": b_k_y.size},
+        },
+        {
+            "binding": 13,
+            "resource": {"buffer": b_a_y_h, "offset": 0, "size": b_a_y_h.size},
+        },
+        {
+            "binding": 14,
+            "resource": {"buffer": b_b_y_h, "offset": 0, "size": b_b_y_h.size},
+        },
+        {
+            "binding": 15,
+            "resource": {"buffer": b_k_y_h, "offset": 0, "size": b_k_y_h.size},
+        },
+        {
+            "binding": 16,
             "resource": {"buffer": b_idx_fd, "offset": 0, "size": b_idx_fd.size},
         },
         {
-            "binding": 26,
-            "resource": {"buffer": b_rho_map, "offset": 0, "size": b_rho_map.size},
+            "binding": 17,
+            "resource": {"buffer": b_fd_coeffs, "offset": 0, "size": b_fd_coeffs.size},
         },
         {
-            "binding": 28,
-            "resource": {"buffer": b_fd_coeffs, "offset": 0, "size": b_fd_coeffs.size},
+            "binding": 18,
+            "resource": {"buffer": b_rho_map, "offset": 0, "size": b_rho_map.size},
         },
     ]
     b_sim_arrays = [
         {
+            "binding": 0,
+            "resource": {"buffer": b_vx, "offset": 0, "size": b_vx.size},
+        },
+        {
+            "binding": 1,
+            "resource": {"buffer": b_vy, "offset": 0, "size": b_vy.size},
+        },
+        {
+            "binding": 2,
+            "resource": {"buffer": b_v_2, "offset": 0, "size": b_v_2.size},
+        },
+        {
+            "binding": 3,
+            "resource": {"buffer": b_sigmaxx, "offset": 0, "size": b_sigmaxx.size},
+        },
+        {
+            "binding": 4,
+            "resource": {"buffer": b_sigmayy, "offset": 0, "size": b_sigmayy.size},
+        },
+        {
             "binding": 5,
-            "resource": {"buffer": b_vel, "offset": 0, "size": b_vel.size},
+            "resource": {"buffer": b_sigmaxy, "offset": 0, "size": b_sigmaxy.size},
         },
         {
             "binding": 6,
-            "resource": {"buffer": b_sig, "offset": 0, "size": b_sig.size},
+            "resource": {"buffer": b_memory_dvx_dx, "offset": 0, "size": b_memory_dvx_dx.size},
         },
         {
             "binding": 7,
-            "resource": {"buffer": b_memo, "offset": 0, "size": b_memo.size},
+            "resource": {"buffer": b_memory_dvx_dy, "offset": 0, "size": b_memory_dvx_dy.size},
+        },
+        {
+            "binding": 8,
+            "resource": {"buffer": b_memory_dvy_dx, "offset": 0, "size": b_memory_dvy_dx.size},
+        },
+        {
+            "binding": 9,
+            "resource": {"buffer": b_memory_dvy_dy, "offset": 0, "size": b_memory_dvy_dy.size},
+        },
+        {
+            "binding": 10,
+            "resource": {"buffer": b_memory_dsigmaxx_dx, "offset": 0, "size": b_memory_dsigmaxx_dx.size},
+        },
+        {
+            "binding": 11,
+            "resource": {"buffer": b_memory_dsigmayy_dy, "offset": 0, "size": b_memory_dsigmayy_dy.size},
+        },
+        {
+            "binding": 12,
+            "resource": {"buffer": b_memory_dsigmaxy_dx, "offset": 0, "size": b_memory_dsigmaxy_dx.size},
+        },
+        {
+            "binding": 13,
+            "resource": {"buffer": b_memory_dsigmaxy_dy, "offset": 0, "size": b_memory_dsigmaxy_dy.size},
         },
     ]
     b_sensors = [
         {
-            "binding": 8,
+            "binding": 0,
             "resource": {"buffer": b_sens_x, "offset": 0, "size": b_sens_x.size},
         },
         {
-            "binding": 9,
+            "binding": 1,
             "resource": {"buffer": b_sens_y, "offset": 0, "size": b_sens_y.size},
         },
         {
-            "binding": 11,
+            "binding": 2,
             "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
         },
         {
-            "binding": 12,
+            "binding": 3,
             "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
         },
         {
-            "binding": 13,
+            "binding": 4,
             "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
         },
     ]
@@ -801,19 +864,16 @@ def sim_webgpu(device):
             # Efetua a execucao dos comandos na GPU
             device.queue.submit([command_encoder.finish()])
 
-            # en = np.asarray(device.queue.read_buffer(b_energy).cast("f")).reshape((NSTEP, 4))
-            b_v_2_offset = (vx.size + vy.size) * 4
-            vsn2 = np.asarray(device.queue.read_buffer(b_vel,
-                                                       buffer_offset=b_v_2_offset).cast("f")).reshape((nx, ny))
+            # Pega resultados na GPU
+            vsn2 = np.asarray(device.queue.read_buffer(b_v_2,
+                                                       buffer_offset=0).cast("f")).reshape((nx, ny))
             v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
             if (it % IT_DISPLAY) == 0 or it == 5:
                 if show_debug or show_anim:
-                    vxgpu = np.asarray(device.queue.read_buffer(b_vel,
-                                                                buffer_offset=0,
-                                                                size=vx.size * 4).cast("f")).reshape((nx, ny))
-                    vygpu = np.asarray(device.queue.read_buffer(b_vel,
-                                                                buffer_offset=vx.size * 4,
-                                                                size=vy.size * 4).cast("f")).reshape((nx, ny))
+                    vxgpu = np.asarray(device.queue.read_buffer(b_vx,
+                                                                buffer_offset=0).cast("f")).reshape((nx, ny))
+                    vygpu = np.asarray(device.queue.read_buffer(b_vy,
+                                                                buffer_offset=0).cast("f")).reshape((nx, ny))
 
                     if show_debug:
                         print(f'Time step # {it} out of {NSTEP}')
@@ -850,12 +910,10 @@ def sim_webgpu(device):
         device.queue.submit([command_encoder.finish()])
 
     # Pega os resultados da simulacao
-    vxgpu = np.asarray(device.queue.read_buffer(b_vel,
-                                                buffer_offset=0,
-                                                size=vx.size * 4).cast("f")).reshape((nx, ny))
-    vygpu = np.asarray(device.queue.read_buffer(b_vel,
-                                                buffer_offset=vx.size * 4,
-                                                size=vy.size * 4).cast("f")).reshape((nx, ny))
+    vxgpu = np.asarray(device.queue.read_buffer(b_vx,
+                                                buffer_offset=0).cast("f")).reshape((nx, ny))
+    vygpu = np.asarray(device.queue.read_buffer(b_vy,
+                                                buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
     adapter_info = device.adapter.request_adapter_info()
