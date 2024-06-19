@@ -851,7 +851,7 @@ def sim_webgpu(device):
 
         # Ativa o pipeline de execucao do armazenamento dos sensores
         compute_pass.set_pipeline(compute_store_sensors_kernel)
-        compute_pass.dispatch_workgroups(idx_rec_offset)
+        compute_pass.dispatch_workgroups(1)
 
         # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_it_kernel)
@@ -865,15 +865,12 @@ def sim_webgpu(device):
             device.queue.submit([command_encoder.finish()])
 
             # Pega resultados na GPU
-            vsn2 = np.asarray(device.queue.read_buffer(b_v_2,
-                                                       buffer_offset=0).cast("f")).reshape((nx, ny))
+            vsn2 = np.asarray(device.queue.read_buffer(b_v_2, buffer_offset=0).cast("f")).reshape((nx, ny))
             v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
             if (it % IT_DISPLAY) == 0 or it == 5:
                 if show_debug or show_anim:
-                    vxgpu = np.asarray(device.queue.read_buffer(b_vx,
-                                                                buffer_offset=0).cast("f")).reshape((nx, ny))
-                    vygpu = np.asarray(device.queue.read_buffer(b_vy,
-                                                                buffer_offset=0).cast("f")).reshape((nx, ny))
+                    vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
+                    vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
 
                     if show_debug:
                         print(f'Time step # {it} out of {NSTEP}')
@@ -910,10 +907,8 @@ def sim_webgpu(device):
         device.queue.submit([command_encoder.finish()])
 
     # Pega os resultados da simulacao
-    vxgpu = np.asarray(device.queue.read_buffer(b_vx,
-                                                buffer_offset=0).cast("f")).reshape((nx, ny))
-    vygpu = np.asarray(device.queue.read_buffer(b_vy,
-                                                buffer_offset=0).cast("f")).reshape((nx, ny))
+    vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
+    vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
     adapter_info = device.adapter.request_adapter_info()
