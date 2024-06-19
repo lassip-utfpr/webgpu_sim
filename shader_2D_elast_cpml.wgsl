@@ -1,3 +1,6 @@
+// ++++++++++++++++++++++++++++++
+// ++++ Group 0 - parameters ++++
+// ++++++++++++++++++++++++++++++
 struct SimIntValues {
     x_sz: i32,          // x field size
     y_sz: i32,          // y field size
@@ -9,6 +12,9 @@ struct SimIntValues {
     it: i32             // time iteraction
 };
 
+@group(0) @binding(0) // param_int32
+var<storage,read_write> sim_int_par: SimIntValues;
+
 struct SimFltValues {
     cp: f32,            // longitudinal sound speed
     cs: f32,            // transverse sound speed
@@ -19,61 +25,8 @@ struct SimFltValues {
     mu_cte: f32         // constant to calculate mu
 };
 
-// Group 0 - parameters
-@group(0) @binding(0)   // param_flt32
+@group(0) @binding(1)   // param_flt32
 var<storage,read> sim_flt_par: SimFltValues;
-
-@group(0) @binding(1) // source term
-var<storage,read> source_term: array<f32>;
-
-@group(0) @binding(24) // source term index
-var<storage,read> idx_src: array<i32>;
-
-@group(0) @binding(2) // a_x, b_x, k_x, a_x_h, b_x_h, k_x_h
-var<storage,read> coef_x: array<f32>;
-
-@group(0) @binding(3) // a_y, b_y, k_y, a_y_h, b_y_h, k_y_h
-var<storage,read> coef_y: array<f32>;
-
-@group(0) @binding(4) // param_int32
-var<storage,read_write> sim_int_par: SimIntValues;
-
-@group(0) @binding(25) // idx_fd
-var<storage,read> idx_fd: array<i32>;
-
-@group(0) @binding(26) // rho
-var<storage,read> rho_map: array<f32>;
-
-@group(0) @binding(28) // fd_coeff
-var<storage,read> fd_coeffs: array<f32>;
-
-// Group 1 - simulation arrays
-@group(1) @binding(5) // velocity fields (vx, vy, v_2)
-var<storage,read_write> vel: array<f32>;
-
-@group(1) @binding(6) // stress fields (sigmaxx, sigmayy, sigmaxy)
-var<storage,read_write> sig: array<f32>;
-
-@group(1) @binding(7) // memory fields
-                      // memory_dvx_dx, memory_dvx_dy, memory_dvy_dx, memory_dvy_dy,
-                      // memory_dsigmaxx_dx, memory_dsigmayy_dy, memory_dsigmaxy_dx, memory_dsigmaxy_dy
-var<storage,read_write> memo: array<f32>;
-
-// Group 2 - sensors arrays and energies
-@group(2) @binding(8) // sensors signals vx
-var<storage,read_write> sensors_vx: array<f32>;
-
-@group(2) @binding(9) // sensors signals vy
-var<storage,read_write> sensors_vy: array<f32>;
-
-@group(2) @binding(11) // delay sensor
-var<storage,read> delay_rec: array<i32>;
-
-@group(2) @binding(12) // info rec ptos
-var<storage,read> info_rec_pt: array<i32>;
-
-@group(2) @binding(13) // info rec ptos
-var<storage,read> offset_sensors: array<i32>;
 
 // -------------------------------
 // --- Index access functions ----
@@ -85,22 +38,23 @@ fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {
     return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
 }
 
-// function to convert 3D [i,j,k] index into 1D [] index
-fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {
-    let index = j + i * j_max + k * j_max * i_max;
-
-    return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
-}
-
 // -----------------------------------
 // --- Force array access funtions ---
 // -----------------------------------
+@group(0) @binding(2) // source term
+var<storage,read> source_term: array<f32>;
+
 // function to get a source_term array value
 fn get_source_term(n: i32, e: i32) -> f32 {
     let index: i32 = ij(n, e, sim_int_par.n_iter, sim_int_par.n_src_el);
 
     return select(0.0, source_term[index], index != -1);
 }
+
+// ----------------------------------
+
+@group(0) @binding(3) // source term index
+var<storage,read> idx_src: array<i32>;
 
 // function to get a source term index of a source
 fn get_idx_source_term(x: i32, y: i32) -> i32 {
@@ -109,422 +63,158 @@ fn get_idx_source_term(x: i32, y: i32) -> i32 {
     return select(-1, idx_src[index], index != -1);
 }
 
-// ---------------------------------
-// --- Rho map access funtions ---
-// ---------------------------------
-// function to get a rho value
-fn get_rho(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, rho_map[index], index != -1);
-}
-
 // -------------------------------------------------
 // --- CPML X coefficients array access funtions ---
 // -------------------------------------------------
+@group(0) @binding(4) // a_x
+var<storage,read> a_x: array<f32>;
+
 // function to get a a_x array value
 fn get_a_x(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 0, sim_int_par.x_sz - pad, 6);
 
-    return select(0.0, coef_x[index], index != -1);
+    return select(0.0, a_x[n], n >= 0 && n < sim_int_par.x_sz - pad);
 }
 
-// function to get a a_x_h array value
-fn get_a_x_h(n: i32) -> f32 {
-    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 3, sim_int_par.x_sz - pad, 6);
+// ----------------------------------
 
-    return select(0.0, coef_x[index], index != -1);
-}
+@group(0) @binding(5) // b_x
+var<storage,read> b_x: array<f32>;
 
 // function to get a b_x array value
 fn get_b_x(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 1, sim_int_par.x_sz - pad, 6);
 
-    return select(0.0, coef_x[index], index != -1);
+    return select(0.0, b_x[n], n >= 0 && n < sim_int_par.x_sz - pad);
 }
 
-// function to get a b_x_h array value
-fn get_b_x_h(n: i32) -> f32 {
-    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 4, sim_int_par.x_sz - pad, 6);
+// ----------------------------------
 
-    return select(0.0, coef_x[index], index != -1);
-}
+@group(0) @binding(6) // k_x
+var<storage,read> k_x: array<f32>;
 
 // function to get a k_x array value
 fn get_k_x(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 2, sim_int_par.x_sz - pad, 6);
 
-    return select(0.0, coef_x[index], index != -1);
+    return select(0.0, k_x[n], n >= 0 && n < sim_int_par.x_sz - pad);
 }
+
+// ----------------------------------
+
+@group(0) @binding(7) // a_x_h
+var<storage,read> a_x_h: array<f32>;
+
+// function to get a a_x_h array value
+fn get_a_x_h(n: i32) -> f32 {
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+
+    return select(0.0, a_x_h[n], n >= 0 && n < sim_int_par.x_sz - pad);
+}
+
+// ----------------------------------
+
+@group(0) @binding(8) // b_x_h
+var<storage,read> b_x_h: array<f32>;
+
+// function to get a b_x_h array value
+fn get_b_x_h(n: i32) -> f32 {
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+
+    return select(0.0, b_x_h[n], n >= 0 && n < sim_int_par.x_sz - pad);
+}
+
+// ----------------------------------
+
+@group(0) @binding(9) // k_x_h
+var<storage,read> k_x_h: array<f32>;
 
 // function to get a k_x_h array value
 fn get_k_x_h(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 5, sim_int_par.x_sz - pad, 6);
 
-    return select(0.0, coef_x[index], index != -1);
+    return select(0.0, k_x_h[n], n >= 0 && n < sim_int_par.x_sz - pad);
 }
 
 // -------------------------------------------------
 // --- CPML Y coefficients array access funtions ---
 // -------------------------------------------------
+@group(0) @binding(10) // a_y
+var<storage,read> a_y: array<f32>;
+
 // function to get a a_y array value
 fn get_a_y(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 0, sim_int_par.y_sz - pad, 6);
 
-    return select(0.0, coef_y[index], index != -1);
+    return select(0.0, a_y[n], n >= 0 && n < sim_int_par.y_sz - pad);
 }
 
-// function to get a a_y_h array value
-fn get_a_y_h(n: i32) -> f32 {
-    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 3, sim_int_par.y_sz - pad, 6);
+// ----------------------------------
 
-    return select(0.0, coef_y[index], index != -1);
-}
+@group(0) @binding(11) // b_y
+var<storage,read> b_y: array<f32>;
 
 // function to get a b_y array value
 fn get_b_y(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 1, sim_int_par.y_sz - pad, 6);
 
-    return select(0.0, coef_y[index], index != -1);
+    return select(0.0, b_y[n], n >= 0 && n < sim_int_par.y_sz - pad);
 }
 
-// function to get a b_y_h array value
-fn get_b_y_h(n: i32) -> f32 {
-    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 4, sim_int_par.y_sz - pad, 6);
+// ----------------------------------
 
-    return select(0.0, coef_y[index], index != -1);
-}
+@group(0) @binding(12) // k_y
+var<storage,read> k_y: array<f32>;
 
 // function to get a k_y array value
 fn get_k_y(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 2, sim_int_par.y_sz - pad, 6);
 
-    return select(0.0, coef_y[index], index != -1);
+    return select(0.0, k_y[n], n >= 0 && n < sim_int_par.y_sz - pad);
 }
+
+// ----------------------------------
+
+@group(0) @binding(13) // a_y_h
+var<storage,read> a_y_h: array<f32>;
+
+// function to get a a_y_h array value
+fn get_a_y_h(n: i32) -> f32 {
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+
+    return select(0.0, a_y_h[n], n >= 0 && n < sim_int_par.y_sz - pad);
+}
+
+// ----------------------------------
+
+@group(0) @binding(14) // b_y_h
+var<storage,read> b_y_h: array<f32>;
+
+// function to get a b_y_h array value
+fn get_b_y_h(n: i32) -> f32 {
+    let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
+
+    return select(0.0, b_y_h[n], n >= 0 && n < sim_int_par.y_sz - pad);
+}
+
+// ----------------------------------
+
+@group(0) @binding(15) // k_y_h
+var<storage,read> k_y_h: array<f32>;
 
 // function to get a k_y_h array value
 fn get_k_y_h(n: i32) -> f32 {
     let pad: i32 = (sim_int_par.fd_coeff - 1) * 2;
-    let index: i32 = ij(n, 5, sim_int_par.y_sz - pad, 6);
 
-    return select(0.0, coef_y[index], index != -1);
-}
-
-// ---------------------------------------
-// --- Velocity arrays access funtions ---
-// ---------------------------------------
-// function to get a vx array value
-fn get_vx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, vel[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_vx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        vel[index] = val;
-    }
-}
-
-// function to get a vy array value
-fn get_vy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, vel[index], index != -1);
-}
-
-// function to set a vy array value
-fn set_vy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        vel[index] = val;
-    }
-}
-
-// function to get a v_2 array value
-fn get_v_2(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, vel[index], index != -1);
-}
-
-// function to set a v_2 array value
-fn set_v_2(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        vel[index] = val;
-    }
-}
-
-// -------------------------------------
-// --- Stress arrays access funtions ---
-// -------------------------------------
-// function to get a sigmaxx array value
-fn get_sigmaxx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, sig[index], index != -1);
-}
-
-// function to set a sigmaxx array value
-fn set_sigmaxx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        sig[index] = val;
-    }
-}
-
-// function to get a sigmayy array value
-fn get_sigmayy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, sig[index], index != -1);
-}
-
-// function to set a sigmayy array value
-fn set_sigmayy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        sig[index] = val;
-    }
-}
-
-// function to get a sigmaxy array value
-fn get_sigmaxy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    return select(0.0, sig[index], index != -1);
-}
-
-// function to set a sigmaxy array value
-fn set_sigmaxy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 3);
-
-    if(index != -1) {
-        sig[index] = val;
-    }
-}
-
-// -------------------------------------
-// --- Memory arrays access funtions ---
-// -------------------------------------
-// function to get a memory_dvx_dx array value
-fn get_mdvx_dx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dvx_dx array value
-fn set_mdvx_dx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 0, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dvx_dy array value
-fn get_mdvx_dy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dvx_dy array value
-fn set_mdvx_dy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 1, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dvy_dx array value
-fn get_mdvy_dx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dvy_dx array value
-fn set_mdvy_dx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 2, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dvy_dy array value
-fn get_mdvy_dy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dvy_dy array value
-fn set_mdvy_dy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 3, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dsigmaxx_dx array value
-fn get_mdsxx_dx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 4, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dsigmaxx_dx array value
-fn set_mdsxx_dx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 4, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dsigmayy_dy array value
-fn get_mdsyy_dy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 5, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dsigmayy_dy array value
-fn set_mdsyy_dy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 5, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dsigmaxy_dx array value
-fn get_mdsxy_dx(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 6, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dsigmaxy_dx array value
-fn set_mdsxy_dx(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 6, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// function to get a memory_dsigmaxy_dy array value
-fn get_mdsxy_dy(x: i32, y: i32) -> f32 {
-    let index: i32 = ijk(x, y, 7, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    return select(0.0, memo[index], index != -1);
-}
-
-// function to set a memory_dsigmaxy_dy array value
-fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
-    let index: i32 = ijk(x, y, 7, sim_int_par.x_sz, sim_int_par.y_sz, 8);
-
-    if(index != -1) {
-        memo[index] = val;
-    }
-}
-
-// --------------------------------------
-// --- Sensors arrays access funtions ---
-// --------------------------------------
-// function to set a sens_vx array value
-fn set_sens_vx(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_vx[index] = val;
-    }
-}
-
-// function to get a sens_vx array value
-fn get_sens_vx(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_vx[index], index != -1);
-}
-
-// function to set a sens_vy array value
-fn set_sens_vy(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_vy[index] = val;
-    }
-}
-
-// function to get a sens_vy array value
-fn get_sens_vy(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_vy[index], index != -1);
-}
-
-// function to get a delay receiver value
-fn get_delay_rec(s: i32) -> i32 {
-   let index: i32 = ij(s, 0, sim_int_par.n_rec_el, 1);
-
-    return select(0, delay_rec[index], index != -1);
-}
-
-// function to get a x-index of a receiver point
-fn get_idx_x_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 0, sim_int_par.n_rec_pt, 3);
-
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// function to get a y-index of a receiver point
-fn get_idx_y_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 1, sim_int_par.n_rec_pt, 3);
-
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// function to get a sensor-index of a receiver point
-fn get_idx_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 2, sim_int_par.n_rec_pt, 3);
-
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// function to get the offset of a sensor receiver in info_rec_pt table
-fn get_offset_sensor(s: i32) -> i32 {
-    return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
+    return select(0.0, k_y_h[n], n >= 0 && n < sim_int_par.y_sz - pad);
 }
 
 // -------------------------------------------------------------
 // --- Finite difference index limits arrays access funtions ---
 // -------------------------------------------------------------
+@group(0) @binding(16) // idx_fd
+var<storage,read> idx_fd: array<i32>;
+
 // function to get an index to ini-half grid
 fn get_idx_ih(c: i32) -> i32 {
     let index: i32 = ij(c, 0, sim_int_par.fd_coeff, 4);
@@ -553,9 +243,419 @@ fn get_idx_ff(c: i32) -> i32 {
     return select(-1, idx_fd[index], index != -1);
 }
 
+// ----------------------------------
+
+@group(0) @binding(17) // fd_coeff
+var<storage,read> fd_coeffs: array<f32>;
+
 // function to get a fd coefficient
 fn get_fdc(c: i32) -> f32 {
     return select(0.0, fd_coeffs[c], c >= 0 && c < sim_int_par.fd_coeff);
+}
+
+// ---------------------------------
+// --- Rho map access funtions ---
+// ---------------------------------
+@group(0) @binding(18) // rho
+var<storage,read> rho_map: array<f32>;
+
+// function to get a rho value
+fn get_rho(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, rho_map[index], index != -1);
+}
+
+// +++++++++++++++++++++++++++++++++++++
+// ++++ Group 1 - simulation arrays ++++
+// +++++++++++++++++++++++++++++++++++++
+// ---------------------------------------
+// --- Velocity arrays access funtions ---
+// ---------------------------------------
+@group(1) @binding(0) // vx field
+var<storage,read_write> vx: array<f32>;
+
+// function to get a vx array value
+fn get_vx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, vx[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_vx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        vx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(1) // vy field
+var<storage,read_write> vy: array<f32>;
+
+// function to get a vy array value
+fn get_vy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, vy[index], index != -1);
+}
+
+// function to set a vy array value
+fn set_vy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        vy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(2) // v_2
+var<storage,read_write> v_2: array<f32>;
+
+// function to get a v_2 array value
+fn get_v_2(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, v_2[index], index != -1);
+}
+
+// function to set a v_2 array value
+fn set_v_2(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        v_2[index] = val;
+    }
+}
+
+// -------------------------------------
+// --- Stress arrays access funtions ---
+// -------------------------------------
+@group(1) @binding(3) // sigmaxx field
+var<storage,read_write> sigmaxx: array<f32>;
+
+// function to get a sigmaxx array value
+fn get_sigmaxx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, sigmaxx[index], index != -1);
+}
+
+// function to set a sigmaxx array value
+fn set_sigmaxx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        sigmaxx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(4) // sigmayy field
+var<storage,read_write> sigmayy: array<f32>;
+
+// function to get a sigmayy array value
+fn get_sigmayy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, sigmayy[index], index != -1);
+}
+
+// function to set a sigmayy array value
+fn set_sigmayy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        sigmayy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(5) // sigmaxy field
+var<storage,read_write> sigmaxy: array<f32>;
+
+// function to get a sigmaxy array value
+fn get_sigmaxy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, sigmaxy[index], index != -1);
+}
+
+// function to set a sigmaxy array value
+fn set_sigmaxy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        sigmaxy[index] = val;
+    }
+}
+
+// -------------------------------------
+// --- Memory arrays access funtions ---
+// -------------------------------------
+@group(1) @binding(6) // mdvx_dx field
+var<storage,read_write> mdvx_dx: array<f32>;
+
+// function to get a memory_dvx_dx array value
+fn get_mdvx_dx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdvx_dx[index], index != -1);
+}
+
+// function to set a memory_dvx_dx array value
+fn set_mdvx_dx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdvx_dx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(7) // mdvx_dy field
+var<storage,read_write> mdvx_dy: array<f32>;
+
+// function to get a memory_dvx_dy array value
+fn get_mdvx_dy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdvx_dy[index], index != -1);
+}
+
+// function to set a memory_dvx_dy array value
+fn set_mdvx_dy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdvx_dy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(8) // mdvy_dx field
+var<storage,read_write> mdvy_dx: array<f32>;
+
+// function to get a memory_dvy_dx array value
+fn get_mdvy_dx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdvy_dx[index], index != -1);
+}
+
+// function to set a memory_dvy_dx array value
+fn set_mdvy_dx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdvy_dx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(9) // mdvy_dy field
+var<storage,read_write> mdvy_dy: array<f32>;
+
+// function to get a memory_dvy_dy array value
+fn get_mdvy_dy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdvy_dy[index], index != -1);
+}
+
+// function to set a memory_dvy_dy array value
+fn set_mdvy_dy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdvy_dy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(10) // mdsxx_dx field
+var<storage,read_write> mdsxx_dx: array<f32>;
+
+// function to get a memory_dsigmaxx_dx array value
+fn get_mdsxx_dx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdsxx_dx[index], index != -1);
+}
+
+// function to set a memory_dsigmaxx_dx array value
+fn set_mdsxx_dx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdsxx_dx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(11) // mdsyy_dy field
+var<storage,read_write> mdsyy_dy: array<f32>;
+
+// function to get a memory_dsigmayy_dy array value
+fn get_mdsyy_dy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdsyy_dy[index], index != -1);
+}
+
+// function to set a memory_dsigmayy_dy array value
+fn set_mdsyy_dy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdsyy_dy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(12) // mdsxy_dx field
+var<storage,read_write> mdsxy_dx: array<f32>;
+
+// function to get a memory_dsigmaxy_dx array value
+fn get_mdsxy_dx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdsxy_dx[index], index != -1);
+}
+
+// function to set a memory_dsigmaxy_dx array value
+fn set_mdsxy_dx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdsxy_dx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(13) // mdsxy_dy field
+var<storage,read_write> mdsxy_dy: array<f32>;
+
+// function to get a memory_dsigmaxy_dy array value
+fn get_mdsxy_dy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, mdsxy_dy[index], index != -1);
+}
+
+// function to set a memory_dsigmaxy_dy array value
+fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        mdsxy_dy[index] = val;
+    }
+}
+
+// +++++++++++++++++++++++++++++++++++++++++++++++
+// ++++ Group 2 - sensors arrays and energies ++++
+// +++++++++++++++++++++++++++++++++++++++++++++++
+// --------------------------------------
+// --- Sensors arrays access funtions ---
+// --------------------------------------
+@group(2) @binding(0) // sensors signals vx
+var<storage,read_write> sensors_vx: array<f32>;
+
+// function to get a sens_vx array value
+fn get_sens_vx(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    return select(0.0, sensors_vx[index], index != -1);
+}
+
+// function to set a sens_vx array value
+fn set_sens_vx(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    if(index != -1) {
+        sensors_vx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(2) @binding(1) // sensors signals vy
+var<storage,read_write> sensors_vy: array<f32>;
+
+// function to get a sens_vy array value
+fn get_sens_vy(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    return select(0.0, sensors_vy[index], index != -1);
+}
+
+// function to set a sens_vy array value
+fn set_sens_vy(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    if(index != -1) {
+        sensors_vy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(2) @binding(2) // delay sensor
+var<storage,read> delay_rec: array<i32>;
+
+// function to get a delay receiver value
+fn get_delay_rec(s: i32) -> i32 {
+    return select(0, delay_rec[s], s >= 0 && s < sim_int_par.n_rec_el);
+}
+
+// ----------------------------------
+
+@group(2) @binding(3) // info rec ptos
+var<storage,read> info_rec_pt: array<i32>;
+
+// function to get a x-index of a receiver point
+fn get_idx_x_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 0, sim_int_par.n_rec_pt, 3);
+
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// function to get a y-index of a receiver point
+fn get_idx_y_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 1, sim_int_par.n_rec_pt, 3);
+
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// function to get a sensor-index of a receiver point
+fn get_idx_sensor(n: i32) -> i32 {
+    let index: i32 = ij(n, 2, sim_int_par.n_rec_pt, 3);
+
+    return select(-1, info_rec_pt[index], index != -1);
+}
+
+// ----------------------------------
+
+@group(2) @binding(4) // info rec ptos
+var<storage,read> offset_sensors: array<i32>;
+
+// function to get the offset of a sensor receiver in info_rec_pt table
+fn get_offset_sensor(s: i32) -> i32 {
+    return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
 }
 
 // ---------------
