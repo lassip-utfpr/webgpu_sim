@@ -7,6 +7,7 @@ else:
 
 from datetime import datetime
 import numpy as np
+import argparse
 import ast
 import matplotlib.pyplot as plt
 from time import time
@@ -102,7 +103,7 @@ def sim_cpu():
     global ix_src, iy_src, ix_rec, iy_rec
     global v_solid_norm, v_2
     global windows_cpu
-    global rho, mu, lambda_
+    global rho, rho_map, rho_grid_vx
 
     _ord = coefs.shape[0]
     idx_fd = np.array([[c + _ord,  # ini half grid
@@ -147,6 +148,24 @@ def sim_cpu():
     idx_src = np.array(idx_src).astype(np.int32).flatten()
     idx_rec = np.array(idx_rec).astype(np.int32).flatten()
 
+    # rho_grid_vy e a matriz de densidade calculada no ponto medio do grid de vx (grid de vy)
+    rho_grid_vy = rho_grid_vx
+    rho_grid_vy[:-1, :-1] = flt32(0.25) * (
+            rho_grid_vx[:-1, :-1] + rho_grid_vx[1:, :-1] + rho_grid_vx[1:, 1:] + rho_grid_vx[:-1, 1:])
+
+    # Inicializa os mapas dos parametros de Lame
+    if rho_map is not None:
+        mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = rho_grid_vx * flt32(cs * cs)
+        lambda_grid_vx = lambda_grid_sig_norm = rho_grid_vx * flt32(cp * cp - 2.0 * cs * cs)
+    else:
+        mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = np.ones((nx, ny), dtype=flt32) * flt32(rho*cs*cs)
+        lambda_grid_vx = lambda_grid_sig_norm = np.ones((nx, ny), dtype=flt32) * flt32(rho*(cp*cp - 2.0*cs*cs))
+
+    mu_grid_sig_norm[:-1, :-1] = flt32(0.5) * (mu_grid_vx[1:, :-1] + mu_grid_vx[:-1, :-1])
+    lambda_grid_sig_norm[:-1, :-1] = flt32(0.5) * (lambda_grid_vx[1:, :-1] + lambda_grid_vx[:-1, :-1])
+    lambdaplus2mu_grid_sig_norm = lambda_grid_sig_norm + flt32(2.0) * mu_grid_sig_norm
+    mu_grid_sig_trans[:-1, :-1] = flt32(0.5) * (mu_grid_vx[:-1, 1:] + mu_grid_vx[:-1, :-1])
+
     # Inicio do laco de tempo
     for it in range(1, NSTEP + 1):
         # Calculo da tensao [stress] - {sigma} (equivalente a pressao nos gases-liquidos)
@@ -189,8 +208,8 @@ def sim_cpu():
                                                   memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
         # compute the stress using the Lame parameters
-        sigmaxx = sigmaxx + (lambdaplus2mu_xx_yy * value_dvx_dx + lambda_xx_yy * value_dvy_dy) * dt
-        sigmayy = sigmayy + (lambda_xx_yy * value_dvx_dx + lambdaplus2mu_xx_yy * value_dvy_dy) * dt
+        sigmaxx = sigmaxx + (lambdaplus2mu_grid_sig_norm * value_dvx_dx + lambda_grid_sig_norm * value_dvy_dy) * dt
+        sigmayy = sigmayy + (lambda_grid_sig_norm * value_dvx_dx + lambdaplus2mu_grid_sig_norm * value_dvy_dy) * dt
 
         # Segundo "laco" i: 2,NX; j: 1,NY-1 -> [2:-1, 1:-2]
         i_dix = idx_fd[0, 0]
@@ -230,7 +249,7 @@ def sim_cpu():
                                                   memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
 
         # compute the stress using the Lame parameters
-        sigmaxy = sigmaxy + dt * mu_xy * (value_dvx_dy + value_dvy_dx)
+        sigmaxy = sigmaxy + dt * mu_grid_sig_trans * (value_dvx_dy + value_dvy_dx)
 
         # Calculo da velocidade
         # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
@@ -270,7 +289,7 @@ def sim_cpu():
         value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
                                                        memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
-        vx = dt * (value_dsigmaxx_dx + value_dsigmaxy_dy) / rho_vx + vx
+        vx = dt * (value_dsigmaxx_dx + value_dsigmaxy_dy) / rho_grid_vx + vx
 
         # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
         i_dix = idx_fd[0, 1]
@@ -311,7 +330,7 @@ def sim_cpu():
         value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
                                                        memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
 
-        vy = dt * (value_dsigmaxy_dx + value_dsigmayy_dy) / rho_vy + vy
+        vy = dt * (value_dsigmaxy_dx + value_dsigmayy_dy) / rho_grid_vy + vy
 
         # add the source (force vector located at a given grid point)
         for _isrc in range(NSRC):
@@ -381,7 +400,7 @@ def sim_webgpu(device):
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global ix_src, iy_src, ix_rec, iy_rec
     global v_2, v_solid_norm
-    global simul_roi
+    global simul_roi, rho_grid_vx
     global windows_gpu
 
     # Obtem fontes e receptores dos transdutores
@@ -422,7 +441,7 @@ def sim_webgpu(device):
         tmp_rec += list(_i)
     info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(tmp_rec).flatten())).astype(np.int32)
     numbers = list(np.array(tmp_rec, dtype=np.int32).flatten())
-    offset_sensors = [ numbers[0] ]
+    offset_sensors = [numbers[0]]
     for i in range(1, len(numbers)):
         if numbers[i] != numbers[i - 1]:
             offset_sensors.append(np.int32(i))
@@ -500,11 +519,8 @@ def sim_webgpu(device):
 
     # Buffer com o mapa de densidades da ROI
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
-    rho_map = rho * np.ones((nx, ny), dtype=np.float32)
-    # rho_map = (plt.imread("rho_maps/SDH.png")[:, :, :-1].mean(axis=2, dtype=np.float32) * np.float32(rho - 1225.0) +
-    #            np.float32(1225.0))
-    # rho_map[390:411, 300] = np.float32(1225.0)
-    b_rho_map = device.create_buffer_with_data(data=rho_map, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
+    b_rho_map = device.create_buffer_with_data(data=rho_grid_vx, usage=wgpu.BufferUsage.STORAGE |
+                                                                       wgpu.BufferUsage.COPY_SRC)
 
     # Buffer com os coeficientes para ao calculo das derivadas
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -580,7 +596,7 @@ def sim_webgpu(device):
         {"binding": 0,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
-            "type": wgpu.BufferBindingType.storage}
+             "type": wgpu.BufferBindingType.storage}
          }
     ]
     bl_params += [
@@ -911,12 +927,14 @@ def sim_webgpu(device):
     vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
-    adapter_info = device.adapter.request_adapter_info()
-    return vxgpu, vygpu, sens_vx, sens_vy, v_sol_n, adapter_info["device"]
+    return vxgpu, vygpu, sens_vx, sens_vy, v_sol_n, device.adapter.info["device"]
 
 
 # ----------------------------------------------------------
 # Aqui comeca o codigo principal de execucao dos simuladores
+# ----------------------------------------------------------
+# ----------------------------------------------------------
+# Definicao de constantes
 # ----------------------------------------------------------
 # Constantes
 PI = flt32(np.pi)
@@ -934,13 +952,34 @@ coefs_Lui = [
      -63.0 / 2883584.0]
 ]
 
+# ----------------------------------------------------------
+# Avaliacao dos parametros na linha de comando
+# ----------------------------------------------------------
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+args = parser.parse_args()
+
 # -----------------------
 # Leitura da configuracao no formato JSON
 # -----------------------
-with open('config.json', 'r') as f:
+with open(args.config, 'r') as f:
     configs = ast.literal_eval(f.read())
     coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
-    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
+
+    # Configuracao do corpo de prova
+    rho_map = None
+    rho = flt32(1000.0)
+    cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
+    cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+    if "rho" in configs["specimen_params"]:
+        rho = flt32(configs["specimen_params"]["rho"])
+    if "rho_map" in configs["specimen_params"]:
+        rho_map = np.load(configs["specimen_params"]["rho_map"]).T.astype(np.float32)
+
+    # Configuracao da ROI
+    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
+
+    # Configuracao dos transdutores
     simul_probes = list()
     probes_cfg = configs["probes"]
     for p in probes_cfg:
@@ -948,7 +987,7 @@ with open('config.json', 'r') as f:
             simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
     print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
-    # Configuracao dos ensaios
+    # Configuracao geral dos ensaios
     n_iter_gpu = configs["simul_configs"]["n_iter_gpu"]
     n_iter_cpu = configs["simul_configs"]["n_iter_cpu"]
     do_sim_gpu = bool(configs["simul_configs"]["do_sim_gpu"])
@@ -999,31 +1038,12 @@ dy = flt32(simul_roi.h_step)
 one_dx = flt32(1.0 / dx)
 one_dy = flt32(1.0 / dy)
 
-# Velocidades do som e densidade do meio
-cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
-cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
-rho = flt32(configs["specimen_params"]["rho"])
-
 # Inicializa os mapas de densidade do meio
-rho_vx = np.ones((nx, ny), dtype=flt32) * rho
-rho_vy = np.ones((nx, ny), dtype=flt32) * rho
-rho_vy[:-1, :-1] = flt32(0.25) * (rho_vx[:-1, :-1] + rho_vx[1:, :-1] + rho_vx[1:, 1:] + rho_vx[:-1, 1:])
-
-# Inicializa os mapas dos parametros de Lame
-mu = flt32(rho * cs * cs)
-lambda_ = flt32(rho * (cp * cp - 2.0 * cs * cs))
-lambdaplus2mu = flt32(rho * cp * cp)
-
-mu_a = np.ones((nx, ny), dtype=flt32) * mu
-lambda_a = np.ones((nx, ny), dtype=flt32) * lambda_
-mu_xx_yy = np.ones((nx, ny), dtype=flt32) * mu
-lambda_xx_yy = np.ones((nx, ny), dtype=flt32) * lambda_
-mu_xx_yy[:-1, :-1] = flt32(0.5) * (mu_a[1:, :-1] + mu_a[:-1, :-1])
-lambda_xx_yy[:-1, :-1] = flt32(0.5) * (lambda_a[1:, :-1] + lambda_a[:-1, :-1])
-lambdaplus2mu_xx_yy = lambda_xx_yy + flt32(2.0) * mu_xx_yy
-
-mu_xy = np.ones((nx, ny), dtype=flt32) * mu
-mu_xy[:-1, :-1] = flt32(0.5) * (mu_a[:-1, 1:] + mu_a[:-1, :-1])
+# rho_grid_vx e a matriz das densidades no mesmo grid de vx
+rho_grid_vx = np.ones((nx, ny), dtype=flt32) * rho
+if rho_map is not None:
+    rho_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
+                simul_roi.get_iz_min(): simul_roi.get_iz_max()] = rho_map
 
 # Numero total de passos de tempo
 NSTEP = configs["simul_params"]["time_steps"]

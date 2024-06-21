@@ -102,7 +102,7 @@ class SimulationROI:
 
     def __init__(self, coord_ref=np.zeros((1, 3)), height=30.0, h_len=300, width=30.0, w_len=300, depth=0.0, d_len=1,
                  len_pml_xmin=10, len_pml_xmax=10, len_pml_ymin=10, len_pml_ymax=10, len_pml_zmin=10, len_pml_zmax=10,
-                 pad=1):
+                 pad=1, rho_map=None):
         if type(coord_ref) is list:
             coord_ref = np.array(coord_ref)
 
@@ -110,6 +110,15 @@ class SimulationROI:
             raise TypeError("``coord_ref`` deve ser um vetor-linha de 3 elementos [shape = (1,3)]")
 
         # Atribuicao dos atributos da instancia.
+        # Se for definido um mapa de densidades, pega o numero de pontos do mapa
+        if rho_map is not None:
+            if len(rho_map.shape) == 1:
+                w_len = rho_map.shape[0]
+            elif len(rho_map.shape) == 2:
+                w_len, h_len = rho_map.shape
+            elif len(rho_map.shape) == 3:
+                w_len, d_len, h_len = rho_map.shape
+
         # Ponto cartesiano indicando a coordenada de referencia da ROI.
         self.coord_ref = coord_ref
 
