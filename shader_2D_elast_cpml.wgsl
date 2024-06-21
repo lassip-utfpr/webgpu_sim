@@ -1,3 +1,13 @@
+// +++++++++++++++++++++++++++++++
+// +++ Index access functions ++++
+// +++++++++++++++++++++++++++++++
+// function to convert 2D [i,j] index into 1D [] index
+fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {
+    let index = j + i * j_max;
+
+    return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
+}
+
 // ++++++++++++++++++++++++++++++
 // ++++ Group 0 - parameters ++++
 // ++++++++++++++++++++++++++++++
@@ -15,6 +25,8 @@ struct SimIntValues {
 @group(0) @binding(0) // param_int32
 var<storage,read_write> sim_int_par: SimIntValues;
 
+// ----------------------------------
+
 struct SimFltValues {
     cp: f32,            // longitudinal sound speed
     cs: f32,            // transverse sound speed
@@ -27,16 +39,6 @@ struct SimFltValues {
 
 @group(0) @binding(1)   // param_flt32
 var<storage,read> sim_flt_par: SimFltValues;
-
-// -------------------------------
-// --- Index access functions ----
-// -------------------------------
-// function to convert 2D [i,j] index into 1D [] index
-fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {
-    let index = j + i * j_max;
-
-    return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
-}
 
 // -----------------------------------
 // --- Force array access funtions ---
