@@ -39,40 +39,7 @@
           0.0,
           0.0
         ],
-        "emmiters": [
-          "True",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "True"
-        ],
+        "emmiters": "all",
         "t0_emmition": 1.0,
         "receivers": "all",
         "t0_reception": 0.0
@@ -136,7 +103,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 6000,
+    "time_steps": 20000,
     "dt": 2.0e-3,
     "ord": 4,
     "rcoef": 0.0001,
@@ -170,8 +137,11 @@
   },
   "specimen_params":
   {
-    "cp": 5.9,
-    "cs": 3.23,
-    "rho": 7800.0
+    "cp": 1.43,
+    "cs": 0.0,
+    "rho": 1000.0,
+    "rho_map": "./rho_maps/teste_rho.npy",
+    "cp_map": "./rho_maps/teste_cp.npy",
+    "cs_map": "./rho_maps/teste_cs.npy"
   }
 }

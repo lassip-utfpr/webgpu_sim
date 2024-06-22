@@ -28,13 +28,9 @@ var<storage,read_write> sim_int_par: SimIntValues;
 // ----------------------------------
 
 struct SimFltValues {
-    cp: f32,            // longitudinal sound speed
-    cs: f32,            // transverse sound speed
     dx: f32,            // delta x
     dy: f32,            // delta y
     dt: f32,            // delta t
-    lambda_cte: f32,    // constant to calculate lambda
-    mu_cte: f32         // constant to calculate mu
 };
 
 @group(0) @binding(1)   // param_flt32
@@ -266,6 +262,32 @@ fn get_rho(x: i32, y: i32) -> f32 {
     let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
 
     return select(0.0, rho_map[index], index != -1);
+}
+
+// ---------------------------------
+// --- Cp map access funtions ---
+// ---------------------------------
+@group(0) @binding(19) // cp
+var<storage,read> cp_map: array<f32>;
+
+// function to get a cp value
+fn get_cp(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, cp_map[index], index != -1);
+}
+
+// ---------------------------------
+// --- Cs map access funtions ---
+// ---------------------------------
+@group(0) @binding(20) // cs
+var<storage,read> cs_map: array<f32>;
+
+// function to get a cp value
+fn get_cs(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, cs_map[index], index != -1);
 }
 
 // +++++++++++++++++++++++++++++++++++++
@@ -682,7 +704,7 @@ fn teste_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     var id_y_f: i32 = sim_int_par.y_sz - get_idx_if(last);
     if(x >= id_x_i && x < id_x_f && y >= id_y_i && y < id_y_f) {
         set_vx(x, y, get_rho(x, y));
-        set_vy(x, y, sim_flt_par.mu_cte);
+        set_vy(x, y, get_cp(x, y));
     }
 }
 
@@ -695,8 +717,6 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let dx: f32 = sim_flt_par.dx;
     let dy: f32 = sim_flt_par.dy;
     let dt: f32 = sim_flt_par.dt;
-    let lambda_cte: f32 = sim_flt_par.lambda_cte;
-    let mu_cte: f32 = sim_flt_par.mu_cte;
     let last: i32 = sim_int_par.fd_coeff - 1;
     let offset: i32 = sim_int_par.fd_coeff - 1;
 
@@ -723,8 +743,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvy_dy(x, y, mdvy_dy_new);
 
         let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
-        let lambda: f32 = rho_h_x * lambda_cte;
-        let mu: f32 = rho_h_x * mu_cte;
+        let cp_h_x = 0.5 * (get_cp(x + 1, y) + get_cp(x, y));
+        let cs_h_x = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
+        let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x * cs_h_x);
+        let mu: f32 = rho_h_x * (cs_h_x * cs_h_x);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
         let sigmaxx: f32 = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
         let sigmayy: f32 = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
@@ -756,7 +778,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvx_dy(x, y, mdvx_dy_new);
 
         let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
-        let mu: f32 = rho_h_y * mu_cte;
+        let cs_h_y = 0.5 * (get_cs(x, y + 1) + get_cs(x, y));
+        let mu: f32 = rho_h_y * (cs_h_y * cs_h_y);
         let sigmaxy: f32 = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
         set_sigmaxy(x, y, sigmaxy);
     }

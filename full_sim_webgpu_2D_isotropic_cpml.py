@@ -103,7 +103,7 @@ def sim_cpu():
     global ix_src, iy_src, ix_rec, iy_rec
     global v_solid_norm, v_2
     global windows_cpu
-    global rho, rho_map, rho_grid_vx
+    global rho_grid_vx, cp_grid_vx, cs_grid_vx
 
     _ord = coefs.shape[0]
     idx_fd = np.array([[c + _ord,  # ini half grid
@@ -154,12 +154,8 @@ def sim_cpu():
             rho_grid_vx[:-1, :-1] + rho_grid_vx[1:, :-1] + rho_grid_vx[1:, 1:] + rho_grid_vx[:-1, 1:])
 
     # Inicializa os mapas dos parametros de Lame
-    if rho_map is not None:
-        mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = rho_grid_vx * flt32(cs * cs)
-        lambda_grid_vx = lambda_grid_sig_norm = rho_grid_vx * flt32(cp * cp - 2.0 * cs * cs)
-    else:
-        mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = np.ones((nx, ny), dtype=flt32) * flt32(rho*cs*cs)
-        lambda_grid_vx = lambda_grid_sig_norm = np.ones((nx, ny), dtype=flt32) * flt32(rho*(cp*cp - 2.0*cs*cs))
+    mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = rho_grid_vx * cs_grid_vx * cs_grid_vx
+    lambda_grid_vx = lambda_grid_sig_norm = rho_grid_vx * (cp_grid_vx * cp_grid_vx - 2.0 * cs_grid_vx * cs_grid_vx)
 
     mu_grid_sig_norm[:-1, :-1] = flt32(0.5) * (mu_grid_vx[1:, :-1] + mu_grid_vx[:-1, :-1])
     lambda_grid_sig_norm[:-1, :-1] = flt32(0.5) * (lambda_grid_vx[1:, :-1] + lambda_grid_vx[:-1, :-1])
@@ -400,7 +396,7 @@ def sim_webgpu(device):
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global ix_src, iy_src, ix_rec, iy_rec
     global v_2, v_solid_norm
-    global simul_roi, rho_grid_vx
+    global simul_roi, rho_grid_vx, cp_grid_vx, cs_grid_vx
     global windows_gpu
 
     # Obtem fontes e receptores dos transdutores
@@ -452,7 +448,7 @@ def sim_webgpu(device):
     _ord = coefs.shape[0]
     params_i32 = np.array([nx, ny, NSTEP, source_term.shape[1], sisvx.shape[1], n_pto_rec, _ord, 0],
                           dtype=np.int32)
-    params_f32 = np.array([cp, cs, dx, dy, dt, cp * cp - 2.0 * cs * cs, cs * cs], dtype=flt32)
+    params_f32 = np.array([dx, dy, dt], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_2D_elast_cpml.wgsl') as shader_file:
@@ -517,10 +513,14 @@ def sim_webgpu(device):
     idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(_ord)], dtype=np.int32)
     b_idx_fd = device.create_buffer_with_data(data=idx_fd, usage=wgpu.BufferUsage.STORAGE | wgpu.BufferUsage.COPY_SRC)
 
-    # Buffer com o mapa de densidades da ROI
+    # Buffer com os mapas de velocidade e densidade da ROI
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     b_rho_map = device.create_buffer_with_data(data=rho_grid_vx, usage=wgpu.BufferUsage.STORAGE |
                                                                        wgpu.BufferUsage.COPY_SRC)
+    b_cp_map = device.create_buffer_with_data(data=cp_grid_vx, usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+    b_cs_map = device.create_buffer_with_data(data=cs_grid_vx, usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
 
     # Buffer com os coeficientes para ao calculo das derivadas
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -604,7 +604,7 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         } for ii in range(1, 19)
+         } for ii in range(1, 21)
     ]
 
     # Arrays da simulacao
@@ -709,6 +709,14 @@ def sim_webgpu(device):
         {
             "binding": 18,
             "resource": {"buffer": b_rho_map, "offset": 0, "size": b_rho_map.size},
+        },
+        {
+            "binding": 19,
+            "resource": {"buffer": b_cp_map, "offset": 0, "size": b_cp_map.size},
+        },
+        {
+            "binding": 20,
+            "resource": {"buffer": b_cs_map, "offset": 0, "size": b_cs_map.size},
         },
     ]
     b_sim_arrays = [
@@ -967,14 +975,29 @@ with open(args.config, 'r') as f:
     coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
 
     # Configuracao do corpo de prova
-    rho_map = None
-    rho = flt32(1000.0)
-    cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
-    cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+    cp = flt32(5.9)
+    if "cp" in configs["specimen_params"]:
+        cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
+
+    cp_map = None
+    if "cp_map" in configs["specimen_params"]:
+        cp_map = np.load(configs["specimen_params"]["cp_map"]).astype(np.float32)
+
+    cs = flt32(3.23)
+    if "cs" in configs["specimen_params"]:
+        cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+
+    cs_map = None
+    if "cs_map" in configs["specimen_params"]:
+        cs_map = np.load(configs["specimen_params"]["cs_map"]).astype(np.float32)
+
+    rho = flt32(7800.0)
     if "rho" in configs["specimen_params"]:
         rho = flt32(configs["specimen_params"]["rho"])
+
+    rho_map = None
     if "rho_map" in configs["specimen_params"]:
-        rho_map = np.load(configs["specimen_params"]["rho_map"]).T.astype(np.float32)
+        rho_map = np.load(configs["specimen_params"]["rho_map"]).astype(np.float32)
 
     # Configuracao da ROI
     simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
@@ -1042,8 +1065,41 @@ one_dy = flt32(1.0 / dy)
 # rho_grid_vx e a matriz das densidades no mesmo grid de vx
 rho_grid_vx = np.ones((nx, ny), dtype=flt32) * rho
 if rho_map is not None:
-    rho_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
-                simul_roi.get_iz_min(): simul_roi.get_iz_max()] = rho_map
+    if rho_map.shape[0] < nx and rho_map.shape[1] < ny:
+        rho_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
+                    simul_roi.get_iz_min(): simul_roi.get_iz_max()] = rho_map
+    elif rho_map.shape[0] > nx and rho_map.shape[1] > ny:
+        rho_grid_vx = rho_map[:nx, :ny]
+    elif rho_map.shape[0] == nx and rho_map.shape[1] == ny:
+        rho_grid_vx = rho_map
+    else:
+        raise ValueError(f'rho_map shape {rho_map.shape} e incompativel com a ROI')
+
+# cp_grid_vx e a matriz das velocidades longitudinais no mesmo grid de vx
+cp_grid_vx = np.ones((nx, ny), dtype=flt32) * cp
+if cp_map is not None:
+    if cp_map.shape[0] < nx and cp_map.shape[1] < ny:
+        cp_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
+                   simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cp_map
+    elif cp_map.shape[0] > nx and cp_map.shape[1] > ny:
+        cp_grid_vx = cp_map[:nx, :ny]
+    elif cp_map.shape[0] == nx and cp_map.shape[1] == ny:
+        cp_grid_vx = cp_map
+    else:
+        raise ValueError(f'cp_map shape {cp_map.shape} e incompativel com a ROI')
+
+# cs_grid_vx e a matriz das velocidades transversais no mesmo grid de vx
+cs_grid_vx = np.ones((nx, ny), dtype=flt32) * cs
+if cs_map is not None:
+    if cs_map.shape[0] < nx and cs_map.shape[1] < ny:
+        cs_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
+                   simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cs_map
+    elif cs_map.shape[0] > nx and cs_map.shape[1] > ny:
+        cs_grid_vx = cs_map[:nx, :ny]
+    elif cs_map.shape[0] == nx and cs_map.shape[1] == ny:
+        cs_grid_vx = cs_map
+    else:
+        raise ValueError(f'cs_map shape {cs_map.shape} e incompativel com a ROI')
 
 # Numero total de passos de tempo
 NSTEP = configs["simul_params"]["time_steps"]
