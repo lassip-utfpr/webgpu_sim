@@ -407,9 +407,11 @@ def sim_webgpu(device):
     idx_rec_offset = 0
     for _pr in simul_probes:
         if source_env:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D", out='e')
+            st = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         else:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+            st = _pr.get_source_term(samples=NSTEP, dt=dt)
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
@@ -426,17 +428,11 @@ def sim_webgpu(device):
         np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
 
     pos_sources = -np.ones((nx, ny), dtype=np.int32)
-    tmp_src = list()
-    for _i in idx_src:
-        tmp_src += list(_i)
-    pos_sources[ix_src, iy_src] = np.array(tmp_src).astype(np.int32).flatten()
+    pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()
 
     # Receivers
-    tmp_rec = list()
-    for _i in idx_rec:
-        tmp_rec += list(_i)
-    info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(tmp_rec).flatten())).astype(np.int32)
-    numbers = list(np.array(tmp_rec, dtype=np.int32).flatten())
+    info_rec_pt = np.column_stack((ix_rec, iy_rec, np.array(idx_rec).flatten())).astype(np.int32)
+    numbers = list(np.array(idx_rec, dtype=np.int32).flatten())
     offset_sensors = [numbers[0]]
     for i in range(1, len(numbers)):
         if numbers[i] != numbers[i - 1]:
@@ -1116,8 +1112,8 @@ i_probe_rx_ptos = list()
 delay_recv = list()
 NREC = 0
 for pr in simul_probes:
-    i_probe_tx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="e")
-    i_probe_rx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="r")
+    i_probe_tx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="e")[0]
+    i_probe_rx_ptos += pr.get_points_roi(simul_roi, simul_type="2d", dir="r")[0]
     delay_recv += pr.get_delay_rx()
     NREC += pr.receivers.count(True)
 

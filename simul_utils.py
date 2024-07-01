@@ -104,68 +104,78 @@ class SimulationROI:
                  len_pml_xmin=10, len_pml_xmax=10, len_pml_ymin=10, len_pml_ymax=10, len_pml_zmin=10, len_pml_zmax=10,
                  pad=1, rho_map=None):
         if type(coord_ref) is list:
-            coord_ref = np.array(coord_ref)
+            coord_ref = np.array(coord_ref, dtype=np.float32)
 
         if (coord_ref is not np.ndarray) and (coord_ref.shape != (1, 3)):
             raise TypeError("``coord_ref`` deve ser um vetor-linha de 3 elementos [shape = (1,3)]")
 
         # Atribuicao dos atributos da instancia.
-        # Se for definido um mapa de densidades, pega o numero de pontos do mapa
-        if rho_map is not None:
-            if len(rho_map.shape) == 1:
-                w_len = rho_map.shape[0]
-            elif len(rho_map.shape) == 2:
-                w_len, h_len = rho_map.shape
-            elif len(rho_map.shape) == 3:
-                w_len, d_len, h_len = rho_map.shape
-
         # Ponto cartesiano indicando a coordenada de referencia da ROI.
         self.coord_ref = coord_ref
 
         # Passo dos pontos da ROI no sentido da altura.
         self.h_step = height / h_len
-
-        # Vetor com as coordenadas da ROI no sentido da altura (dimensao 3 - eixo 'z') da simulacao.
         self.dec_h = int(abs(np.log10(self.h_step))) + 1
-        self.h_points = np.linspace(coord_ref[0, 2], coord_ref[0, 2] + height, num=int(h_len), endpoint=False,
-                                    dtype=np.float32).round(decimals=self.dec_h)
-
-        # Quantidade de pontos da ROI no sentido da altura.
-        self._h_len = self.h_points.size
-
-        # Altura da ROI.
-        self.height = height
+        self.h_step = np.round(self.h_step, decimals=self.dec_h).astype(np.float32)
 
         # Passo dos pontos da ROI no sentido da largura.
         self.w_step = width / w_len
-
-        # Vetor com as coordenadas da ROI no sentido da largura (dimensão 1 - eixo 'x') da simulacao.
         self.dec_w = int(abs(np.log10(self.w_step))) + 1
-        self.w_points = np.linspace(coord_ref[0, 0], coord_ref[0, 0] + width, num=int(w_len), endpoint=False,
-                                    dtype=np.float32).round(decimals=self.dec_w)
-
-        # Quantidade de pontos da ROI no sentido da largura.
-        self._w_len = self.w_points.size
-
-        # Largura da ROI.
-        self.width = width
+        self.w_step = np.round(self.w_step, decimals=self.dec_w).astype(np.float32)
 
         # Passo dos pontos da ROI no sentido da profundidade.
         if depth > 0.0 and d_len > 1:
             self.d_step = depth / d_len
         else:
             self.d_step = self.w_step
+        self.dec_d = int(abs(np.log10(self.d_step))) + 1
+        self.d_step = np.round(self.d_step, decimals=self.dec_d).astype(np.float32)
+
+        # Se for definido um mapa de densidades, pega o numero de pontos do mapa
+        w_len_map = 0
+        h_len_map = 0
+        d_len_map = 0
+        if rho_map is not None:
+            if len(rho_map.shape) == 1:
+                w_len_map = rho_map.shape[0]
+            elif len(rho_map.shape) == 2:
+                w_len_map, h_len_map = rho_map.shape
+            elif len(rho_map.shape) == 3:
+                w_len_map, d_len_map, h_len_map = rho_map.shape
+
+        # Ajusta tamanhos e passos no caso de definicao de mapa de densidades
+        if w_len_map > w_len:
+            self.width = np.float32(w_len_map * self.w_step)
+            self._w_len = w_len_map
+        else:
+            self.width = np.float32(width)
+            self._w_len = w_len
+
+        if h_len_map > h_len:
+            self.height = np.float32(h_len_map * self.h_step)
+            self._h_len = h_len_map
+        else:
+            self.height = np.float32(height)
+            self._h_len = h_len
+
+        if d_len_map > d_len:
+            self.depth = np.float32(d_len_map * self.d_step)
+            self._d_len = d_len_map
+        else:
+            self.depth = np.float32(depth)
+            self._d_len = d_len
+
+        # Vetor com as coordenadas da ROI no sentido da largura (dimensão 1 - eixo 'x') da simulacao.
+        self.w_points = np.linspace(coord_ref[0, 0], coord_ref[0, 0] + self.width, num=int(self._w_len),
+                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_w)
 
         # Vetor com as coordenadas da ROI no sentido da profundidade (dimensão 2 - eixo 'y') da simulacao.
-        self.dec_d = int(abs(np.log10(self.d_step))) + 1
-        self.d_points = np.linspace(coord_ref[0, 1], coord_ref[0, 1] + depth, num=int(d_len), endpoint=False,
-                                    dtype=np.float32).round(decimals=self.dec_d)
+        self.d_points = np.linspace(coord_ref[0, 1], coord_ref[0, 1] + self.depth, num=int(self._d_len),
+                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_d)
 
-        # Quantidade de pontos da ROI no sentido da profundidade.
-        self._d_len = self.d_points.size
-
-        # Profundidade da ROI.
-        self.depth = depth
+        # Vetor com as coordenadas da ROI no sentido da altura (dimensao 3 - eixo 'z') da simulacao.
+        self.h_points = np.linspace(coord_ref[0, 2], coord_ref[0, 2] + self.height, num=int(self._h_len),
+                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_h)
 
         # Tamanho das camadas de PML, 0 se não for para calcular
         self._pml_xmin_len = len_pml_xmin
@@ -223,19 +233,29 @@ class SimulationROI:
     def get_pml_thickness_z(self):
         return (self._pml_zmin_len + self._pml_zmax_len) * self.h_step
 
+    def is_point_in_roi(self, point):
+        """Método para retornar se o ponto pertence a ROI."""
+        if type(point) is not np.ndarray and type(point) is list:
+            point = np.array(point, dtype=np.float32)
+        elif type(point) is np.ndarray:
+            point = point.astype(np.float32)
+
+        if (not (self.w_points[0] <= point[0] <= self.w_points[-1]) or
+                not (self.d_points[0] <= point[1] <= self.d_points[-1]) or
+                not (self.h_points[0] <= point[2] <= self.h_points[-1])):
+            return False
+        else:
+            return True
+
     def get_nearest_grid_idx(self, point):
         """Método para retornar os índices mais próximos da grade para o ponto da ROI fornecido."""
         if type(point) is not np.ndarray and type(point) is list:
-            point = np.ndarray(point)
+            point = np.ndarray(point, dtype=np.float32)
+        elif type(point) is np.ndarray:
+            point = point.astype(np.float32)
 
-        if not (self.w_points[0] <= point[0] <= self.w_points[-1]):
-            raise IndexError(f"'x' = {point[0]} out of bounds")
-
-        if not (self.d_points[0] <= point[1] <= self.d_points[-1]):
-            raise IndexError(f"'y' = {point[1]} out of bounds")
-
-        if not (self.h_points[0] <= point[2] <= self.h_points[-1]):
-            raise IndexError(f"'z' = {point[2]} out of bounds")
+        if not self.is_point_in_roi(point):
+            raise IndexError(f"[{point[0]}, {point[1]}, {point[2]}] out of bounds")
 
         ix = np.absolute(self.w_points - np.round(point[0] - self.w_step / 10.0 ** (self.dec_w - 1),
                                                   decimals=self.dec_w)).argmin() + self._pml_xmin_len + self._pad
@@ -377,7 +397,7 @@ class ElementRect:
 
     def get_num_points_roi(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
-        Metodo que retorna o número de os pontos ativos do transdutor no grid de simulacao.
+        Metodo que retorna o número dos pontos ativos do transdutor no grid de simulacao.
 
         Returns
         -------
@@ -417,9 +437,8 @@ class ElementRect:
         dim_p = min(self.elem_dim_p, sim_roi.depth)
         num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
         num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d)) if dim_p != 0.0 else 1
-        simul_type = simul_type.lower()
         num_coord = num_pt_a
-        if simul_type == "3d":
+        if simul_type.lower() == "3d":
             num_coord *= num_pt_p
 
         list_out = list()
@@ -427,9 +446,10 @@ class ElementRect:
             x_coord = np.float32((p % num_pt_a) * sim_roi.w_step - self.elem_dim_a / 2.0)
             y_coord = np.float32(0.0 if simul_type == "2d"
                                  else ((p // num_pt_a) % num_pt_p) * sim_roi.d_step - dim_p / 2.0)
-            list_out.append([np.round(x_coord + self.coord_center[0], decimals=sim_roi.dec_w),
+            point = [np.round(x_coord + self.coord_center[0], decimals=sim_roi.dec_w),
                              np.round(y_coord + self.coord_center[1], decimals=sim_roi.dec_d),
-                             np.round(self.coord_center[2], decimals=sim_roi.dec_h)])
+                             np.round(self.coord_center[2], decimals=sim_roi.dec_h)]
+            list_out.append(point)
 
         return list_out
 
@@ -650,40 +670,43 @@ class SimulationProbeLinearArray(SimulationProbe):
                 Cada elemento dessa lista é a coordenada cartesiana (como índice) de um ponto na ROI.
 
         """
-        arr_elem = list()
-        for e in self.elem_list:
-            arr_elem += e.get_points_roi(sim_roi=sim_roi, simul_type=simul_type, dir=dir)
+        arr_out = list()
+        idx_src = list()
+        for idx_st, e in enumerate(self.elem_list):
+            arr_elem = e.get_points_roi(sim_roi=sim_roi, simul_type=simul_type, dir=dir)
 
-        arr_out = [sim_roi.get_nearest_grid_idx(p + self.coord_center) for p in arr_elem]
-        return arr_out
+            for p in arr_elem:
+                try:
+                    coord = sim_roi.get_nearest_grid_idx(p + self.coord_center)
+                    arr_out.append(coord)
+                    idx_src.append(idx_st)
+                except IndexError:
+                    pass
 
-    def get_source_term(self, samples=1000, dt=1.0, sim_roi=SimulationROI(), simul_type="2D", out='r'):
+        return arr_out, idx_src
+
+    def get_source_term(self, samples=1000, dt=1.0, out='r'):
         """
         Metodo que retorna os sinais dos termos de fonte do transdutor. Além de retornar um
         array com os sinais dos termos de fonte de cada elemento ativo do transdutor, esta função
         também retorna uma lista com o índice do termo de fonte para cada ponto da ROI que é
         um ponto emissor.
         :param out:
-        :param simul_type:
-        :param sim_roi:
         :param samples: int
             Número de amostras de tempo na simulação.
         :param dt: float
             Valor do passo de tempo na simulação.
 
-        :return: :numpy.array, :list
-        O primeiro array tem dimensões de N amostras de tempo (linhas) por M elementos do transdutor (colunas).
-        A lista contém os índices dos elementos fonte de cada ponto emissor na ROI.
+        :return: :numpy.array
+        Array contém dimensões de N amostras de tempo (linhas) por M elementos do transdutor (colunas).
         """
         t = np.arange(samples, dtype=np.float32) * dt
         source_term = np.zeros((samples, self.num_elem), dtype=np.float32)
-        idx_src = list()
         for idx_st, e in enumerate(self.elem_list):
             if e.tx_en:
                 source_term[:, idx_st] = e.get_element_exc_fn(t, out)
-                idx_src.append([idx_st for _ in range(e.get_num_points_roi(sim_roi=sim_roi, simul_type=simul_type))])
 
-        return source_term, idx_src
+        return source_term
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
@@ -695,11 +718,16 @@ class SimulationProbeLinearArray(SimulationProbe):
         Lista com o índice do elemento receptor de cada ponto receptor na ROI.
         """
         idx_rec = list()
-        idx_count = 0
+        # idx_count = 0
         for idx_st, e in enumerate(self.elem_list):
-            if e.rx_en:
-                idx_rec.append([idx_count for _ in range(e.get_num_points_roi(sim_roi=sim_roi, simul_type=simul_type))])
-                idx_count += 1
+            arr_elem = e.get_points_roi(sim_roi=sim_roi, simul_type=simul_type, dir='r')
+
+            for p in arr_elem:
+                try:
+                    _ = sim_roi.get_nearest_grid_idx(p + self.coord_center)
+                    idx_rec.append(idx_st)
+                except IndexError:
+                    pass
 
         return idx_rec
 
