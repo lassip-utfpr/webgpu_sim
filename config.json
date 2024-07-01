@@ -1,15 +1,15 @@
 {
   "receivers" :
     [
-      [40.0, 0.0, 0.0, 6.0],
-      [30.0, 0.0, 0.0, 8.0],
-      [55.0, 0.0, 0.0, 9.0]
+      [40.0, 0.0, 12.0, 1.44e-6],
+      [30.0, 0.0, 12.0, 1.44e-6],
+      [55.0, 0.0, 12.0, 1.44e-6]
     ],
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 58.2,
-      "h_len" : 582,
+      "height" : 57.4,
+      "h_len" : 574,
       "width" : 77.4,
       "w_len" : 774,
       "depth" : 0.0,
@@ -21,89 +21,61 @@
       "len_pml_zmin" : 10,
       "len_pml_zmax" : 10
     },
-  "probes":
-  [
-    {
-      "linear": {
-        "id": "probe01",
-        "num_elem": 32,
-        "dim_a": 0.7,
-        "dim_p": 10.0,
-        "inter_elem": 0.1,
-        "freq": 5.0,
-        "bw": 0.5,
-        "gain": 1e7,
-        "pulse_type": "gaussian",
-        "coord_center": [
-          40.0,
-          0.0,
-          0.0
-        ],
-        "emmiters": "all",
-        "t0_emmition": 1.0,
-        "receivers": "all",
-        "t0_reception": 0.0
-      }
-    },
-    {
-      "linear": {
-        "id": "probe02",
-        "num_elem": 32,
-        "dim_a": 0.7,
-        "dim_p": 10.0,
-        "inter_elem": 0.1,
-        "freq": 5.0,
-        "bw": 0.5,
-        "gain": 1e7,
-        "pulse_type": "gaussian",
-        "coord_center": [
-          40.0,
-          0.0,
-          50.0
-        ],
-        "emmiters": [
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False"
-        ],
-        "t0_emmition": 1.0,
-        "receivers": "all",
-        "t0_reception": 0.0
-      }
+  "probe":
+  {
+    "linear": {
+      "num_elem": 32,
+      "dim_a": 0.7,
+      "dim_p": 10.0,
+      "inter_elem": 0.1,
+      "freq": 5.0,
+      "bw": 0.5,
+      "gain": 1e10,
+      "pulse_type": "gaussian",
+      "coord_center": [
+        40.0,
+        0.0,
+        0.0
+      ],
+      "t0_emmition": [
+        1.00,
+        1.01,
+        1.02,
+        1.03,
+        1.04,
+        1.05,
+        1.06,
+        1.07,
+        1.08,
+        1.09,
+        1.10,
+        1.11,
+        1.12,
+        1.13,
+        1.14,
+        1.15,
+        1.16,
+        1.17,
+        1.18,
+        1.19,
+        1.20,
+        1.21,
+        1.22,
+        1.23,
+        1.24,
+        1.25,
+        1.26,
+        1.27,
+        1.28,
+        1.29,
+        1.30,
+        1.31
+      ]
     }
-  ],
+  },
   "simul_params":
   {
-    "time_steps": 20000,
+    "time_steps": 3000,
     "dt": 2.0e-3,
     "ord": 4,
     "rcoef": 0.0001,
@@ -123,25 +95,17 @@
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
-    "show_debug": 1,
+    "show_debug": 0,
     "plot_results": 1,
-    "plot_sensors": 0,
-    "plot_bscan": 1,
+    "plot_sensors": 1,
     "show_results": 1,
     "save_results": 0,
-    "save_bscan": 1,
-    "save_sources": 0,
-    "gpu_type": "high-perf",
-    "sim_interactive": 1,
-    "source_env": 0
+    "gpu_type": "high-perf"
   },
   "specimen_params":
   {
-    "cp": 1.43,
-    "cs": 0.0,
-    "rho": 1000.0,
-    "rho_map": "./rho_maps/teste_rho.npy",
-    "cp_map": "./rho_maps/teste_cp.npy",
-    "cs_map": "./rho_maps/teste_cs.npy"
+    "cp": 5.9,
+    "cs": 3.23,
+    "rho": 7800.0
   }
 }
