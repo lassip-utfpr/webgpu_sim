@@ -1,0 +1,141 @@
+{
+  "roi" :
+    {
+      "coord_ref" : [[0.0, 0.0, 0.0]],
+      "height" : 58.2,
+      "h_len" : 582,
+      "width" : 77.4,
+      "w_len" : 774,
+      "depth" : 0.0,
+      "d_len" : 1,
+      "len_pml_xmin" : 10,
+      "len_pml_xmax" : 10,
+      "len_pml_ymin" : 10,
+      "len_pml_ymax" : 10,
+      "len_pml_zmin" : 10,
+      "len_pml_zmax" : 10
+    },
+  "probes":
+  [
+    {
+      "linear": {
+        "id": "probe01",
+        "num_elem": 32,
+        "dim_a": 0.7,
+        "dim_p": 10.0,
+        "inter_elem": 0.1,
+        "freq": 5.0,
+        "bw": 0.5,
+        "gain": 1e7,
+        "pulse_type": "gaussian",
+        "coord_center": [
+          40.0,
+          0.0,
+          0.0
+        ],
+        "emmiters": "all",
+        "t0_emmition": 1.0,
+        "receivers": "all",
+        "t0_reception": 0.0
+      }
+    },
+    {
+      "linear": {
+        "id": "probe02",
+        "num_elem": 32,
+        "dim_a": 0.7,
+        "dim_p": 10.0,
+        "inter_elem": 0.1,
+        "freq": 5.0,
+        "bw": 0.5,
+        "gain": 1e7,
+        "pulse_type": "gaussian",
+        "coord_center": [
+          40.0,
+          0.0,
+          50.0
+        ],
+        "emmiters": [
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False",
+          "False"
+        ],
+        "t0_emmition": 1.0,
+        "receivers": "all",
+        "t0_reception": 0.0
+      }
+    }
+  ],
+  "simul_params":
+  {
+    "time_steps": 20000,
+    "dt": 2.0e-3,
+    "ord": 4,
+    "rcoef": 0.0001,
+    "it_display": 10,
+    "npower": 2.0,
+    "k_max_pml": 1.0
+  },
+  "simul_configs":
+  {
+    "n_iter_gpu": 1,
+    "n_iter_cpu": 1,
+    "do_sim_gpu": 1,
+    "do_sim_cpu": 0,
+    "do_comp_fig_cpu_gpu": 1,
+    "use_refletors": 0,
+    "show_anim": 1,
+    "show_xy": 0,
+    "show_xz": 1,
+    "show_yz": 0,
+    "show_debug": 1,
+    "plot_results": 1,
+    "plot_sensors": 0,
+    "plot_bscan": 1,
+    "show_results": 1,
+    "save_results": 0,
+    "save_bscan": 1,
+    "save_sources": 0,
+    "gpu_type": "high-perf",
+    "sim_interactive": 1,
+    "source_env": 0
+  },
+  "specimen_params":
+  {
+    "cp": 1.43,
+    "cs": 0.0,
+    "rho": 1000.0,
+    "rho_map": "./rho_maps/teste_rho.npy",
+    "cp_map": "./rho_maps/teste_cp.npy",
+    "cs_map": "./rho_maps/teste_cs.npy"
+  }
+}
