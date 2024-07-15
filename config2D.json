@@ -20,10 +20,10 @@
     {
       "linear": {
         "id": "probe01",
-        "num_elem": 32,
-        "dim_a": 0.7,
+        "num_elem": 64,
+        "dim_a": 0.42,
         "dim_p": 10.0,
-        "inter_elem": 0.1,
+        "inter_elem": 0.08,
         "freq": 5.0,
         "bw": 0.5,
         "gain": 1e7,
@@ -134,8 +134,8 @@
     "cp": 1.43,
     "cs": 0.0,
     "rho": 1000.0,
-    "rho_map": "./rho_maps/teste_rho.npy",
-    "cp_map": "./rho_maps/teste_cp.npy",
-    "cs_map": "./rho_maps/teste_cs.npy"
+    "rho_map": "./rho_maps/rho_smartwedge.npy",
+    "cp_map": "./rho_maps/cp_smartwedge.npy",
+    "cs_map": "./rho_maps/cs_smartwedge.npy"
   }
 }

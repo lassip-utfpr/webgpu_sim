@@ -960,7 +960,7 @@ coefs_Lui = [
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config2D.json')
 args = parser.parse_args()
 
 # -----------------------
@@ -1050,6 +1050,8 @@ if do_sim_gpu:
 # Parametros da simulacao
 nx = simul_roi.get_nx()
 ny = simul_roi.get_nz()
+
+kk = ny // wsy
 
 # Escala do grid (valor do passo no espaco em milimetros)
 dx = flt32(simul_roi.w_step)
