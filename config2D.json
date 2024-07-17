@@ -29,7 +29,7 @@
         "gain": 1e7,
         "pulse_type": "gaussian",
         "coord_center": [
-          15.96,
+          40.0,
           0.0,
           0.0
         ],
@@ -42,18 +42,18 @@
     {
       "linear": {
         "id": "probe02",
-        "num_elem": 32,
-        "dim_a": 0.7,
+        "num_elem": 64,
+        "dim_a": 0.42,
         "dim_p": 10.0,
-        "inter_elem": 0.1,
+        "inter_elem": 0.08  ,
         "freq": 5.0,
         "bw": 0.5,
         "gain": 1e7,
         "pulse_type": "gaussian",
         "coord_center": [
-          15.96,
+          40.0,
           0.0,
-          25.0
+          50.0
         ],
         "emmiters": [
           "False",
@@ -98,8 +98,8 @@
   "simul_params":
   {
     "time_steps": 20000,
-    "dt": 2.0e-3,
-    "ord": 4,
+    "dt": 2e-3,
+    "ord": 6,
     "rcoef": 0.0001,
     "it_display": 10,
     "npower": 2.0,
@@ -111,7 +111,7 @@
     "n_iter_cpu": 1,
     "do_sim_gpu": 1,
     "do_sim_cpu": 0,
-    "do_comp_fig_cpu_gpu": 1,
+    "do_comp_fig_cpu_gpu": 0,
     "use_refletors": 0,
     "show_anim": 1,
     "show_xy": 0,
