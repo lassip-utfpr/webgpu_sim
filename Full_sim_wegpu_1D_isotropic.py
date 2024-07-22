@@ -115,10 +115,10 @@ def sim_1D_wgpu(device):
     global vx, sigmaxx
     global ix_rec, ix_src
     global sisvx
-    global coefs
+    global coefs, ord
 
     # Arrays com parametros
-    params_i32 = np.array([nx, aux_src, NSTEP, NREC, 0], dtype=np.int32)
+    params_i32 = np.array([nx, aux_src, NSTEP, NREC, 0, ord], dtype=np.int32)
     params_f32 = np.array([dx, dt, rho, lambda_, mu, lambdaplus2mu], dtype=flt32)
 
     # Rodar shader
@@ -193,7 +193,7 @@ def sim_1D_wgpu(device):
             "binding": 7,
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
-                "type": wgpu.BufferBindingType.storage, }
+                "type": wgpu.BufferBindingType.read_only_storage, }
         }
     ]
 

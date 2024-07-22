@@ -3,7 +3,8 @@ struct SimIntValues {
     x_source: i32,
     n_iter: i32,
     n_rec: i32,
-    it: i32
+    it: i32,
+    ord: i32
 };
 
 struct SimFltValues {
@@ -39,6 +40,9 @@ var<storage,read_write> sensors_vx: array<f32>;
 @group(2) @binding(6)
 var<storage,read> sensors_pos_x: array<i32>;
 
+@group(0) @binding(7)
+var<storage,read> coefs:array<f32>;
+
 @compute
 @workgroup_size(wsx)
 fn sigmax(@builtin(global_invocation_id) index: vec3<u32>) {
@@ -46,13 +50,16 @@ fn sigmax(@builtin(global_invocation_id) index: vec3<u32>) {
     let lambda: f32 = sim_flt.lambda;
     let mu: f32 = sim_flt.mu;
     let lambdaplus2mu: f32 = sim_flt.lambda + 2.0 * sim_flt.mu;
+    let id: i32 = sim_int.ord - 1;
 
     // Cálculo das derivadas da velocidade e do valor de sigma
     if(x >= 1 && x < (sim_int.x_sz - 2)) {
 
-       var Vcoef1: f32 = (1.125*(vx[x+1]-vx[x]));
-       var Vcoef2: f32 = (vx[x + 2] - vx[x - 1])/24.0;
-       var dvx_dx: f32 = (Vcoef1 - Vcoef2)/sim_flt.dx;
+       var dvx_dx: f32 = 0.0;
+
+        for(var c: i32 = 0; c < sim_int.ord; c++) {
+            dvx_dx += coefs[c]*(vx[x+c+1]-vx[x-c])/sim_flt.dx;
+        }
 
         sigma[x] = sigma[x] + (lambdaplus2mu * dvx_dx) * sim_flt.dt;
     }
@@ -68,11 +75,14 @@ fn velx(@builtin(global_invocation_id) index: vec3<u32>) {
     // Cálculo das derivadas do sigma e do valor da velocidade
     if(x >= 2 && x < (sim_int.x_sz - 1)) {
 
-        var Scoef1: f32 = (1.125*(sigma[x] - sigma[x - 1]));
-        var Scoef2: f32 = (sigma[x + 1] - sigma[x - 2])/24.0;
-        var dsig_dx: f32 = (Scoef1 - Scoef2)/sim_flt.dx;
+        var dsig_dx: f32 = 0.0;
+
+        for(var c: i32 = 0; c < sim_int.ord; c++) {
+            dsig_dx += coefs[c]*(sigma[x+c] - sigma[x - c - 1])/sim_flt.dx;
+        }
 
         vx[x] =  dt_rho * (dsig_dx) + vx[x];
+
     }
 }
 
