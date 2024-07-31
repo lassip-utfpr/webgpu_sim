@@ -43,13 +43,13 @@ source_term_cfg.append(configs2["probes"][0]["linear"]["gain"])
 data_src = np.array([data_src])
 data_rec = np.array([data_rec])
 
-with open('config1D.json', 'r') as f:
+with open('config.json', 'r') as f:
     configs = ast.literal_eval(f.read())
 
 
 
 
-    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0])
+    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1)
     wavenumber_x = (2.0 * pi * source_term_cfg[1]) / configs["specimen_params"]["cp"]
 
 
@@ -103,12 +103,29 @@ ix_rec = i_rec[:, 0].astype(np.int32)
 
 # Valor da potencia para calcular "d0"
 NPOWER = 2.0
+K_MAX_PML = flt32(configs["simul_params"]["k_max_pml"])
+ALPHA_MAX_PML = flt32(2.0 * pi * (f0 / 2.0))
+
+d0_x = flt32(-(NPOWER + 1) * cp * np.log(0.0001) / simul_roi.get_pml_thickness_x())
+
+a_x, b_x, k_x = simul_roi.calc_pml_array(axis='x', grid='f', dt=dt, d0=d0_x,
+                                         npower=NPOWER, k_max=K_MAX_PML, alpha_max=ALPHA_MAX_PML)
+
+a_x_half, b_x_half, k_x_half = simul_roi.calc_pml_array(axis='x', grid='h', dt=dt, d0=d0_x,
+                                                        npower=NPOWER, k_max=K_MAX_PML, alpha_max=ALPHA_MAX_PML)
+
 
 vx = np.zeros(nx, dtype=flt32)
 sigmaxx = np.zeros(nx, dtype=flt32)
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 
 wsx = nx
+
+#CPML
+
+memory_dvx_dx = np.zeros((nx), dtype=flt32)
+memory_dsigmaxx_dx = np.zeros((nx), dtype=flt32)
+
 
 def sim_1D_wgpu(device):
     global source_term
@@ -163,9 +180,51 @@ def sim_1D_wgpu(device):
     bf_pos_x = device.create_buffer_with_data(data=ix_rec, usage=wgpu.BufferUsage.STORAGE |
                                                                      wgpu.BufferUsage.COPY_SRC)
 
-    # binding 7
+    # binding 15
     bf_coefs = device.create_buffer_with_data(data=coefs, usage=wgpu.BufferUsage.STORAGE |
                                                                 wgpu.BufferUsage.COPY_SRC)
+
+       #CPML
+
+    # Binding 7
+
+    b_memory_dvx_dx = device.create_buffer_with_data(data=memory_dvx_dx,usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 8
+
+    b_memory_dsigmaxx_dx = device.create_buffer_with_data(data=memory_dsigmaxx_dx, usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 9
+
+    b_a_x = device.create_buffer_with_data(data=a_x, usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 10
+
+    b_b_x = device.create_buffer_with_data(data=b_x, usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 11
+
+    b_k_x = device.create_buffer_with_data(data=k_x, usage=wgpu.BufferUsage.STORAGE |
+                                                                     wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 12
+
+    b_a_x_h = device.create_buffer_with_data(data=a_x_half, usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 13
+
+    b_b_x_h = device.create_buffer_with_data(data=b_x_half, usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
+
+    # Binding 14
+
+    b_k_x_h = device.create_buffer_with_data(data=k_x_half, usage=wgpu.BufferUsage.STORAGE |
+                                                                            wgpu.BufferUsage.COPY_SRC)
 
 
 
@@ -190,7 +249,7 @@ def sim_1D_wgpu(device):
                 "type": wgpu.BufferBindingType.storage,}
         },
         {
-            "binding": 7,
+            "binding": 15,
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
                 "type": wgpu.BufferBindingType.read_only_storage, }
@@ -223,6 +282,48 @@ def sim_1D_wgpu(device):
          }
     ]
 
+    bl_cpml = [
+        {"binding": 7,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 8,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 9,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 10,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 11,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 12,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 13,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+        {"binding": 14,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.read_only_storage}
+         },
+    ]
 
     # Bindings
 
@@ -240,7 +341,7 @@ def sim_1D_wgpu(device):
             "resource": {"buffer": bf_param_int32, "offset": 0, "size": bf_param_int32.size},
         },
         {
-            "binding": 7,
+            "binding": 15,
             "resource": {"buffer": bf_coefs, "offset": 0, "size": bf_coefs.size},
         }
     ]
@@ -265,14 +366,52 @@ def sim_1D_wgpu(device):
         },
     ]
 
+    b_cpml = [
+        {
+            "binding": 7,
+            "resource": {"buffer":  b_memory_dvx_dx, "offset": 0, "size":  b_memory_dvx_dx.size},
+        },
+        {
+            "binding": 8,
+            "resource": {"buffer": b_memory_dsigmaxx_dx, "offset": 0, "size": b_memory_dsigmaxx_dx.size},
+        },
+        {
+            "binding": 9,
+            "resource": {"buffer": b_a_x, "offset": 0, "size": b_a_x.size},
+        },
+        {
+            "binding": 10,
+            "resource": {"buffer": b_b_x, "offset": 0, "size": b_b_x.size},
+        },
+        {
+            "binding": 11,
+            "resource": {"buffer": b_k_x, "offset": 0, "size": b_k_x.size},
+        },
+        {
+            "binding": 12,
+            "resource": {"buffer": b_a_x_h, "offset": 0, "size": b_a_x_h.size},
+        },
+        {
+            "binding": 13,
+            "resource": {"buffer": b_b_x_h, "offset": 0, "size": b_b_x_h.size},
+        },
+        {
+            "binding": 14,
+            "resource": {"buffer": b_k_x_h, "offset": 0, "size": b_k_x_h.size},
+        },
+
+    ]
+
     # B Layouts + Bindings + Pipeline Layout
     bgl_0 = device.create_bind_group_layout(entries=bl_params)
     bgl_1 = device.create_bind_group_layout(entries=bl_sim)
     bgl_2 = device.create_bind_group_layout(entries=bl_sensors)
-    pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2])
+    bgl_3 = device.create_bind_group_layout(entries=bl_cpml)
+    pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2,bgl_3])
     bg_0 = device.create_bind_group(layout=bgl_0, entries=b_params)
     bg_1 = device.create_bind_group(layout=bgl_1, entries=b_sim)
     bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
+    bg_3 = device.create_bind_group(layout=bgl_3, entries=b_cpml)
 
     # Pipeline config
     compute_sigmax = device.create_compute_pipeline(layout=pipeline_layout,
@@ -297,6 +436,7 @@ def sim_1D_wgpu(device):
         compute_pass.set_bind_group(0, bg_0, [], 0, 999999)
         compute_pass.set_bind_group(1, bg_1, [], 0, 999999)
         compute_pass.set_bind_group(2, bg_2, [], 0, 999999)
+        compute_pass.set_bind_group(3, bg_3, [], 0, 999999)
 
         compute_pass.set_pipeline(compute_sigmax)
         compute_pass.dispatch_workgroups(wsx)
