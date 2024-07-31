@@ -43,7 +43,7 @@ source_term_cfg.append(configs2["probes"][0]["linear"]["gain"])
 data_src = np.array([data_src])
 data_rec = np.array([data_rec])
 
-with open('config.json', 'r') as f:
+with open('config1D.json', 'r') as f:
     configs = ast.literal_eval(f.read())
 
 
