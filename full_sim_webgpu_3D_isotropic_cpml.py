@@ -1373,8 +1373,7 @@ def sim_webgpu(device):
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
     sens_vz = np.array(device.queue.read_buffer(b_sens_z).cast("f")).reshape((NSTEP, NREC))
-    adapter_info = device.adapter.request_adapter_info()
-    return vxgpu, vygpu, vzgpu, sens_vx, sens_vy, sens_vz, v_sol_n, adapter_info["device"]
+    return vxgpu, vygpu, vzgpu, sens_vx, sens_vy, sens_vz, v_sol_n, device.adapter.info["device"]
 
 
 # ----------------------------------------------------------
