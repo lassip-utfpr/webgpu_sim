@@ -339,23 +339,7 @@ fn set_vy(x: i32, y: i32, val : f32) {
 // ----------------------------------
 
 @group(1) @binding(2) // v_2
-var<storage,read_write> v_2: array<f32>;
-
-// function to get a v_2 array value
-fn get_v_2(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, v_2[index], index != -1);
-}
-
-// function to set a v_2 array value
-fn set_v_2(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    if(index != -1) {
-        v_2[index] = val;
-    }
-}
+var<storage,read_write> v_2: f32;
 
 // -------------------------------------
 // --- Stress arrays access funtions ---
@@ -885,6 +869,7 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let id_x_f: i32 = sim_int_par.x_sz - get_idx_ih(last);
     let id_y_i: i32 = -get_idx_fh(last);
     let id_y_f: i32 = sim_int_par.y_sz - get_idx_ih(last);
+    let v_2_old: f32 = v_2;
 
     // Apply Dirichlet conditions
     if(x <= id_x_i || x >= id_x_f || y <= id_y_i || y >= id_y_f) {
@@ -893,8 +878,8 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     }
 
     // Compute velocity norm L2
-    let v_2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
-    set_v_2(x, y, v_2);
+    let v2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
+    v_2 = max(v_2_old, v2);
 }
 
 // Kernel to store sensors velocity
