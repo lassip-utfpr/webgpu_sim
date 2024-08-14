@@ -240,7 +240,7 @@ class SimulationROI:
         """Método para retornar se o ponto pertence a ROI."""
         if type(point) is not np.ndarray and type(point) is list:
             point = np.array(point, dtype=np.float32)
-        elif type(point) is np.ndarray:
+        elif type(point) is np.array:
             point = point.astype(np.float32)
 
         if (not (self.w_points[0] <= point[0] <= self.w_points[-1]) or
