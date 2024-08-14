@@ -101,7 +101,6 @@ def sim_cpu():
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global sisvx, sisvy
     global ix_src, iy_src, ix_rec, iy_rec
-    global v_solid_norm, v_2
     global windows_cpu
     global rho_grid_vx, cp_grid_vx, cs_grid_vx
 
@@ -359,14 +358,13 @@ def sim_cpu():
                 sisvx[it - 1, _irec] += vx[_x, _y]
                 sisvy[it - 1, _irec] += vy[_x, _y]
 
-        v_2 = vx[:, :] ** 2 + vy[:, :] ** 2
-        v_solid_norm[it - 1] = np.sqrt(np.max(v_2))
+        vsn2 = np.sqrt(np.max(vx[:, :] ** 2 + vy[:, :] ** 2))
         if (it % IT_DISPLAY) == 0 or it == 5:
             if show_debug:
                 print(f'Time step # {it} out of {NSTEP}')
                 print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}')
                 print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}')
-                print(f'Max norm velocity vector V (m/s) = {v_solid_norm[it - 1]}')
+                print(f'Max norm velocity vector V (m/s) = {vsn2}')
 
             if show_anim:
                 windows_cpu[0].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
@@ -374,7 +372,7 @@ def sim_cpu():
                 App.processEvents()
 
         # Verifica a estabilidade da simulacao
-        if v_solid_norm[it - 1] > STABILITY_THRESHOLD:
+        if vsn2 > STABILITY_THRESHOLD:
             print("Simulacao tornando-se instavel")
             exit(2)
 
@@ -395,7 +393,6 @@ def sim_webgpu(device):
     global value_dsigmaxx_dx, value_dsigmaxy_dy
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global ix_src, iy_src, ix_rec, iy_rec
-    global v_2, v_solid_norm
     global simul_roi, rho_grid_vx, cp_grid_vx, cs_grid_vx
     global windows_gpu
 
@@ -502,7 +499,8 @@ def sim_webgpu(device):
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     b_param_int32 = device.create_buffer_with_data(data=params_i32, usage=wgpu.BufferUsage.STORAGE |
-                                                                          wgpu.BufferUsage.COPY_SRC)
+                                                                          wgpu.BufferUsage.COPY_SRC |
+                                                                          wgpu.BufferUsage.COPY_DST)
 
     # Buffers com os indices para o calculo das derivadas com acuracia maior
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
@@ -830,30 +828,29 @@ def sim_webgpu(device):
 
     v_max = 100.0
     v_min = - v_max
-    v_sol_n = np.zeros(NSTEP, dtype=flt32)
     ix_min = simul_roi.get_ix_min()
     ix_max = simul_roi.get_ix_max()
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
 
-    # Cria o codificador de comandos
-    command_encoder = device.create_command_encoder()
-
-    # Inicia os passos de execucao do decodificador
-    compute_pass = command_encoder.begin_compute_pass()
-
-    # Ajusta os grupos de amarracao
-    compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
-    compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
-    compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
-
     # Laco de tempo para execucao da simulacao
     for it in range(1, NSTEP + 1):
+        # Cria o codificador de comandos
+        command_encoder = device.create_command_encoder()
+
+        # Inicia os passos de execucao do decodificador
+        compute_pass = command_encoder.begin_compute_pass()
+
+        # Ajusta os grupos de amarracao
+        compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
+
         # Ativa o pipeline de teste
         # compute_pass.set_pipeline(compute_teste_kernel)
         # compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
 
-        # Ativa o pipeline de execucao do calculo dos estresses
+        # # Ativa o pipeline de execucao do calculo dos estresses
         compute_pass.set_pipeline(compute_sigma_kernel)
         compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
 
@@ -877,61 +874,42 @@ def sim_webgpu(device):
         compute_pass.set_pipeline(compute_incr_it_kernel)
         compute_pass.dispatch_workgroups(1)
 
-        if sim_interactive:
-            # Termina o passo de execucao
-            compute_pass.end()
-
-            # Efetua a execucao dos comandos na GPU
-            device.queue.submit([command_encoder.finish()])
-
-            # Pega resultados na GPU
-            vsn2 = np.asarray(device.queue.read_buffer(b_v_2, buffer_offset=0).cast("f")).reshape((nx, ny))
-            v_sol_n[it - 1] = np.sqrt(np.max(vsn2))
-            if (it % IT_DISPLAY) == 0 or it == 5:
-                if show_debug or show_anim:
-                    vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
-                    vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
-
-                    if show_debug:
-                        print(f'Time step # {it} out of {NSTEP}')
-                        print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}')
-                        print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}')
-                        print(f'Max norm velocity vector V (m/s) = {v_sol_n[it - 1]}')
-
-                    if show_anim:
-                        windows_gpu[0].imv.setImage(vxgpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                        windows_gpu[1].imv.setImage(vygpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                        App.processEvents()
-
-            # Verifica a estabilidade da simulacao
-            if v_sol_n[it - 1] > STABILITY_THRESHOLD:
-                print("Simulacao tornando-se instavel")
-                exit(2)
-
-            # Cria o codificador de comandos
-            command_encoder = device.create_command_encoder()
-
-            # Inicia os passos de execucao do decodificador
-            compute_pass = command_encoder.begin_compute_pass()
-
-            # Ajusta os grupos de amarracao
-            compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
-            compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
-            compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
-
-    if not sim_interactive:
         # Termina o passo de execucao
         compute_pass.end()
 
         # Efetua a execucao dos comandos na GPU
         device.queue.submit([command_encoder.finish()])
 
+        # Leitura da GPU para sincronismo
+        vsn2 = np.sqrt(device.queue.read_buffer(b_v_2, buffer_offset=0, size=b_v_2.size).cast("f")[0])
+        if (it % IT_DISPLAY) == 0 or it == 5:
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max norm velocity vector V (m/s) = {vsn2}')
+
+            if show_anim:
+                vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
+                vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
+
+                windows_gpu[0].imv.setImage(vxgpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                windows_gpu[1].imv.setImage(vygpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                App.processEvents()
+
+                if show_debug:
+                    print(f'Max Vx = {np.max(vxgpu)}, Vy = {np.max(vygpu)}')
+                    print(f'Min Vx = {np.min(vxgpu)}, Vy = {np.min(vygpu)}')
+
+        # Verifica a estabilidade da simulacao
+        if vsn2 > STABILITY_THRESHOLD:
+            print("Simulacao tornando-se instavel")
+            exit(2)
+
     # Pega os resultados da simulacao
     vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
     vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
-    return vxgpu, vygpu, sens_vx, sens_vy, v_sol_n, device.adapter.info["device"]
+    return vxgpu, vygpu, sens_vx, sens_vy, device.adapter.info["device"]
 
 
 # ----------------------------------------------------------
@@ -1023,7 +1001,6 @@ with open(args.config, 'r') as f:
     show_results = bool(configs["simul_configs"]["show_results"])
     save_results = bool(configs["simul_configs"]["save_results"])
     gpu_type = configs["simul_configs"]["gpu_type"]
-    sim_interactive = bool(configs["simul_configs"]["sim_interactive"])
     source_env = bool(configs["simul_configs"]["source_env"])
 
 # -----------------------
@@ -1132,8 +1109,7 @@ iy_rec = i_probe_rx_ptos[:, 2].astype(np.int32)
 delay_recv = (np.array(delay_recv) / dt + 1.0).astype(np.int32)
 
 # for evolution of total energy in the medium
-v_2 = np.zeros((nx, ny), dtype=flt32)
-v_solid_norm = np.zeros(NSTEP, dtype=flt32)
+v_2 = np.float32(0.0)
 
 # Arrays para as variaveis de memoria do calculo
 memory_dvx_dx = np.zeros((nx, ny), dtype=flt32)
@@ -1241,7 +1217,7 @@ sensor_gpu_result = list()
 sensor_cpu_result = list()
 
 # Configuracao e inicializacao da janela de exibicao
-if show_anim and sim_interactive:
+if show_anim:
     App = pg.QtWidgets.QApplication([])
     if do_sim_cpu:
         x_pos = 200 + np.arange(3) * (nx + 50)
@@ -1274,7 +1250,7 @@ if do_sim_gpu:
         print(f'wsx = {wsx}, wsy = {wsy}')
         print(f'Iteracao {n}')
         t_gpu = time()
-        vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, v_solid_norm_gpu, gpu_str = sim_webgpu(device_gpu)
+        vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, gpu_str = sim_webgpu(device_gpu)
         times_gpu.append(time() - t_gpu)
         print(gpu_str)
         print(f'{times_gpu[-1]:.3}s')
@@ -1437,21 +1413,33 @@ if save_results:
         if do_sim_gpu:
             vx_gpu_sim_result.savefig(name + 'Vx_gpu_' + gpu_type + '.png')
             vy_gpu_sim_result.savefig(name + 'Vy_gpu_' + gpu_type + '.png')
-            for s in range(NREC):
-                sensor_gpu_result[s].savefig(name + f'_sensor_{s}_' + gpu_type + '.png')
+            if plot_sensors:
+                for s in range(NREC):
+                    try:
+                        sensor_gpu_result[s].savefig(name + f'_sensor_{s}_' + gpu_type + '.png')
+                    except IndexError:
+                        pass
 
         if do_sim_cpu:
             vx_cpu_sim_result.savefig(name + 'Vx_cpu.png')
             vy_cpu_sim_result.savefig(name + 'Vy_cpu.png')
-            for s in range(NREC):
-                sensor_cpu_result[s].savefig(name + f'_sensor_{s}_CPU.png')
+            if plot_sensors:
+                for s in range(NREC):
+                    try:
+                        sensor_cpu_result[s].savefig(name + f'_sensor_{s}_CPU.png')
+                    except IndexError:
+                        pass
 
         if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
             vx_comp_sim_result.savefig(name + 'Vx_XY_comp_cpu_gpu_' + gpu_type + '.png')
             vy_comp_sim_result.savefig(name + 'Vy_XY_comp_cpu_gpu_' + gpu_type + '.png')
 
-    np.savetxt(name + '_GPU_' + gpu_type + '.csv', times_gpu, '%10.3f', delimiter=',')
-    np.savetxt(name + '_CPU.csv', times_cpu, '%10.3f', delimiter=',')
+    if do_sim_gpu:
+        np.savetxt(name + 'GPU_' + gpu_type + '.csv', times_gpu, '%10.3f', delimiter=',')
+
+    if do_sim_cpu:
+        np.savetxt(name + 'CPU.csv', times_cpu, '%10.3f', delimiter=',')
+
     with open(name + '_desc.txt', 'w') as f:
         f.write('Parametros do ensaio\n')
         f.write('--------------------\n')
