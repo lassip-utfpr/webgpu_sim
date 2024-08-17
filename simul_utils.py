@@ -1,8 +1,5 @@
-import os.path
-
 import numpy as np
 from scipy.signal import gausspulse
-from file_law import read
 
 HUGEVAL = 1.0e30  # Valor enorme
 
@@ -237,7 +234,9 @@ class SimulationROI:
         return (self._pml_zmin_len + self._pml_zmax_len) * self.h_step
 
     def is_point_in_roi(self, point):
-        """Método para retornar se o ponto pertence a ROI."""
+        """
+        Função para retornar se o ponto pertence a ROI.
+        """
         if type(point) is not np.ndarray and type(point) is list:
             point = np.array(point, dtype=np.float32)
         elif type(point) is np.array:
@@ -251,7 +250,9 @@ class SimulationROI:
             return True
 
     def get_nearest_grid_idx(self, point):
-        """Método para retornar os índices mais próximos da grade para o ponto da ROI fornecido."""
+        """
+        Função para retornar os índices mais próximos da grade para o ponto da ROI fornecido.
+        """
         if type(point) is not np.ndarray and type(point) is list:
             point = np.array(point, dtype=np.float32)
         elif type(point) is np.array:
@@ -269,7 +270,9 @@ class SimulationROI:
         return [ix, iy, iz]
 
     def calc_pml_array(self, axis='x', grid='f', dt=1.0, d0=1.0, npower=2.0, alpha_max=30.0, k_max=1.0):
-        """Metodo que calcula os vetores com os valores para implementar a camada de PML"""
+        """
+        Função que calcula os vetores com os valores para implementar a camada de PML.
+        """
         # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
         if axis == 'x' or axis == 'X':
             delta = self.w_step
@@ -295,7 +298,7 @@ class SimulationROI:
         else:
             raise IndexError(f"'axis' = {axis} not supported")
 
-        # Incicializacao para full ou half grid
+        # Inicializacao para full ou half grid
         val = delta * np.arange(tam_pml)
         if grid == 'f' or grid == 'F':
             val_pml_left = orig_left - val
@@ -400,7 +403,7 @@ class ElementRect:
 
     def get_num_points_roi(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
-        Método que retorna o número dos pontos ativos do transdutor no grid de simulação.
+        Função que retorna o número dos pontos ativos do transdutor no grid de simulação.
 
         Returns
         -------
@@ -420,7 +423,7 @@ class ElementRect:
 
     def get_points_roi(self, sim_roi=SimulationROI(), probe_center=np.zeros((1, 3)), simul_type="2D", dir="e"):
         """
-        Método que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
+        Função que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
         no formato vetorizado.
 
         Returns
@@ -519,7 +522,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def __init__(self, coord_center=np.zeros((1, 3)), num_elem=32, dim_a=0.5, dim_p=10.0, inter_elem=0.1,
                  freq=5., bw=0.5, gain=1.0, pulse_type="gaussian", id="",
-                 emmiters="all", t0_emmition=0.0, receivers="all", t0_reception=0.0):
+                 emmiters="all", receivers="all", t0_emission=None, t0_reception=None):
         # Chama o construtor da classe base.
         super().__init__(coord_center)
 
@@ -560,25 +563,25 @@ class SimulationProbeLinearArray(SimulationProbe):
         # Tempo de atraso para emissao dos elementos. Se for um valor escalar, e assumido para todos os elementos.
         # Se for um array, deve ter um valor para cada elemento.
         # Se for um nome de um arquivo 'law',
-        if type(t0_emmition) is np.float32 or type(t0_emmition) is float:
-            self.t0_emmition = np.ones(num_elem, dtype=np.float32) * np.float32(t0_emmition)
-        elif type(t0_emmition) is list:
-            self.t0_emmition = t0_emmition
-            if len(self.t0_emmition) < num_elem:
-                self.t0_emmition += [0.0] * (num_elem - len(self.t0_emmition))
-            elif len(self.t0_emmition) > num_elem:
-                self.t0_emmition = self.t0_emmition[:num_elem]
-
-            self.t0_emmition = np.array(self.t0_emmition, dtype=np.float32)
-        elif os.path.isfile(t0_emmition):
-            delay_law, _ = read(t0_emmition)
-            self.t0_emmition = delay_law[0, :].astype(np.float32)
+        if t0_emission is None:
+            self.t0_emission = np.zeros(num_elem, dtype=np.float32)
+        elif type(t0_emission) is np.float32 or type(t0_emission) is float:
+            self.t0_emission = np.ones(num_elem, dtype=np.float32) * np.float32(t0_emission)
+        elif type(t0_emission) is list:
+            self.t0_emission = t0_emission
+            if len(self.t0_emission) < num_elem:
+                self.t0_emission += [0.0] * (num_elem - len(self.t0_emission))
+            elif len(self.t0_emission) > num_elem:
+                self.t0_emission = self.t0_emission[:num_elem]
+            self.t0_emission = np.array(self.t0_emission, dtype=np.float32)
         else:
-            raise ValueError("t0_emmition must be either a float [numpy.float32] or a list of floats.")
+            raise ValueError("t0_emission must be either a float [numpy.float32] or a list of floats.")
 
         # Tempo de atraso para recepcao dos elementos. Se for um valor escalar, e assumido para todos os elementos.
         # Se for um array, deve ter um valor para cada elemento.
-        if type(t0_reception) is np.float32 or type(t0_reception) is float:
+        if t0_reception is None:
+            self.t0_reception = np.zeros(num_elem, dtype=np.float32)
+        elif type(t0_reception) is np.float32 or type(t0_reception) is float:
             self.t0_reception = np.ones(num_elem, dtype=np.float32) * np.float32(t0_reception)
         elif type(t0_reception) is list:
             self.t0_reception = t0_reception
@@ -586,7 +589,6 @@ class SimulationProbeLinearArray(SimulationProbe):
                 self.t0_reception += [0.0] * (num_elem - len(self.t0_reception))
             elif len(self.t0_reception) > num_elem:
                 self.t0_reception = self.t0_reception[:num_elem]
-
             self.t0_reception = np.array(self.t0_reception, dtype=np.float32)
         else:
             raise ValueError("t0_reception must be either a float [numpy.float32] or a list of floats.")
@@ -603,7 +605,7 @@ class SimulationProbeLinearArray(SimulationProbe):
                                       freq=freq, bw=bw, gain=gain, pulse_type=pulse_type,
                                       tx_en=self.emmiters[i],
                                       rx_en=self.receivers[i],
-                                      t0=np.float32(self.t0_emmition[i]))
+                                      t0=np.float32(self.t0_emission[i]))
                           for i in range(num_elem)]
 
         # Parametros geometricos gerais do transdutor
@@ -654,7 +656,8 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_freq(self, mode='common'):
         """
-        Método que retorna a frequência do transdutor.
+        Função que retorna a frequência do transdutor.
+
         :param mode: str
             Este parâmetro define o modo de obtenção da frequência.
             "common" significa que será utilizado o parâmetro geral, utilizado por todos os elementos ativos.
@@ -674,7 +677,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
         """
-        Método que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
+        Função que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
         no formato vetorizado.
 
         Returns
@@ -700,7 +703,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_source_term(self, samples=1000, dt=1.0, out='r'):
         """
-        Método que retorna os sinais dos termos de fonte do transdutor. Além de retornar um
+        Função que retorna os sinais dos termos de fonte do transdutor. Além de retornar um
         *array* com os sinais dos termos de fonte de cada elemento ativo do transdutor, esta função
         também retorna uma lista com o índice do termo de fonte para cada ponto da ROI que é
         um ponto emissor.
@@ -723,7 +726,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
-        Método que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
+        Função que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
         :param simul_type:
         :param sim_roi:
 
@@ -745,7 +748,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_delay_rx(self):
         """
-        Método que retorna uma lista com os valores do atraso na recepção de todos os canais.
+        Função que retorna uma lista com os valores do atraso na recepção de todos os canais.
 
         :return: list
         Lista com o tempo de atraso de recepção, em microssegundos, de todos os canais do transdutor habilitados para
@@ -757,3 +760,28 @@ class SimulationProbeLinearArray(SimulationProbe):
                 t0_recp.append(self.t0_reception[idx_e])
 
         return t0_recp
+
+    def set_t0(self, t0_emission=None):
+        """
+        Função que modifica os valores do atraso na emissão de todos os canais.
+
+        :return: None
+        """
+        if t0_emission is None:
+            self.t0_emission = np.zeros(self.num_elem, dtype=np.float32)
+        elif type(t0_emission) is np.float32 or type(t0_emission) is float:
+            self.t0_emission = np.ones(self.num_elem, dtype=np.float32) * np.float32(t0_emission)
+        elif type(t0_emission) is list:
+            self.t0_emission = t0_emission
+            if len(self.t0_emission) < self.num_elem:
+                self.t0_emission += [0.0] * (self.num_elem - len(self.t0_emission))
+            elif len(self.t0_emission) > self.num_elem:
+                self.t0_emission = self.t0_emission[:self.num_elem]
+            self.t0_emission = np.array(self.t0_emission, dtype=np.float32)
+        elif type(t0_emission) is np.ndarray:
+            self.t0_emission = t0_emission
+        else:
+            raise ValueError("t0_emission must be either a float [numpy.float32] or a list of floats.")
+
+        for idx_e, e in enumerate(self.elem_list):
+            e.t0 = self.t0_emission[idx_e]

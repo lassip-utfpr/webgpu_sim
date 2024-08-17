@@ -34,7 +34,7 @@
           10.0
         ],
         "emmiters": "all",
-        "t0_emmition": 1.0,
+        "t0_emission": 1.0,
         "receivers": "all",
         "t0_reception": 0.0
       }
@@ -89,7 +89,7 @@
           "False",
           "False"
         ],
-        "t0_emmition": 1.0,
+        "t0_emission": 1.0,
         "receivers": "all",
         "t0_reception": 0.0
       }

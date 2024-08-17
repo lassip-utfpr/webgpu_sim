@@ -728,7 +728,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
         let cp_h_x = 0.5 * (get_cp(x + 1, y) + get_cp(x, y));
-        let cs_h_x = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
+        let cs_h_x = select(0.5 * (get_cs(x + 1, y) + get_cs(x, y)), 0.0, min(get_cs(x + 1, y), get_cs(x, y)) == 0.0);
         let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x * cs_h_x);
         let mu: f32 = rho_h_x * (cs_h_x * cs_h_x);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
@@ -762,7 +762,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvx_dy(x, y, mdvx_dy_new);
 
         let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
-        let cs_h_y = 0.5 * (get_cs(x, y + 1) + get_cs(x, y));
+        let cs_h_y = select(0.5 * (get_cs(x, y + 1) + get_cs(x, y)), 0.0, min(get_cs(x, y + 1), get_cs(x, y)) == 0.0);
         let mu: f32 = rho_h_y * (cs_h_y * cs_h_y);
         let sigmaxy: f32 = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
         set_sigmaxy(x, y, sigmaxy);

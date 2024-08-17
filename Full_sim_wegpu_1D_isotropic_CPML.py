@@ -28,7 +28,7 @@ with open('config1D.json', 'r') as d:
 ord = configs2["simul_params"]["ord"]
 coefs = np.array(coefs_Lui[configs2["simul_params"]["ord"] - 2], dtype=flt32)
 data_src = configs2["probes"][0]["linear"]["coord_center"][:]
-t_src = configs2["probes"][0]["linear"]["t0_emmition"]*1e-6
+t_src = configs2["probes"][0]["linear"]["t0_emission"]*1e-6
 data_src.append(t_src)
 
 data_rec = configs2["probes"][0]["linear"]["coord_center"][:]

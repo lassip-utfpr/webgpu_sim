@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageWidget
 from simul_utils import SimulationROI, SimulationProbeLinearArray
+import os.path
+import file_law
 
 # ==========================================================
 # Esse arquivo contem as simulacoes realizadas dentro da GPU.
@@ -126,9 +128,9 @@ def sim_cpu():
     idx_rec_offset = 0
     for _pr in simul_probes:
         if source_env:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D", out='e')
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
         else:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, sim_roi=simul_roi, simul_type="2D")
+            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt)
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
@@ -946,62 +948,70 @@ args = parser.parse_args()
 # -----------------------
 with open(args.config, 'r') as f:
     configs = ast.literal_eval(f.read())
-    coefs = np.array(coefs_Lui[configs["simul_params"]["ord"] - 2], dtype=flt32)
 
-    # Configuracao do corpo de prova
-    cp = flt32(5.9)
-    if "cp" in configs["specimen_params"]:
-        cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
+deriv_ord = configs["simul_params"]["ord"] if "ord" in configs["simul_params"] else 2
+try:
+    coefs = np.array(coefs_Lui[deriv_ord - 2], dtype=flt32)
+except IndexError:
+    print(f"Acurácia das derivadas {deriv_ord} não suportada. Usando o maior valor permitido (6).")
+    coefs = np.array(coefs_Lui[-1], dtype=flt32)
 
-    cp_map = None
-    if "cp_map" in configs["specimen_params"]:
-        cp_map = np.load(configs["specimen_params"]["cp_map"]).astype(np.float32)
+# Configuracao do corpo de prova
+cp = flt32(5.9)
+if "cp" in configs["specimen_params"]:
+    cp = flt32(configs["specimen_params"]["cp"])  # [mm/us]
 
-    cs = flt32(3.23)
-    if "cs" in configs["specimen_params"]:
-        cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
+cp_map = None
+if "cp_map" in configs["specimen_params"]:
+    cp_map = np.load(configs["specimen_params"]["cp_map"]).astype(np.float32)
 
-    cs_map = None
-    if "cs_map" in configs["specimen_params"]:
-        cs_map = np.load(configs["specimen_params"]["cs_map"]).astype(np.float32)
+cs = flt32(3.23)
+if "cs" in configs["specimen_params"]:
+    cs = flt32(configs["specimen_params"]["cs"])  # [mm/us]
 
-    rho = flt32(7800.0)
-    if "rho" in configs["specimen_params"]:
-        rho = flt32(configs["specimen_params"]["rho"])
+cs_map = None
+if "cs_map" in configs["specimen_params"]:
+    cs_map = np.load(configs["specimen_params"]["cs_map"]).astype(np.float32)
 
-    rho_map = None
-    if "rho_map" in configs["specimen_params"]:
-        rho_map = np.load(configs["specimen_params"]["rho_map"]).astype(np.float32)
+rho = flt32(7800.0)
+if "rho" in configs["specimen_params"]:
+    rho = flt32(configs["specimen_params"]["rho"])
 
-    # Configuracao da ROI
-    simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
+rho_map = None
+if "rho_map" in configs["specimen_params"]:
+    rho_map = np.load(configs["specimen_params"]["rho_map"]).astype(np.float32)
 
-    # Configuracao dos transdutores
-    simul_probes = list()
-    probes_cfg = configs["probes"]
-    for p in probes_cfg:
-        if p["linear"]:
-            simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
-    print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
+# Configuracao da ROI
+simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
 
-    # Configuracao geral dos ensaios
-    n_iter_gpu = configs["simul_configs"]["n_iter_gpu"]
-    n_iter_cpu = configs["simul_configs"]["n_iter_cpu"]
-    do_sim_gpu = bool(configs["simul_configs"]["do_sim_gpu"])
-    do_sim_cpu = bool(configs["simul_configs"]["do_sim_cpu"])
-    do_comp_fig_cpu_gpu = bool(configs["simul_configs"]["do_comp_fig_cpu_gpu"])
-    use_refletors = bool(configs["simul_configs"]["use_refletors"])
-    show_anim = bool(configs["simul_configs"]["show_anim"])
-    show_debug = bool(configs["simul_configs"]["show_debug"])
-    plot_results = bool(configs["simul_configs"]["plot_results"])
-    plot_sensors = bool(configs["simul_configs"]["plot_sensors"])
-    plot_bscan = bool(configs["simul_configs"]["plot_bscan"])
-    save_bscan = bool(configs["simul_configs"]["save_bscan"])
-    save_sources = bool(configs["simul_configs"]["save_sources"])
-    show_results = bool(configs["simul_configs"]["show_results"])
-    save_results = bool(configs["simul_configs"]["save_results"])
-    gpu_type = configs["simul_configs"]["gpu_type"]
-    source_env = bool(configs["simul_configs"]["source_env"])
+# Configuracao dos transdutores
+simul_probes = list()
+probes_cfg = configs["probes"]
+for p in probes_cfg:
+    if p["linear"]:
+        simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
+print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
+
+# Configuracao geral dos ensaios
+n_iter_gpu = configs["simul_configs"]["n_iter_gpu"] if "n_iter_gpu" in configs["simul_configs"] else 1
+n_iter_cpu = configs["simul_configs"]["n_iter_cpu"] if "n_iter_cpu" in configs["simul_configs"] else 1
+do_sim_gpu = bool(configs["simul_configs"]["do_sim_gpu"]) if "do_sim_gpu" in configs["simul_configs"] else False
+do_sim_cpu = bool(configs["simul_configs"]["do_sim_cpu"]) if "do_sim_cpu" in configs["simul_configs"] else False
+show_anim = bool(configs["simul_configs"]["show_anim"]) if "show_anim" in configs["simul_configs"] else False
+show_debug = bool(configs["simul_configs"]["show_debug"]) if "show_debug" in configs["simul_configs"] else False
+plot_results = bool(configs["simul_configs"]["plot_results"]) if "plot_results" in configs["simul_configs"] else False
+plot_sensors = bool(configs["simul_configs"]["plot_sensors"]) if "plot_sensors" in configs["simul_configs"] else False
+plot_bscan = bool(configs["simul_configs"]["plot_bscan"]) if "plot_bscan" in configs["simul_configs"] else False
+save_bscan = bool(configs["simul_configs"]["save_bscan"]) if "save_bscan" in configs["simul_configs"] else False
+save_sources = bool(configs["simul_configs"]["save_sources"]) if "save_sources" in configs["simul_configs"] else False
+show_results = bool(configs["simul_configs"]["show_results"]) if "show_results" in configs["simul_configs"] else False
+save_results = bool(configs["simul_configs"]["save_results"]) if "save_results" in configs["simul_configs"] else False
+gpu_type = configs["simul_configs"]["gpu_type"] if "gpu_type" in configs["simul_configs"] else "high-perf"
+source_env = bool(configs["simul_configs"]["source_env"]) if "source_env" in configs["simul_configs"] else False
+if "emission_laws" in configs["simul_configs"] and os.path.isfile(configs["simul_configs"]["emission_laws"]):
+    emission_laws, _ = file_law.read(configs["simul_configs"]["emission_laws"])
+else:
+    emission_laws = None
 
 # -----------------------
 # Inicializacao do WebGPU
@@ -1040,7 +1050,7 @@ rho_grid_vx = np.ones((nx, ny), dtype=flt32) * rho
 if rho_map is not None:
     if rho_map.shape[0] < nx and rho_map.shape[1] < ny:
         rho_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
-                    simul_roi.get_iz_min(): simul_roi.get_iz_max()] = rho_map
+        simul_roi.get_iz_min(): simul_roi.get_iz_max()] = rho_map
     elif rho_map.shape[0] > nx and rho_map.shape[1] > ny:
         rho_grid_vx = rho_map[:nx, :ny]
     elif rho_map.shape[0] == nx and rho_map.shape[1] == ny:
@@ -1053,7 +1063,7 @@ cp_grid_vx = np.ones((nx, ny), dtype=flt32) * cp
 if cp_map is not None:
     if cp_map.shape[0] < nx and cp_map.shape[1] < ny:
         cp_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cp_map
+        simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cp_map
     elif cp_map.shape[0] > nx and cp_map.shape[1] > ny:
         cp_grid_vx = cp_map[:nx, :ny]
     elif cp_map.shape[0] == nx and cp_map.shape[1] == ny:
@@ -1066,7 +1076,7 @@ cs_grid_vx = np.ones((nx, ny), dtype=flt32) * cs
 if cs_map is not None:
     if cs_map.shape[0] < nx and cs_map.shape[1] < ny:
         cs_grid_vx[simul_roi.get_ix_min(): simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cs_map
+        simul_roi.get_iz_min(): simul_roi.get_iz_max()] = cs_map
     elif cs_map.shape[0] > nx and cs_map.shape[1] > ny:
         cs_grid_vx = cs_map[:nx, :ny]
     elif cs_map.shape[0] == nx and cs_map.shape[1] == ny:
@@ -1244,83 +1254,180 @@ else:
     App = None
 
 # WebGPU
+now = datetime.now()
 if do_sim_gpu:
     for n in range(n_iter_gpu):
         print(f'Simulacao WEBGPU')
         print(f'wsx = {wsx}, wsy = {wsy}')
         print(f'Iteracao {n}')
-        t_gpu = time()
-        vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, gpu_str = sim_webgpu(device_gpu)
-        times_gpu.append(time() - t_gpu)
-        print(gpu_str)
-        print(f'{times_gpu[-1]:.3}s')
 
-        # Plota as velocidades tomadas no sensores
-        if plot_results and plot_sensors:
-            for r in range(NREC):
-                fig, ax = plt.subplots(3, sharex=True, sharey=True)
-                fig.suptitle(f'Receptor {r + 1} [GPU]')
-                ax[0].plot(sensor_vx_gpu[:, r])
-                ax[0].set_title(r'$V_x$')
-                ax[1].plot(sensor_vy_gpu[:, r])
-                ax[1].set_title(r'$V_y$')
-                ax[2].plot(sensor_vx_gpu[:, r] + sensor_vy_gpu[:, r], 'tab:orange')
-                ax[2].set_title(r'$V_x + V_y$')
-                sensor_gpu_result.append(fig)
+        n_laws = emission_laws.shape[0] if emission_laws is not None else 1
+        for law in range(n_laws):
+            print(f'\tLaw {law} of {n_laws}')
+            for p in simul_probes:
+                p.set_t0(emission_laws[law])
 
-            if show_results:
-                plt.show(block=False)
+            t_gpu = time()
+            vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, gpu_str = sim_webgpu(device_gpu)
+            times_gpu.append(time() - t_gpu)
+            print(gpu_str)
+            print(f'{times_gpu[-1]:.3}s')
+            name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
+                    f'{simul_roi.get_len_x()}x{simul_roi.get_len_z()}_{NSTEP}_iter_{n}_law_{law}')
 
-        if plot_results and plot_bscan:
-            gpu_bscan_sim_result = plt.figure()
-            plt.title(f'GPU simulation B-scan\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-            plt.imshow(sensor_vx_gpu + sensor_vy_gpu, aspect='auto', cmap='viridis')
-            plt.colorbar()
+            # Plota os mapas de velocidades
+            if plot_results:
+                vx_gpu_sim_result = plt.figure()
+                plt.title(f'GPU simulation Vx - law ({law})\n'
+                          f'[{gpu_type}]({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
 
-            if show_results:
-                plt.show(block=False)
+                vy_gpu_sim_result = plt.figure()
+                plt.title(f'GPU simulation Vy - law ({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0])
+                           )
+                plt.colorbar()
 
-        if save_bscan:
-            name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU'
-            np.save(name, sensor_vx_gpu + sensor_vy_gpu)
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    vx_gpu_sim_result.savefig(name + '_Vx_gpu_' + gpu_type + '.png')
+                    vy_gpu_sim_result.savefig(name + '_Vy_gpu_' + gpu_type + '.png')
+
+            # Plota as velocidades tomadas no sensores
+            if plot_results and plot_sensors:
+                for r in range(NREC):
+                    fig, ax = plt.subplots(3, sharex=True, sharey=True)
+                    fig.suptitle(f'Receptor {r + 1} [GPU] - law ({law})')
+                    ax[0].plot(sensor_vx_gpu[:, r])
+                    ax[0].set_title(r'$V_x$')
+                    ax[1].plot(sensor_vy_gpu[:, r])
+                    ax[1].set_title(r'$V_y$')
+                    ax[2].plot(sensor_vx_gpu[:, r] + sensor_vy_gpu[:, r], 'tab:orange')
+                    ax[2].set_title(r'$V_x + V_y$')
+                    sensor_gpu_result.append(fig)
+
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    for s in range(NREC):
+                        try:
+                            sensor_gpu_result[s].savefig(name + f'_sensor_{s}_' + gpu_type + '.png')
+                        except IndexError:
+                            pass
+
+            if plot_results and plot_bscan:
+                gpu_bscan_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan - law({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sensor_vx_gpu + sensor_vy_gpu, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                if show_results:
+                    plt.show(block=False)
+
+            if save_bscan:
+                name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_law_{law}'
+                np.save(name + '_Vx_GPU', sensor_vx_gpu)
+                np.save(name + '_Vy_GPU', sensor_vy_gpu)
 
 # CPU
 if do_sim_cpu:
     for n in range(n_iter_cpu):
         print(f'SIMULACAO CPU')
         print(f'Iteracao {n}')
-        t_cpu = time()
-        sim_cpu()
-        times_cpu.append(time() - t_cpu)
-        print(f'{times_cpu[-1]:.3}s')
 
-        # Plota as velocidades tomadas no sensores
-        if plot_results and plot_sensors:
-            for r in range(NREC):
-                sensor_cpu_result, ax = plt.subplots(3, sharex=True, sharey=True)
-                sensor_cpu_result.suptitle(f'Receptor {r + 1} [CPU]')
-                ax[0].plot(sisvx[:, r])
-                ax[0].set_title(r'$V_x$')
-                ax[1].plot(sisvy[:, r])
-                ax[1].set_title(r'$V_y$')
-                ax[2].plot(sisvx[:, r] + sisvy[:, r], 'tab:orange')
-                ax[2].set_title(r'$V_x + V_y$')
+        n_laws = emission_laws.shape[0] if emission_laws is not None else 1
+        for law in range(n_laws):
+            print(f'\tLaw {law} of {n_laws}')
+            for p in simul_probes:
+                p.set_t0(emission_laws[law])
 
-            if show_results:
-                plt.show(block=False)
+            t_cpu = time()
+            sim_cpu()
+            times_cpu.append(time() - t_cpu)
+            print(f'{times_cpu[-1]:.3}s')
+            name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
+                    f'{simul_roi.get_len_x()}x{simul_roi.get_len_z()}_{NSTEP}_iter_{n}_law_{law}')
 
-        if plot_results and plot_bscan:
-            cpu_bscan_sim_result = plt.figure()
-            plt.title(f'CPU simulation B-scan\n[CPU] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-            plt.imshow(sisvx + sisvy, aspect='auto', cmap='viridis')
-            plt.colorbar()
+            # Plota os mapas de velocidade
+            if plot_results:
+                vx_cpu_sim_result = plt.figure()
+                plt.title(f'CPU simulation Vx - law ({law})\n'
+                          f'({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0])
+                           )
+                plt.colorbar()
 
-            if show_results:
-                plt.show(block=False)
+                vy_cpu_sim_result = plt.figure()
+                plt.title(f'CPU simulation Vy - law ({law})\n'
+                          f'({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
 
-        if save_bscan:
-            name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU'
-            np.save(name, sisvx + sisvy)
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    vx_cpu_sim_result.savefig(name + '_Vx_cpu.png')
+                    vy_cpu_sim_result.savefig(name + '_Vy_cpu.png')
+
+            # Plota as velocidades tomadas no sensores
+            if plot_results and plot_sensors:
+                for r in range(NREC):
+                    sensor_cpu_result, ax = plt.subplots(3, sharex=True, sharey=True)
+                    sensor_cpu_result.suptitle(f'Receptor {r + 1} [CPU] - law ({law})')
+                    ax[0].plot(sisvx[:, r])
+                    ax[0].set_title(r'$V_x$')
+                    ax[1].plot(sisvy[:, r])
+                    ax[1].set_title(r'$V_y$')
+                    ax[2].plot(sisvx[:, r] + sisvy[:, r], 'tab:orange')
+                    ax[2].set_title(r'$V_x + V_y$')
+
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    for s in range(NREC):
+                        try:
+                            sensor_cpu_result[s].savefig(name + f'_sensor_{s}_cpu.png')
+                        except IndexError:
+                            pass
+
+            if plot_results and plot_bscan:
+                cpu_bscan_sim_result = plt.figure()
+                plt.title(f'CPU simulation B-scan - law({law})\n'
+                          f'[CPU] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sisvx + sisvy, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                if show_results:
+                    plt.show(block=False)
+
+            if save_bscan:
+                name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_law{law}'
+                np.save(name + '_Vx_CPU', sisvx)
+                np.save(name + '_Vy_CPU', sisvy)
 
 if show_anim and App:
     App.exit()
@@ -1341,98 +1448,9 @@ if do_sim_gpu and do_sim_cpu:
     print(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}')
     print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}')
 
-if plot_results:
-    if do_sim_gpu:
-        vx_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vx\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0]))
-        plt.colorbar()
-
-        vy_gpu_sim_result = plt.figure()
-        plt.title(f'GPU simulation Vy\n[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0])
-                   )
-        plt.colorbar()
-
-    if do_sim_cpu:
-        vx_cpu_sim_result = plt.figure()
-        plt.title(f'CPU simulation Vx ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0])
-                   )
-        plt.colorbar()
-
-        vy_cpu_sim_result = plt.figure()
-        plt.title(f'CPU simulation Vy ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0]))
-        plt.colorbar()
-
-    if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-        vx_comp_sim_result = plt.figure()
-        plt.title(f'CPU vs GPU Vx ({gpu_type}) error simulation ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T -
-                   vx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0]))
-        plt.colorbar()
-
-        vy_comp_sim_result = plt.figure()
-        plt.title(f'CPU vs GPU Vy ({gpu_type}) error simulation ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-        plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T -
-                   vy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
-                   simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
-                   aspect='auto', cmap='gray',
-                   extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
-                           simul_roi.h_points[-1], simul_roi.h_points[0]))
-        plt.colorbar()
-
 if save_results:
-    now = datetime.now()
     name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
             f'{simul_roi.get_len_x()}x{simul_roi.get_len_z()}_{NSTEP}_iter_')
-    if plot_results:
-        if do_sim_gpu:
-            vx_gpu_sim_result.savefig(name + 'Vx_gpu_' + gpu_type + '.png')
-            vy_gpu_sim_result.savefig(name + 'Vy_gpu_' + gpu_type + '.png')
-            if plot_sensors:
-                for s in range(NREC):
-                    try:
-                        sensor_gpu_result[s].savefig(name + f'_sensor_{s}_' + gpu_type + '.png')
-                    except IndexError:
-                        pass
-
-        if do_sim_cpu:
-            vx_cpu_sim_result.savefig(name + 'Vx_cpu.png')
-            vy_cpu_sim_result.savefig(name + 'Vy_cpu.png')
-            if plot_sensors:
-                for s in range(NREC):
-                    try:
-                        sensor_cpu_result[s].savefig(name + f'_sensor_{s}_CPU.png')
-                    except IndexError:
-                        pass
-
-        if do_comp_fig_cpu_gpu and do_sim_cpu and do_sim_gpu:
-            vx_comp_sim_result.savefig(name + 'Vx_XY_comp_cpu_gpu_' + gpu_type + '.png')
-            vy_comp_sim_result.savefig(name + 'Vy_XY_comp_cpu_gpu_' + gpu_type + '.png')
 
     if do_sim_gpu:
         np.savetxt(name + 'GPU_' + gpu_type + '.csv', times_gpu, '%10.3f', delimiter=',')
@@ -1446,7 +1464,6 @@ if save_results:
         f.write('\n')
         f.write(f'Quantidade de iteracoes no tempo: {NSTEP}\n')
         f.write(f'Tamanho da ROI: {simul_roi.get_len_x()}x{simul_roi.get_len_z()}\n')
-        f.write(f'Refletores na ROI: {"Sim" if use_refletors else "Nao"}\n')
         f.write(f'Simulacao GPU: {"Sim" if do_sim_gpu else "Nao"}\n')
         if do_sim_gpu:
             f.write(f'GPU: {gpu_str}\n')
@@ -1465,10 +1482,6 @@ if save_results:
                 f.write(f'Desvio padrao: {times_cpu[5:].std()}\n')
             else:
                 f.write(f'Tempo execucao: {times_cpu[0]:.3}s\n')
-
-        if do_sim_gpu and do_sim_cpu:
-            f.write(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}\n')
-            f.write(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}\n')
 
 if show_results:
     plt.show()
