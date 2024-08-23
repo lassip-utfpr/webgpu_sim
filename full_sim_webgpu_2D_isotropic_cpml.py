@@ -1264,8 +1264,10 @@ if do_sim_gpu:
         n_laws = emission_laws.shape[0] if emission_laws is not None else 1
         for law in range(n_laws):
             print(f'\tLaw {law} of {n_laws}')
-            for p in simul_probes:
-                p.set_t0(emission_laws[law])
+
+            if emission_laws is not None:
+                for p in simul_probes:
+                    p.set_t0(emission_laws[law])
 
             t_gpu = time()
             vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, gpu_str = sim_webgpu(device_gpu)
