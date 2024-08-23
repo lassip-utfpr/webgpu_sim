@@ -728,9 +728,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
         let cp_h_x = 0.5 * (get_cp(x + 1, y) + get_cp(x, y));
-        let cs_h_x = select(0.5 * (get_cs(x + 1, y) + get_cs(x, y)), 0.0, min(get_cs(x + 1, y), get_cs(x, y)) == 0.0);
-        let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x * cs_h_x);
-        let mu: f32 = rho_h_x * (cs_h_x * cs_h_x);
+        let cs_h_x_l = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
+        let cs_h_x_m = select(cs_h_x_l, 0.0, min(get_cs(x + 1, y), get_cs(x, y)) == 0.0);
+        let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x_l * cs_h_x_l);
+        let mu: f32 = rho_h_x * (cs_h_x_m * cs_h_x_m);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
         let sigmaxx: f32 = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
         let sigmayy: f32 = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
