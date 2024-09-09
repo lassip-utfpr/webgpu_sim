@@ -575,6 +575,15 @@ def sim_webgpu(device):
     b_sens_y = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
+    b_sens_sigxx = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
+                                                                wgpu.BufferUsage.COPY_DST |
+                                                                wgpu.BufferUsage.COPY_SRC)
+    b_sens_sigyy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
+                                                                wgpu.BufferUsage.COPY_DST |
+                                                                wgpu.BufferUsage.COPY_SRC)
+    b_sens_sigxy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
+                                                                wgpu.BufferUsage.COPY_DST |
+                                                                wgpu.BufferUsage.COPY_SRC)
 
     # Tempo de espera para recepcao nos sensores
     b_delay_rec = device.create_buffer_with_data(data=delay_recv, usage=wgpu.BufferUsage.STORAGE |
@@ -618,7 +627,7 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(0, 2)
+         } for ii in [*range(0, 2), *range(5, 8)]
     ]
     bl_sensors += [
         {"binding": ii,
@@ -794,6 +803,18 @@ def sim_webgpu(device):
             "binding": 4,
             "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
         },
+        {
+            "binding": 5,
+            "resource": {"buffer": b_sens_sigxx, "offset": 0, "size": b_sens_sigxx.size},
+        },
+        {
+            "binding": 6,
+            "resource": {"buffer": b_sens_sigyy, "offset": 0, "size": b_sens_sigyy.size},
+        },
+        {
+            "binding": 7,
+            "resource": {"buffer": b_sens_sigxy, "offset": 0, "size": b_sens_sigxy.size},
+        },
     ]
 
     # Coloca tudo junto
@@ -909,9 +930,16 @@ def sim_webgpu(device):
     # Pega os resultados da simulacao
     vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
     vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxx_gpu = np.asarray(device.queue.read_buffer(b_sigmaxx, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigyy_gpu = np.asarray(device.queue.read_buffer(b_sigmayy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxy_gpu = np.asarray(device.queue.read_buffer(b_sigmaxy, buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
-    return vxgpu, vygpu, sens_vx, sens_vy, device.adapter.info["device"]
+    sens_sigxx = np.array(device.queue.read_buffer(b_sens_sigxx).cast("f")).reshape((NSTEP, NREC))
+    sens_sigyy = np.array(device.queue.read_buffer(b_sens_sigyy).cast("f")).reshape((NSTEP, NREC))
+    sens_sigxy = np.array(device.queue.read_buffer(b_sens_sigxy).cast("f")).reshape((NSTEP, NREC))
+    return (vxgpu, vygpu, sigxx_gpu, sigyy_gpu, sigxy_gpu, sens_vx, sens_vy, sens_sigxx, sens_sigyy, sens_sigxy,
+            device.adapter.info["device"])
 
 
 # ----------------------------------------------------------
@@ -1214,7 +1242,8 @@ sisvy = np.zeros((NSTEP, NREC), dtype=flt32)
 
 # Verifica a condicao de estabilidade de Courant
 # R. Courant et K. O. Friedrichs et H. Lewy (1928)
-courant_number = flt32(cp * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2))
+cp_max = max(cp_grid_vx.max(), cp)
+courant_number = flt32(cp_max * dt * np.sqrt(1.0 / dx ** 2 + 1.0 / dy ** 2))
 print(f'\nNumero de Courant e {courant_number}')
 if courant_number > 1:
     print("O passo de tempo e muito longo, a simulacao sera instavel")
@@ -1270,7 +1299,9 @@ if do_sim_gpu:
                     p.set_t0(emission_laws[law])
 
             t_gpu = time()
-            vx_gpu, vy_gpu, sensor_vx_gpu, sensor_vy_gpu, gpu_str = sim_webgpu(device_gpu)
+            (vx_gpu, vy_gpu, sigxx_gpu, sigyy_gpu, sigxy_gpu,
+             sensor_vx_gpu, sensor_vy_gpu, sensor_sigxx_gpu, sensor_sigyy_gpu, sensor_sigxy_gpu,
+             gpu_str) = sim_webgpu(device_gpu)
             times_gpu.append(time() - t_gpu)
             print(gpu_str)
             print(f'{times_gpu[-1]:.3}s')
@@ -1300,12 +1331,45 @@ if do_sim_gpu:
                            )
                 plt.colorbar()
 
+                sigxx_gpu_sim_result = plt.figure()
+                plt.title(f'GPU simulation SigXX - law ({law})\n'
+                          f'[{gpu_type}]({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sigxx_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
+
+                sigyy_gpu_sim_result = plt.figure()
+                plt.title(f'GPU simulation SigYY - law ({law})\n'
+                          f'[{gpu_type}]({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sigyy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
+
+                sigxy_gpu_sim_result = plt.figure()
+                plt.title(f'GPU simulation SigXY - law ({law})\n'
+                          f'[{gpu_type}]({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sigxy_gpu[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
+
                 if show_results:
                     plt.show(block=False)
 
                 if save_results:
                     vx_gpu_sim_result.savefig(name + '_Vx_gpu_' + gpu_type + '.png')
                     vy_gpu_sim_result.savefig(name + '_Vy_gpu_' + gpu_type + '.png')
+                    sigxx_gpu_sim_result.savefig(name + '_SigXX_gpu_' + gpu_type + '.png')
+                    sigyy_gpu_sim_result.savefig(name + '_SigYY_gpu_' + gpu_type + '.png')
+                    sigxy_gpu_sim_result.savefig(name + '_SigXY_gpu_' + gpu_type + '.png')
 
             # Plota as velocidades tomadas no sensores
             if plot_results and plot_sensors:
@@ -1331,10 +1395,34 @@ if do_sim_gpu:
                             pass
 
             if plot_results and plot_bscan:
-                gpu_bscan_sim_result = plt.figure()
-                plt.title(f'GPU simulation B-scan - law({law})\n'
+                gpu_bscan_vx_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan Vx - law({law})\n'
                           f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
-                plt.imshow(sensor_vx_gpu + sensor_vy_gpu, aspect='auto', cmap='viridis')
+                plt.imshow(sensor_vx_gpu, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                gpu_bscan_vy_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan Vy - law({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sensor_vy_gpu, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                gpu_bscan_sigxx_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan SigXX - law({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sensor_sigxx_gpu, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                gpu_bscan_sigyy_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan SigYY - law({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sensor_sigyy_gpu, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                gpu_bscan_sigxy_sim_result = plt.figure()
+                plt.title(f'GPU simulation B-scan SigXY - law({law})\n'
+                          f'[{gpu_type}] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sensor_sigxy_gpu, aspect='auto', cmap='viridis')
                 plt.colorbar()
 
                 if show_results:
@@ -1344,6 +1432,9 @@ if do_sim_gpu:
                 name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_law_{law}'
                 np.save(name + '_Vx_GPU', sensor_vx_gpu)
                 np.save(name + '_Vy_GPU', sensor_vy_gpu)
+                np.save(name + '_SigXX_GPU', sensor_sigxx_gpu)
+                np.save(name + '_SigYY_GPU', sensor_sigyy_gpu)
+                np.save(name + '_SigXY_GPU', sensor_sigxy_gpu)
 
 # CPU
 if do_sim_cpu:
