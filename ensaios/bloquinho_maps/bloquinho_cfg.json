@@ -1,0 +1,84 @@
+{
+  "roi" :
+    {
+      "coord_ref" : [[0.0, 0.0, 0.0]],
+      "height" : 150.804,
+      "h_len" : 223,
+      "width" : 182.124,
+      "w_len" : 267,
+      "depth" : 0.0,
+      "d_len" : 1,
+      "len_pml_xmin" : 15,
+      "len_pml_xmax" : 15,
+      "len_pml_ymin" : 10,
+      "len_pml_ymax" : 10,
+      "len_pml_zmin" : 10,
+      "len_pml_zmax" : 11
+    },
+  "probes":
+  [
+    {
+      "linear": {
+        "id": "probe01",
+        "num_elem": 64,
+        "dim_a": 0.5,
+        "dim_p": 10.0,
+        "inter_elem": 0.1,
+        "freq": 5,
+        "bw": 0.6,
+        "gain": 1e7,
+        "pulse_type": "gaussian",
+        "coord_center": [
+          91.062,
+          0.0,
+          25
+        ],
+        "emmiters": "all",
+        "t0_emission": 1.0,
+        "receivers": "all",
+        "t0_reception": 0.0
+      }
+    }
+  ],
+  "simul_params":
+  {
+    "time_steps": 100000,
+    "dt": 0.5e-3,
+    "ord": 5,
+    "rcoef": 0.0001,
+    "it_display": 10,
+    "npower": 2.0,
+    "k_max_pml": 1.0
+  },
+  "simul_configs":
+  {
+    "n_iter_gpu": 1,
+    "n_iter_cpu": 1,
+    "do_sim_gpu": 1,
+    "do_sim_cpu": 0,
+    "show_anim": 1,
+    "show_xy": 0,
+    "show_xz": 1,
+    "show_yz": 0,
+    "show_debug": 1,
+    "plot_results": 0,
+    "plot_sensors": 0,
+    "plot_bscan": 0,
+    "show_results": 0,
+    "save_results": 1,
+    "save_bscan": 1,
+    "save_sources": 0,
+    "gpu_type": "high-perf",
+    "source_env": 0,
+    "emission_laws": "./"
+  },
+  "specimen_params":
+  {
+    "cp_map": "./rho_maps/bloquinho_cp.npy",
+    "cp": 1.483,
+    "cs_map": "./rho_maps/bloquinho_cs.npy",
+    "cs": 0.0,
+    "rho_map": "./rho_maps/bloquinho_rho.npy",
+    "rho": 1000.0
+  }
+}
