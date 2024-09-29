@@ -73,7 +73,7 @@ fn sigmax(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);
     let lambda: f32 = sim_flt.lambda;
     let mu: f32 = sim_flt.mu;
-    let lambdaplus2mu: f32 = sim_flt.lambda + 2.0 * sim_flt.mu;
+    let lambdaplus2mu: f32 = sim_flt.lambdaplus2mu;
     let id: i32 = sim_int.ord - 1;
     var id_x_f: i32 = sim_int.x_sz - sim_int.ord;
 
