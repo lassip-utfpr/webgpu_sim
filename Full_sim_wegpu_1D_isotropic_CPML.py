@@ -464,6 +464,7 @@ def sim_1D_wgpu(device):
             ax.plot(simul_roi.w_points, vxgpu[ix_min:ix_max])
             ax.set_xlim(0.0, dx * nx)
             ax.set_ylim(vx_min, vx_max)
+            plt.grid()
             plt.show(block=False)
             plt.pause(0.001)
 
@@ -493,6 +494,7 @@ vx, sisvx = sim_1D_wgpu(device_gpu)
 plt.figure()
 plt.plot(t, source_term)
 plt.title('Sinal da fonte')
+plt.grid()
 
 # Plota as velocidades tomadas no sensores
 for irec in range(NREC):
@@ -502,4 +504,5 @@ for irec in range(NREC):
     ax.plot(sisvx[:, irec])
     ax.set_title(r'$V_x$')
 
+plt.grid()
 plt.show()
