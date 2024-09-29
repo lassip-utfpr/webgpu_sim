@@ -339,23 +339,7 @@ fn set_vy(x: i32, y: i32, val : f32) {
 // ----------------------------------
 
 @group(1) @binding(2) // v_2
-var<storage,read_write> v_2: array<f32>;
-
-// function to get a v_2 array value
-fn get_v_2(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, v_2[index], index != -1);
-}
-
-// function to set a v_2 array value
-fn set_v_2(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    if(index != -1) {
-        v_2[index] = val;
-    }
-}
+var<storage,read_write> v_2: f32;
 
 // -------------------------------------
 // --- Stress arrays access funtions ---
@@ -682,6 +666,69 @@ fn get_offset_sensor(s: i32) -> i32 {
     return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
 }
 
+// ----------------------------------
+
+@group(2) @binding(5) // sensors signals sigxx
+var<storage,read_write> sensors_sigxx: array<f32>;
+
+// function to get a sens_sigxx array value
+fn get_sens_sigxx(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    return select(0.0, sensors_sigxx[index], index != -1);
+}
+
+// function to set a sens_sigxx array value
+fn set_sens_sigxx(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    if(index != -1) {
+        sensors_sigxx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(2) @binding(6) // sensors signals sigyy
+var<storage,read_write> sensors_sigyy: array<f32>;
+
+// function to get a sens_sigyy array value
+fn get_sens_sigyy(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    return select(0.0, sensors_sigyy[index], index != -1);
+}
+
+// function to set a sens_sigyy array value
+fn set_sens_sigyy(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    if(index != -1) {
+        sensors_sigyy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(2) @binding(7) // sensors signals sigxy
+var<storage,read_write> sensors_sigxy: array<f32>;
+
+// function to get a sens_sigxx array value
+fn get_sens_sigxy(n: i32, s: i32) -> f32 {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    return select(0.0, sensors_sigxy[index], index != -1);
+}
+
+// function to set a sens_sigxy array value
+fn set_sens_sigxy(n: i32, s: i32, val : f32) {
+    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
+
+    if(index != -1) {
+        sensors_sigxy[index] = val;
+    }
+}
+
 // ---------------
 // --- Kernels ---
 // ---------------
@@ -744,9 +791,10 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
         let cp_h_x = 0.5 * (get_cp(x + 1, y) + get_cp(x, y));
-        let cs_h_x = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
-        let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x * cs_h_x);
-        let mu: f32 = rho_h_x * (cs_h_x * cs_h_x);
+        let cs_h_x_l = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
+        let cs_h_x_m = select(cs_h_x_l, 0.0, min(get_cs(x + 1, y), get_cs(x, y)) == 0.0);
+        let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x_l * cs_h_x_l);
+        let mu: f32 = rho_h_x * (cs_h_x_m * cs_h_x_m);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
         let sigmaxx: f32 = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
         let sigmayy: f32 = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
@@ -778,7 +826,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvx_dy(x, y, mdvx_dy_new);
 
         let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
-        let cs_h_y = 0.5 * (get_cs(x, y + 1) + get_cs(x, y));
+        let cs_h_y = select(0.5 * (get_cs(x, y + 1) + get_cs(x, y)), 0.0, min(get_cs(x, y + 1), get_cs(x, y)) == 0.0);
         let mu: f32 = rho_h_y * (cs_h_y * cs_h_y);
         let sigmaxy: f32 = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
         set_sigmaxy(x, y, sigmaxy);
@@ -885,6 +933,7 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let id_x_f: i32 = sim_int_par.x_sz - get_idx_ih(last);
     let id_y_i: i32 = -get_idx_fh(last);
     let id_y_f: i32 = sim_int_par.y_sz - get_idx_ih(last);
+    let v_2_old: f32 = v_2;
 
     // Apply Dirichlet conditions
     if(x <= id_x_i || x >= id_x_f || y <= id_y_i || y >= id_y_f) {
@@ -893,8 +942,8 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     }
 
     // Compute velocity norm L2
-    let v_2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
-    set_v_2(x, y, v_2);
+    let v2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
+    v_2 = max(v_2_old, v2);
 }
 
 // Kernel to store sensors velocity
@@ -909,10 +958,18 @@ fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         if(it >= get_delay_rec(sensor)) {
             let x: i32 = get_idx_x_sensor(pt);
             let y: i32 = get_idx_y_sensor(pt);
+
             let value_sens_vx: f32 = get_sens_vx(it, sensor) + get_vx(x, y);
             let value_sens_vy: f32 = get_sens_vy(it, sensor) + get_vy(x, y);
             set_sens_vx(it, sensor, value_sens_vx);
             set_sens_vy(it, sensor, value_sens_vy);
+
+            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx(x, y);
+            let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy(x, y);
+            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy(x, y);
+            set_sens_sigxx(it, sensor, value_sens_sigxx);
+            set_sens_sigyy(it, sensor, value_sens_sigyy);
+            set_sens_sigxy(it, sensor, value_sens_sigxy);
         }
     }
 }
