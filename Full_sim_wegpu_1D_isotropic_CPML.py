@@ -28,7 +28,7 @@ with open('config1D.json', 'r') as d:
 ord = configs2["simul_params"]["ord"]
 coefs = np.array(coefs_Lui[configs2["simul_params"]["ord"] - 2], dtype=flt32)
 data_src = configs2["probes"][0]["linear"]["coord_center"][:]
-t_src = configs2["probes"][0]["linear"]["t0_emission"]*1e-6
+t_src = configs2["probes"][0]["linear"]["t0_emmition"]
 data_src.append(t_src)
 
 data_rec = configs2["probes"][0]["linear"]["coord_center"][:]
@@ -119,7 +119,7 @@ vx = np.zeros(nx, dtype=flt32)
 sigmaxx = np.zeros(nx, dtype=flt32)
 sisvx = np.zeros((NSTEP, NREC), dtype=flt32)
 
-wsx = nx
+wsx = 1024
 
 #CPML
 
@@ -464,6 +464,7 @@ def sim_1D_wgpu(device):
             ax.plot(simul_roi.w_points, vxgpu[ix_min:ix_max])
             ax.set_xlim(0.0, dx * nx)
             ax.set_ylim(vx_min, vx_max)
+            plt.grid()
             plt.show(block=False)
             plt.pause(0.001)
 
@@ -493,6 +494,7 @@ vx, sisvx = sim_1D_wgpu(device_gpu)
 plt.figure()
 plt.plot(t, source_term)
 plt.title('Sinal da fonte')
+plt.grid()
 
 # Plota as velocidades tomadas no sensores
 for irec in range(NREC):
@@ -502,4 +504,5 @@ for irec in range(NREC):
     ax.plot(sisvx[:, irec])
     ax.set_title(r'$V_x$')
 
+plt.grid()
 plt.show()

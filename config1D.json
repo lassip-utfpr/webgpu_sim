@@ -67,62 +67,7 @@
           "False",
           "True"
         ],
-        "t0_emission": 1.0,
-        "receivers": "all",
-        "t0_reception": 0.0
-      }
-    },
-    {
-      "linear": {
-        "id": "probe02",
-        "num_elem": 32,
-        "dim_a": 0.7,
-        "dim_p": 10.0,
-        "inter_elem": 0.1,
-        "freq": 5.0,
-        "bw": 0.5,
-        "gain": 1e7,
-        "pulse_type": "gaussian",
-        "coord_center": [
-          40.0,
-          0.0,
-          50.0
-        ],
-        "emmiters": [
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False",
-          "False"
-        ],
-        "t0_emission": 1.0,
+        "t0_emmition": 1.0,
         "receivers": "all",
         "t0_reception": 0.0
       }
@@ -130,7 +75,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 6000,
+    "time_steps": 4000,
     "dt": 2.0e-3,
     "ord": 4,
     "rcoef": 0.0001,
