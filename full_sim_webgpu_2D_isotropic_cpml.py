@@ -1193,8 +1193,15 @@ if NPOWER < 1:
 # Coeficiente de reflexao e calculo de d0 do relatorio da INRIA section 6.1
 # http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
 rcoef = flt32(configs["simul_params"]["rcoef"])
-d0_x = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x())
-d0_y = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z())
+if simul_roi.get_pml_thickness_x() != 0.0:
+    d0_x = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_x())
+else:
+    d0_x = flt32(0.0)
+
+if simul_roi.get_pml_thickness_z() != 0.0:
+    d0_y = flt32(-(NPOWER + 1) * cp * np.log(rcoef) / simul_roi.get_pml_thickness_z())
+else:
+    d0_y = flt32(0.0)
 
 print(f'd0_x = {d0_x}')
 print(f'd0_y = {d0_y}')

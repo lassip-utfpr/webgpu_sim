@@ -314,8 +314,10 @@ class SimulationROI:
         pml_mask_right = np.where(val_pml_right < 0.0, False, True)
         mask = np.logical_or(pml_mask_left, pml_mask_right)
         pml = np.zeros(tam_pml)
-        pml[pml_mask_left] = val_pml_left[pml_mask_left] / thickness_pml_left
-        pml[pml_mask_right] = val_pml_right[pml_mask_right] / thickness_pml_right
+        if thickness_pml_left:
+            pml[pml_mask_left] = val_pml_left[pml_mask_left] / thickness_pml_left
+        if thickness_pml_right:
+            pml[pml_mask_right] = val_pml_right[pml_mask_right] / thickness_pml_right
         d = (d0 * pml ** npower).astype(np.float32)
         k = (1.0 + (k_max - 1.0) * pml ** npower).astype(np.float32)
         alpha = (alpha_max * (1.0 - np.where(mask, pml, 1.0))).astype(np.float32)
