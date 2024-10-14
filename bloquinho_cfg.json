@@ -3,17 +3,17 @@
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
       "height" : 80.1197,
-      "h_len" : 223,
+      "h_len" : 802,
       "width" : 95.7847,
-      "w_len" : 267,
+      "w_len" : 959,
       "depth" : 0.0,
       "d_len" : 1,
-      "len_pml_xmin" : 15,
-      "len_pml_xmax" : 15,
+      "len_pml_xmin" : 11,
+      "len_pml_xmax" : 12,
       "len_pml_ymin" : 10,
       "len_pml_ymax" : 10,
-      "len_pml_zmin" : 13,
-      "len_pml_zmax" : 13
+      "len_pml_zmin" : 10,
+      "len_pml_zmax" : 10
     },
   "probes":
   [
@@ -31,7 +31,7 @@
         "coord_center": [
           48.9686,
           0,
-          8.9686
+          1.1377
         ],
         "emmiters": "all",
         "t0_emission": 1.0,
@@ -42,7 +42,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 15000,
+    "time_steps": 80000,
     "dt": 0.5e-3,
     "ord": 5,
     "rcoef": 0.0001,
@@ -53,7 +53,7 @@
   "simul_configs":
   {
     "n_iter_gpu": 1,
-    "n_iter_cpu": 1,
+    "n_iter_cpu": 0,
     "do_sim_gpu": 1,
     "do_sim_cpu": 0,
     "show_anim": 1,
@@ -61,11 +61,11 @@
     "show_xz": 1,
     "show_yz": 0,
     "show_debug": 1,
-    "plot_results": 0,
+    "plot_results": 1,
     "plot_sensors": 0,
     "plot_bscan": 1,
     "show_results": 0,
-    "save_results": 0,
+    "save_results": 1,
     "save_bscan": 1,
     "save_sources": 1,
     "gpu_type": "high-perf",
@@ -74,11 +74,11 @@
   },
   "specimen_params":
   {
-    "cp_map": "./ensaios/bloquinho_maps/bloquinho_cp.npy",
+    "cp_map": "./ensaios/bloquinho_maps/bloq959x802_cp.npy",
     "cp": 1.483,
-    "cs_map": "./ensaios/bloquinho_maps/bloquinho_cs.npy",
+    "cs_map": "./ensaios/bloquinho_maps/bloq959x802_cs.npy",
     "cs": 0.0,
-    "rho_map": "./ensaios/bloquinho_maps/bloquinho_rho.npy",
+    "rho_map": "./ensaios/bloquinho_maps/bloq959x802_rho.npy",
     "rho": 1000.0
   }
 }
