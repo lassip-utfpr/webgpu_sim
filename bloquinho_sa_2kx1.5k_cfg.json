@@ -26,7 +26,7 @@
         "inter_elem": 0.1,
         "freq": 5.0,
         "bw": 0.6,
-        "gain": 1e6,
+        "gain": 1e8,
         "pulse_type": "gaussian",
         "coord_center": [
           40.0,
@@ -42,8 +42,8 @@
   ],
   "simul_params":
   {
-    "time_steps": 80000,
-    "dt": 0.5e-3,
+    "time_steps": 20000,
+    "dt": 2e-3,
     "ord": 6,
     "rcoef": 0.0001,
     "it_display": 10,
@@ -56,7 +56,7 @@
     "n_iter_cpu": 1,
     "do_sim_gpu": 1,
     "do_sim_cpu": 0,
-    "show_anim": 0,
+    "show_anim": 1,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
