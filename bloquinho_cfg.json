@@ -25,7 +25,7 @@
         "dim_p": 10.0,
         "inter_elem": 0.1,
         "freq": 5,
-        "bw": 0.96,
+        "bw": 0.6,
         "gain": 1e8,
         "pulse_type": "gaussian",
         "coord_center": [
@@ -42,7 +42,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 80000,
+    "time_steps": 20000,
     "dt": 2e-3,
     "ord": 5,
     "rcoef": 0.0001,
