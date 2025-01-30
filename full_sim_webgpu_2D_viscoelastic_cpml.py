@@ -738,21 +738,22 @@ coefs_Lui = [
 ]
 
 # Parametro de atenuacao
-N_SLS = 2
+N_SLS = 3
 
 # Qp approximately equal to 13, Qkappa approximately to 20 and Qmu / Qs approximately to 10
 q_kappa_att = 20.0
 q_mu_att = 10.0
 f0_attenuation = 16  # in Hz
 
+
 # Portar essa função
 def compute_attenuation_coeffs(is_kappa):  #  n, q_kappa, f0, f_min,f_max):
     if is_kappa:
-        return (np.array([3.4331474384407847E-002, 3.6311125270723529E-003], dtype=flt32),
-                np.array([2.9287653312114702E-002, 3.0503144159812171E-003], dtype=flt32))
+        return (np.array([0.024081581857536852, 0.0046996089908613505, 0.00095679978724359251], dtype=flt32),
+                np.array([0.022560146386368083, 0.0045084712797122525, 0.00089378764037688395], dtype=flt32))
 
-    return (np.array([3.7739400980721378E-002, 4.1548430957513323E-003], dtype=flt32),
-            np.array([2.7848924623855534E-002, 2.8973181158942259E-003], dtype=flt32))
+    return (np.array([0.024305444805272164, 0.0047281078292263955, 0.00096672526958635019], dtype=flt32),
+            np.array([0.022509197794294895, 0.0045013880073380965, 0.00089173320953691182], dtype=flt32))
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
