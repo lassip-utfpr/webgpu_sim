@@ -19,7 +19,8 @@ struct SimIntValues {
     n_rec_el: i32,      // num probes rx elements
     n_rec_pt: i32,      // num rec pto
     fd_coeff: i32,      // num fd coefficients
-    it: i32             // time iteraction
+    it: i32,             // time iteraction
+    n_sls: i32          // num zener bodies
 };
 
 @group(0) @binding(0) // param_int32
@@ -35,24 +36,6 @@ struct SimFltValues {
 
 @group(0) @binding(1)   // param_flt32
 var<storage,read> sim_flt_par: SimFltValues;
-
-// +++++++++++++++++++++++++++++++
-// ++++ Group 0 - attenuation ++++
-// +++++++++++++++++++++++++++++++
-
-struct SimAttValues {
-    tau_epsilon_nu10: f32,
-    tau_epsilon_nu11: f32,
-    tau_sigma_nu10: f32,
-    tau_sigma_nu11: f32,
-    tau_epsilon_nu20: f32,
-    tau_epsilon_nu21: f32,
-    tau_sigma_nu20: f32,
-    tau_sigma_nu21: f32,
-};
-
-@group(0) @binding(21)   // param_flt32
-var<storage,read> sim_att_: SimAttValues;
 
 // -----------------------------------
 // --- Force array access funtions ---
@@ -308,6 +291,34 @@ fn get_cs(x: i32, y: i32) -> f32 {
     return select(0.0, cs_map[index], index != -1);
 }
 
+@group(0) @binding(21) //r_dot
+var<storage,read_write> r_dot: array<f32>;
+
+fn get_r_dot(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+
+    return select(0.0, r_dot[index], index != -1);
+}
+
+fn set_r_dot(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_dot[index] = val;
+    }
+}
+@group(0) @binding(22) //alpha_p e alpha_s
+var<storage,read> alpha_att: array<f32>;
+
+@group(0) @binding(23) //tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2 / o x indica qual tau e o y indica qual corpo zener
+var<storage,read> tau_att: array<f32>;
+
+fn get_tau(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, 2, sim_int_par.n_sls);
+
+    return select(0.0, tau_att[index], index != -1);
+}
+
 // +++++++++++++++++++++++++++++++++++++
 // ++++ Group 1 - simulation arrays ++++
 // +++++++++++++++++++++++++++++++++++++
@@ -420,69 +431,6 @@ fn set_sigmaxy(x: i32, y: i32, val : f32) {
 
     if(index != -1) {
         sigmaxy[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(1) @binding(14) // sigmaxx unrelaxed field
-var<storage,read_write> sigmaxx_ur: array<f32>;
-
-// function to get a sigmaxx unrelaxed array value
-fn get_sigmaxx_ur(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, sigmaxx_ur[index], index != -1);
-}
-
-// function to set a sigmaxx unrelaxed array value
-fn set_sigmaxx_ur(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    if(index != -1) {
-        sigmaxx_ur[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(1) @binding(15) // sigmayy unrelaxed field
-var<storage,read_write> sigmayy_ur: array<f32>;
-
-// function to get a sigmayy unrelaxed array value
-fn get_sigmayy_ur(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, sigmayy_ur[index], index != -1);
-}
-
-// function to set a sigmayy unrelaxed array value
-fn set_sigmayy_ur(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    if(index != -1) {
-        sigmayy_ur[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(1) @binding(16) // sigmaxy unrelaxed field
-var<storage,read_write> sigmaxy_ur: array<f32>;
-
-// function to get a sigmaxy unrelaxed array value
-fn get_sigmaxy_ur(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    return select(0.0, sigmaxy_ur[index], index != -1);
-}
-
-// function to set a sigmaxy array value
-fn set_sigmaxy_ur(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
-
-    if(index != -1) {
-        sigmaxy_ur[index] = val;
     }
 }
 
@@ -654,18 +602,6 @@ fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
         mdsxy_dy[index] = val;
     }
 }
-
-@group(1) @binding(17) // evolution e1
-var<storage,read_write> e1: array<f32>;
-
-@group(1) @binding(18) // evolution e11
-var<storage,read_write> e11: array<f32>;
-
-@group(1) @binding(19) // evolution e12
-var<storage,read_write> e12: array<f32>;
-
-@group(1) @binding(20) // evolution e22
-var<storage,read_write> e22: array<f32>;
 
 // +++++++++++++++++++++++++++++++++++++++++++++++
 // ++++ Group 2 - sensors arrays and energies ++++
@@ -882,9 +818,6 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdvx_dx(x, y, mdvx_dx_new);
         set_mdvy_dy(x, y, mdvy_dy_new);
 
-        let div : f32 = vdvx_dx + vdvy_dy;
-        let mu_nu1 : f32 = 1.0 - (1.0 - SimAttValues.tau_epsilon_nu10 / SimAttValues.tau_sigma_nu10) - (1.0 - SimAttValues.tau_epsilon_nu11/ SimAttValues.tau_sigma_nu11);
-        let mu_nu2 : f32 = 1.0 - (1.0 - SimAttValues.tau_epsilon_nu20 / SimAttValues.tau_sigma_nu20) - (1.0 - SimAttValues.tau_epsilon_nu21 / SimAttValues.tau_sigma_nu21);
         let rho_h_x = 0.5 * (get_rho(x + 1, y) + get_rho(x, y));
         let cp_h_x = 0.5 * (get_cp(x + 1, y) + get_cp(x, y));
         let cs_h_x_l = 0.5 * (get_cs(x + 1, y) + get_cs(x, y));
@@ -892,85 +825,30 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x_l * cs_h_x_l);
         let mu: f32 = rho_h_x * (cs_h_x_m * cs_h_x_m);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
-        let lambda_ur: f32 = ((lambda + (2.0/3.0) * mu) * mu_nu1) - ((2.0/3.0)* mu * mu_nu2);
-        let mu_ur : f32 = mu * mu_nu2;
-        let lambdaplus2mu_ur = lambda_ur + (2.0 * mu_ur);
+        let inv_tau_sigma_p_0: f32 = 1.0/get_tau(1,0);
+        let inv_tau_sigma_p_1: f32 = 1.0/get_tau(1,1);
+        let inv_tau_sigma_p_2: f32 = 1.0/get_tau(1,2);
 
+        let r_dot_xx_0: f32 = (-inv_tau_sigma_p_0) * (get_r_dot(0,0) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
+        let r_dot_xx_1: f32 = (-inv_tau_sigma_p_1) * (get_r_dot(0,1) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
+        let r_dot_xx_2: f32 = (-inv_tau_sigma_p_2) * (get_r_dot(0,2) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
+        set_r_dot(0,0,r_dot_xx_0);
+        set_r_dot(0,1,r_dot_xx_1);
+        set_r_dot(0,2,r_dot_xx_2);
 
-        let phi_nu10 : f32 = (1.0 - SimAttValues.tau_epsilon_nu10 / SimAttValues.tau_sigma_nu10) / SimAttValues.tau_sigma_nu10;
-        let phi_nu11 : f32 = (1.0 - SimAttValues.tau_epsilon_nu11 / SimAttValues.tau_sigma_nu11) / SimAttValues.tau_sigma_nu11;
-        let phi_nu20 : f32 = (1.0 - SimAttValues.tau_epsilon_nu20 / SimAttValues.tau_sigma_nu20) / SimAttValues.tau_sigma_nu20;
-        let phi_nu21 : f32 = (1.0 - SimAttValues.tau_epsilon_nu21 / SimAttValues.tau_sigma_nu21) / SimAttValues.tau_sigma_nu21;
+        let r_dot_yy_0: f32 = (-inv_tau_sigma_p_0) * (get_r_dot(1,0) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
+        let r_dot_yy_1: f32 = (-inv_tau_sigma_p_1) * (get_r_dot(1,1) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
+        let r_dot_yy_2: f32 = (-inv_tau_sigma_p_2) * (get_r_dot(1,2) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
+        set_r_dot(1,0,r_dot_yy_0);
+        set_r_dot(1,1,r_dot_yy_1);
+        set_r_dot(1,2,r_dot_yy_2);
 
-        // evolution e1(0)
-        var tauinv : f32 = - (1.0/SimAttValues.tau_sigma_nu10);
-        var Un : f32 = e1[0];
-        var Sn : f32 = div * phi_nu10;
-        var tauinvUn : f32 = tauinv * Un;
-        var Unp1 : f32 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e1[0] = Unp1;
-
-        // evolution e1(1)
-        tauinv = - (1.0/SimAttValues.tau_sigma_nu11);
-        Un = e1[1];
-        Sn = div * phi_nu11;
-        tauinvUn = tauinv * Un;
-        Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e1[1] = Unp1;
-
-        // evolution e11(0)
-        tauinv = - (1.0/SimAttValues.tau_sigma_nu20);
-        Un = e11[0];
-        Sn = (vdvx_dx - div / 3.0) * phi_nu20;
-        tauinvUn = tauinv * Un;
-        Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e11[0] = Unp1;
-
-        // evolution e11(1)
-        tauinv = - (1.0/SimAttValues.tau_sigma_nu21);
-        Un = e11[1];
-        Sn = (vdvx_dx - div / 3.0) * phi_nu21;
-        tauinvUn = tauinv * Un;
-        Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e11[1] = Unp1;
-
-        // evolution e22(0)
-        tauinv = - (1.0/SimAttValues.tau_sigma_nu20);
-        Un = e22[0];
-        Sn = (vdvy_dy - div / 3.0) * phi_nu20;
-        tauinvUn = tauinv * Un;
-        Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e22[0] = Unp1;
-
-        // evolution e22(1)
-        tauinv = - (1.0/SimAttValues.tau_sigma_nu21);
-        Un = e22[1];
-        Sn = (vdvy_dy - div / 3.0) * phi_nu21;
-        tauinvUn = tauinv * Un;
-        Unp1 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e22[1] = Unp1;
-
+        let sigmaxx: f32 = get_sigmaxx(x, y) + ((lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - (2.0 * mu * alpha_att[1] * vdvy_dy) + r_dot_xx_0 + r_dot_xx_1 + r_dot_xx_2)*dt;
+        let sigmayy: f32 = get_sigmayy(x, y) + ((lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - (2.0 * mu * alpha_att[1] * vdvx_dx) + r_dot_yy_0 + r_dot_yy_1 + r_dot_yy_2)*dt;
         //let sigmaxx: f32 = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
         //let sigmayy: f32 = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
-        //set_sigmaxx(x, y, sigmaxx);
-        //set_sigmayy(x, y, sigmayy);
-
-        var sigmaxx_ur : f32 = get_sigmaxx_ur(x,y) + dt * ((lambda + (2.0/3.0)*mu) * (e1[0] + e1[1]) +
-                                  2.0 * mu * (e11[0] + e11[1]));
-        var sigmayy_ur : f32 = get_sigmayy_ur(x,y) + dt * ((lambda + (2.0/3.0)*mu) * (e1[0] + e1[1]) +
-                                  2.0 * mu * (e22[0] + e22[1]));
-
-        sigmaxx_ur = sigmaxx_ur + (lambdaplus2mu_ur*vdvx_dx + lambda_ur*vdvy_dy) * dt;
-        sigmayy_ur = sigmayy_ur + (lambda_ur*vdvx_dx + lambdaplus2mu_ur*vdvy_dy) * dt;
-        var sigmaxx : f32 = get_sigmaxx(x,y) + (lambdaplus2mu*vdvx_dx + lambda*vdvy_dy) * dt;
-        var sigmayy : f32 = get_sigmayy(x,y) + (lambda*vdvx_dx + lambdaplus2mu*vdvy_dy) * dt;
-        set_sigmaxx_ur(x,y,sigmaxx_ur);
-        set_sigmayy_ur(x,y,sigmayy_ur);
-        set_sigmaxx(x,y,sigmaxx);
-        set_sigmayy(x,y,sigmayy);
-
-
-
+        set_sigmaxx(x, y, sigmaxx);
+        set_sigmayy(x, y, sigmayy);
     }
 
     // Shear stresses
@@ -999,42 +877,24 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let rho_h_y = 0.5 * (get_rho(x, y + 1) + get_rho(x, y));
         let cs_h_y = select(0.5 * (get_cs(x, y + 1) + get_cs(x, y)), 0.0, min(get_cs(x, y + 1), get_cs(x, y)) == 0.0);
         let mu: f32 = rho_h_y * (cs_h_y * cs_h_y);
-        let div : f32 = vdvx_dx + vdvy_dy;
-        let mu_nu1 : f32 = 1.0 - (1.0 - SimAttValues.tau_epsilon_nu10 / SimAttValues.tau_sigma_nu10) - (1.0 - SimAttValues.tau_epsilon_nu11/ SimAttValues.tau_sigma_nu11);
-        let mu_nu2 : f32 = 1.0 - (1.0 - SimAttValues.tau_epsilon_nu20 / SimAttValues.tau_sigma_nu20) - (1.0 - SimAttValues.tau_epsilon_nu21 / SimAttValues.tau_sigma_nu21);
-        let lambda_ur: f32 = ((lambda + (2.0/3.0) * mu) * mu_nu1) - ((2.0/3.0)* mu * mu_nu2);
-        let mu_ur : f32 = mu * mu_nu2;
-        let lambdaplus2mu_ur = lambda_ur + (2.0 * mu_ur);
+        let inv_tau_sigma_s_0: f32 = 1.0/get_tau(3,0);
+        let inv_tau_sigma_s_1: f32 = 1.0/get_tau(3,1);
+        let inv_tau_sigma_s_2: f32 = 1.0/get_tau(3,2);
+
+        let r_dot_xy_0: f32 = (-inv_tau_sigma_s_0) * (get_r_dot(2,0) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
+        let r_dot_xy_1: f32 = (-inv_tau_sigma_s_1) * (get_r_dot(2,1) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
+        let r_dot_xy_2: f32 = (-inv_tau_sigma_s_2) * (get_r_dot(2,2) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
+        set_r_dot(2,0,r_dot_xy_0);
+        set_r_dot(2,1,r_dot_xy_1);
+        set_r_dot(2,2,r_dot_xy_2);
 
 
-        let phi_nu10 : f32 = (1.0 - SimAttValues.tau_epsilon_nu10 / SimAttValues.tau_sigma_nu10) / SimAttValues.tau_sigma_nu10;
-        let phi_nu11 : f32 = (1.0 - SimAttValues.tau_epsilon_nu11 / SimAttValues.tau_sigma_nu11) / SimAttValues.tau_sigma_nu11;
-        let phi_nu20 : f32 = (1.0 - SimAttValues.tau_epsilon_nu20 / SimAttValues.tau_sigma_nu20) / SimAttValues.tau_sigma_nu20;
-        let phi_nu21 : f32 = (1.0 - SimAttValues.tau_epsilon_nu21 / SimAttValues.tau_sigma_nu21) / SimAttValues.tau_sigma_nu21;
-
-        // evolution e12(0)
-        var tauinv : f32 = - (1.0/SimAttValues.tau_sigma_nu20);
-        var Un : f32 = e12[0];
-        var Sn : f32 = (vdvy_dx + vdvy_dx) * phi_nu20;
-        var tauinvUn : f32 = tauinv * Un;
-        var Unp1 : f32 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e12[0] = Unp1;
-
-        // evolution e12(1)
-        var tauinv : f32 = - (1.0/SimAttValues.tau_sigma_nu21);
-        var Un : f32 = e12[1];
-        var Sn : f32 = (vdvy_dx + vdvy_dx) * phi_nu21;
-        var tauinvUn : f32 = tauinv * Un;
-        var Unp1 : f32 = (Un + dt * (Sn + 0.5 * tauinvUn)) / (1.0 - dt * 0.5 * tauinv);
-        e12[1] = Unp1;
-
+        let sigmaxy: f32 = get_sigmaxy(x, y) + ((mu * alpha_att[1] * (vdvx_dy + vdvy_dx)) + r_dot_xy_0 + r_dot_xy_1 + r_dot_xy_2)*dt;
         //let sigmaxy: f32 = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
-        //set_sigmaxy(x, y, sigmaxy);
-        var sigmaxy_ur: f32 = get_sigmaxy_ur(x, y) + dt * mu * (e12[0] + e12[1]);
-        sigmaxy_ur = sigmaxy_ur + mu_ur * (vdvx_dy + vdvy_dx) * dt;
-        var sigmaxy : f32 = get_sigmaxy(x,y) + (vdvx_dy + vdvy_dx) * mu * dt;
-        set_sigmaxy_ur(x,y,sigmaxy_ur);
-        set_sigmaxy(x,y,sigmaxy);
+
+
+
+        set_sigmaxy(x, y, sigmaxy);
 
     }
 }
@@ -1060,8 +920,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         var vdsigmaxx_dx: f32 = 0.0;
         var vdsigmaxy_dy: f32 = 0.0;
         for(var c: i32 = 0; c < sim_int_par.fd_coeff; c++) {
-            vdsigmaxx_dx += get_fdc(c) * (get_sigmaxx_ur(x + get_idx_if(c), y) - get_sigmaxx_ur(x + get_idx_ff(c), y)) / dx;
-            vdsigmaxy_dy += get_fdc(c) * (get_sigmaxy_ur(x, y + get_idx_if(c)) - get_sigmaxy_ur(x, y + get_idx_ff(c))) / dy;
+            vdsigmaxx_dx += get_fdc(c) * (get_sigmaxx(x + get_idx_if(c), y) - get_sigmaxx(x + get_idx_ff(c), y)) / dx;
+            vdsigmaxy_dy += get_fdc(c) * (get_sigmaxy(x, y + get_idx_if(c)) - get_sigmaxy(x, y + get_idx_ff(c))) / dy;
         }
 
         let mdsxx_dx_new: f32 = get_b_x(x - offset) * get_mdsxx_dx(x, y) + get_a_x(x - offset) * vdsigmaxx_dx;
@@ -1089,8 +949,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         var vdsigmaxy_dx: f32 = 0.0;
         var vdsigmayy_dy: f32 = 0.0;
         for(var c: i32 = 0; c < sim_int_par.fd_coeff; c++) {
-            vdsigmaxy_dx += get_fdc(c) * (get_sigmaxy_ur(x + get_idx_ih(c), y) - get_sigmaxy_ur(x + get_idx_fh(c), y)) / dx;
-            vdsigmayy_dy += get_fdc(c) * (get_sigmayy_ur(x, y + get_idx_ih(c)) - get_sigmayy_ur(x, y + get_idx_fh(c))) / dy;
+            vdsigmaxy_dx += get_fdc(c) * (get_sigmaxy(x + get_idx_ih(c), y) - get_sigmaxy(x + get_idx_fh(c), y)) / dx;
+            vdsigmayy_dy += get_fdc(c) * (get_sigmayy(x, y + get_idx_ih(c)) - get_sigmayy(x, y + get_idx_fh(c))) / dy;
         }
 
         let mdsxy_dx_new: f32 = get_b_x_h(x - offset) * get_mdsxy_dx(x, y) + get_a_x_h(x - offset) * vdsigmaxy_dx;
@@ -1170,9 +1030,9 @@ fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             set_sens_vx(it, sensor, value_sens_vx);
             set_sens_vy(it, sensor, value_sens_vy);
 
-            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx_ur(x, y);
-            let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy_ur(x, y);
-            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy_ur(x, y);
+            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx(x, y);
+            let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy(x, y);
+            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy(x, y);
             set_sens_sigxx(it, sensor, value_sens_sigxx);
             set_sens_sigyy(it, sensor, value_sens_sigyy);
             set_sens_sigxy(it, sensor, value_sens_sigxy);
