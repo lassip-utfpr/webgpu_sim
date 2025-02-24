@@ -14,7 +14,7 @@ from time import time
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageWidget
-from simul_utils import SimulationROI, SimulationProbeLinearArray
+from simul_utils import SimulationROI, SimulationProbeLinearArray, SimulationProbePoint
 import os.path
 import file_law
 
@@ -422,7 +422,11 @@ def sim_webgpu(device):
             idx_rec_offset += _pr.num_elem
 
     # Source terms
-    source_term = np.concatenate(source_term, axis=1)
+    if len(source_term) > 1:
+        source_term = np.concatenate(source_term, axis=1)
+    else:
+        source_term = source_term[0][:, np.newaxis]
+
     if save_sources:
         np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
 
@@ -576,14 +580,14 @@ def sim_webgpu(device):
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
     b_sens_sigxx = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
     b_sens_sigyy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
     b_sens_sigxy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Tempo de espera para recepcao nos sensores
     b_delay_rec = device.create_buffer_with_data(data=delay_recv, usage=wgpu.BufferUsage.STORAGE |
@@ -938,6 +942,7 @@ def sim_webgpu(device):
     sens_sigxx = np.array(device.queue.read_buffer(b_sens_sigxx).cast("f")).reshape((NSTEP, NREC))
     sens_sigyy = np.array(device.queue.read_buffer(b_sens_sigyy).cast("f")).reshape((NSTEP, NREC))
     sens_sigxy = np.array(device.queue.read_buffer(b_sens_sigxy).cast("f")).reshape((NSTEP, NREC))
+
     return (vxgpu, vygpu, sigxx_gpu, sigyy_gpu, sigxy_gpu, sens_vx, sens_vy, sens_sigxx, sens_sigyy, sens_sigxy,
             device.adapter.info["device"])
 
@@ -1013,11 +1018,14 @@ if "rho_map" in configs["specimen_params"]:
 simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
 
 # Configuracao dos transdutores
+# TODO: Incluir essa parte em simul_utils, para ficar generico os tipos de transdutores suportados
 simul_probes = list()
 probes_cfg = configs["probes"]
 for p in probes_cfg:
-    if p["linear"]:
+    if "linear" in p:
         simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
+    elif "point" in p:
+        simul_probes.append(SimulationProbePoint(**p["point"]))
 print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
 # Configuracao geral dos ensaios

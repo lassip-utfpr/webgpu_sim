@@ -14,7 +14,7 @@ from time import time
 from PyQt6.QtWidgets import *
 import pyqtgraph as pg
 from pyqtgraph.widgets.RawImageWidget import RawImageWidget
-from simul_utils import SimulationROI, SimulationProbeLinearArray
+from simul_utils import SimulationROI, SimulationProbeLinearArray, SimulationProbePoint
 import os.path
 import file_law
 
@@ -85,6 +85,374 @@ class Window(QMainWindow):
         # setting this widget as central widget of the main window
         self.setCentralWidget(self.widget)
 
+
+# --------------------------
+# Funcao do simulador em CPU
+# --------------------------
+def sim_cpu():
+    global simul_probes, coefs
+    global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
+    global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
+    global vx, vy, sigmaxx, sigmayy, sigmaxy
+    global r_xx, r_yy, r_xy, tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s, alpha_p, alpha_s
+    global memory_dvx_dx, memory_dvx_dy
+    global memory_dvy_dx, memory_dvy_dy
+    global memory_dsigmaxx_dx, memory_dsigmayy_dy
+    global memory_dsigmaxy_dx, memory_dsigmaxy_dy
+    global value_dvx_dx, value_dvy_dy
+    global value_dsigmaxx_dx, value_dsigmaxy_dy
+    global value_dsigmaxy_dx, value_dsigmayy_dy
+    global sisvx, sisvy
+    global ix_src, iy_src, ix_rec, iy_rec
+    global simul_roi, rho_grid_vx, cp_grid_vx, cs_grid_vx
+    global windows_cpu
+
+    _ord = coefs.shape[0]
+    idx_fd = np.array([[c + _ord,  # ini half grid
+                        -c + _ord - 1,  # ini full grid
+                        c - _ord + 1,  # fin half grid
+                        -c - _ord]  # fin full grid
+                       for c in range(_ord)], dtype=np.int32)
+
+    v_max = 100.0
+    v_min = - v_max
+    ix_min = simul_roi.get_ix_min()
+    ix_max = simul_roi.get_ix_max()
+    iy_min = simul_roi.get_iz_min()
+    iy_max = simul_roi.get_iz_max()
+
+    # Obtem fontes e receptores dos transdutores
+    source_term = list()
+    idx_src = list()
+    idx_rec = list()
+    idx_src_offset = 0
+    idx_rec_offset = 0
+    for _pr in simul_probes:
+        if source_env:
+            st = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
+        else:
+            st = _pr.get_source_term(samples=NSTEP, dt=dt)
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
+        if len(i_src) > 0:
+            source_term.append(st)
+            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
+            idx_src_offset += _pr.num_elem
+
+        i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
+        if len(i_rec) > 0:
+            idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
+            idx_rec_offset += _pr.num_elem
+
+    # Source terms
+    if len(source_term) > 1:
+        source_term = np.concatenate(source_term, axis=1)
+    else:
+        source_term = source_term[0][:, np.newaxis]
+
+    if save_sources:
+        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{
+            datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
+
+    idx_src = np.array(idx_src).astype(np.int32).flatten()
+    idx_rec = np.array(idx_rec).astype(np.int32).flatten()
+
+    # rho_grid_vy e a matriz de densidade calculada no ponto medio do grid de vx (grid de vy)
+    rho_grid_vy = rho_grid_vx
+    rho_grid_vy[:-1, :-1] = flt32(0.25) * (
+            rho_grid_vx[:-1, :-1] + rho_grid_vx[1:, :-1] + rho_grid_vx[1:, 1:] + rho_grid_vx[:-1, 1:])
+
+    # Inicializa os mapas dos parametros de Lame
+    mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = rho_grid_vx * cs_grid_vx * cs_grid_vx
+    lambda_grid_vx = lambda_grid_sig_norm = rho_grid_vx * (cp_grid_vx * cp_grid_vx - 2.0 * cs_grid_vx * cs_grid_vx)
+
+    mu_grid_sig_norm[:-1, :-1] = flt32(0.5) * (mu_grid_vx[1:, :-1] + mu_grid_vx[:-1, :-1])
+    lambda_grid_sig_norm[:-1, :-1] = flt32(0.5) * (lambda_grid_vx[1:, :-1] + lambda_grid_vx[:-1, :-1])
+    lambdaplus2mu_grid_sig_norm = lambda_grid_sig_norm + flt32(2.0) * mu_grid_sig_norm
+    mu_grid_sig_trans[:-1, :-1] = flt32(0.5) * (mu_grid_vx[:-1, 1:] + mu_grid_vx[:-1, :-1])
+    lambdaplusmu_grid_sig_norm = lambda_grid_sig_norm + mu_grid_sig_norm
+
+    alpha_p = tau_epsilon_p / tau_sigma_p
+    alpha_s = tau_epsilon_s / tau_sigma_s
+    deltat_phi_p = dt * (1.0 - alpha_p) / tau_sigma_p / np.sum(alpha_p)
+    deltat_phi_s = dt * (1.0 - alpha_s) / tau_sigma_s / np.sum(alpha_s)
+    half_deltat_overtau_sigma_p = np.float32(0.5) * dt / tau_sigma_p
+    half_deltat_overtau_sigma_s = np.float32(0.5) * dt / tau_sigma_s
+    mult_factor_tau_sigma_p = np.float32(1.0) / (1.0 + half_deltat_overtau_sigma_p)
+    mult_factor_tau_sigma_s = np.float32(1.0) / (1.0 + half_deltat_overtau_sigma_s)
+
+    # Inicio do laco de tempo
+    for it in range(1, NSTEP + 1):
+        # Calculo da tensao [stress] - {sigma} (equivalente a pressao nos gases-liquidos)
+        # sigma_ii -> tensoes normais; sigma_ij -> tensoes cisalhantes
+        # Primeiro "laco" i: 1,NX-1; j: 2,NY -> [1:-2, 2:-1]
+        i_dix = idx_fd[0, 1]
+        i_dfx = idx_fd[0, 3]
+        i_diy = idx_fd[0, 0]
+        i_dfy = idx_fd[0, 2]
+        for c in range(_ord):
+            # Eixo "x"
+            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            # eixo "y"
+            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            if c:
+                value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (vx[i_iax:i_fax, i_diy:i_dfy] - vx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (vy[i_dix:i_dfx, i_iay:i_fay] - vy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+            else:
+                value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (vx[i_iax:i_fax, i_diy:i_dfy] - vx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (vy[i_dix:i_dfx, i_iay:i_fay] - vy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+
+        memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x_half[:-1, :] * memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] +
+                                                   a_x_half[:-1, :] * value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy])
+        memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y[:, 1:] * memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] +
+                                                   a_y[:, 1:] * value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x_half[:-1, :] +
+                                                  memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy])
+        value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
+                                                  memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        # compute the stress using the Lame parameters
+        r_xx_old = r_xx
+        r_yy_old = r_yy
+        sum_r_xx = np.zeros_like(sigmaxx)
+        sum_r_yy = np.zeros_like(sigmayy)
+        if viscoelastic_attn:
+            for _l in range(N_SLS):
+                # r_xx[:, :, _l] += -(r_xx[:, :, _l] +
+                #                     alpha_p[_l] * lambdaplus2mu_grid_sig_norm * (value_dvx_dx + value_dvy_dy)
+                #                     - np.float32(2.0) * alpha_s[_l] * mu_grid_sig_norm *
+                #                     value_dvy_dy) * dt / tau_sigma_p[_l]
+                #
+                # r_yy[:, :, _l] += -(r_yy[:, :, _l] +
+                #                     alpha_p[_l] * lambdaplus2mu_grid_sig_norm * (value_dvx_dx + value_dvy_dy)
+                #                     - np.float32(2.0) * alpha_s[_l] * mu_grid_sig_norm *
+                #                     value_dvx_dx) * dt / tau_sigma_p[_l]
+                r_xx[:, :, _l] = ((r_xx_old[:, :, _l] +
+                                  (value_dvx_dx + value_dvy_dy) * deltat_phi_p[_l] -
+                                  r_xx_old[:, :, _l] * half_deltat_overtau_sigma_p[_l]) *
+                                  mult_factor_tau_sigma_p[_l])
+
+                r_yy[:, :, _l] = ((r_yy_old[:, :, _l] +
+                                  0.5 * (value_dvx_dx - value_dvy_dy) * deltat_phi_s[_l] -
+                                  r_yy_old[:, :, _l] * half_deltat_overtau_sigma_s[_l]) *
+                                  mult_factor_tau_sigma_s[_l])
+
+                sum_r_xx += r_xx[:, :, _l] + r_xx_old[:, :, _l]
+                sum_r_yy += r_yy[:, :, _l] + r_yy_old[:, :, _l]
+
+            # sigmaxx += (lambdaplus2mu_grid_sig_norm * np.mean(alpha_p) * (value_dvx_dx + value_dvy_dy) -
+            #             2.0 * mu_grid_sig_norm * np.mean(alpha_s) * value_dvy_dy + np.sum(r_xx, axis=2)) * dt
+            # sigmayy += (lambdaplus2mu_grid_sig_norm * np.mean(alpha_p) * (value_dvx_dx + value_dvy_dy) -
+            #             2.0 * mu_grid_sig_norm * np.mean(alpha_s) * value_dvx_dx + np.sum(r_yy, axis=2)) * dt
+
+            sigmaxx += (lambdaplus2mu_grid_sig_norm * value_dvx_dx + lambda_grid_sig_norm * value_dvy_dy +
+                        0.5 * lambdaplusmu_grid_sig_norm * sum_r_xx + mu_grid_sig_norm * sum_r_yy) * dt
+            sigmayy += (lambda_grid_sig_norm * value_dvx_dx + lambdaplus2mu_grid_sig_norm * value_dvy_dy +
+                        0.5 * lambdaplusmu_grid_sig_norm * sum_r_xx - mu_grid_sig_norm * sum_r_yy) * dt
+        else:
+            sigmaxx += (lambdaplus2mu_grid_sig_norm * value_dvx_dx + lambda_grid_sig_norm * value_dvy_dy) * dt
+            sigmayy += (lambda_grid_sig_norm * value_dvx_dx + lambdaplus2mu_grid_sig_norm * value_dvy_dy) * dt
+
+        # Segundo "laco" i: 2,NX; j: 1,NY-1 -> [2:-1, 1:-2]
+        i_dix = idx_fd[0, 0]
+        i_dfx = idx_fd[0, 2]
+        i_diy = idx_fd[0, 1]
+        i_dfy = idx_fd[0, 3]
+        for c in range(_ord):
+            # Eixo "x"
+            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            # eixo "y"
+            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            if c:
+                value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (vy[i_iax:i_fax, i_diy:i_dfy] - vy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (vx[i_dix:i_dfx, i_iay:i_fay] - vx[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+            else:
+                value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (vy[i_iax:i_fax, i_diy:i_dfy] - vy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (vx[i_dix:i_dfx, i_iay:i_fay] - vx[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+
+        memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x[1:, :] * memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] +
+                                                   a_x[1:, :] * value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy])
+        memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y_half[:, :-1] * memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] +
+                                                   a_y_half[:, :-1] * value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x[1:, :] +
+                                                  memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy])
+        value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
+                                                  memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        # compute the stress using the Lame parameters
+        r_xy_old = r_xy
+        sum_r_xy = np.zeros_like(sigmaxy)
+        if viscoelastic_attn:
+            for _l in range(N_SLS):
+                # r_xy[:, :, _l] += - dt * (r_xy[:, :, _l] + alpha_s[_l] * mu_grid_sig_trans *
+                #                           (value_dvy_dx + value_dvx_dy)) / tau_sigma_s[_l]
+                r_xy[:, :, _l] = ((r_xy_old[:, :, _l] +
+                                   (value_dvy_dx + value_dvx_dy) * deltat_phi_s[_l] -
+                                   r_xy_old[:, :, _l] * half_deltat_overtau_sigma_s[_l]) *
+                                  mult_factor_tau_sigma_s[_l])
+
+                sum_r_xy += r_xy[:, :, _l] + r_xy_old[:, :, _l]
+
+            # sigmaxy += (mu_grid_sig_trans * np.mean(alpha_s) * (value_dvx_dy + value_dvy_dx) + np.sum(r_xy, axis=2))
+            sigmaxy += (mu_grid_sig_trans * (value_dvx_dy + value_dvy_dx) + 0.5 * sum_r_xy) * dt
+        else:
+            sigmaxy += mu_grid_sig_trans * (value_dvx_dy + value_dvy_dx) * dt
+
+        # Calculo da velocidade
+        # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
+        i_dix = idx_fd[0, 0]
+        i_dfx = idx_fd[0, 2]
+        i_diy = idx_fd[0, 0]
+        i_dfy = idx_fd[0, 2]
+        for c in range(_ord):
+            # Eixo "x"
+            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            # eixo "y"
+            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            if c:
+                value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (sigmaxx[i_iax:i_fax, i_diy:i_dfy] - sigmaxx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] += \
+                    (coefs[c] * (sigmaxy[i_dix:i_dfx, i_iay:i_fay] - sigmaxy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+            else:
+                value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (sigmaxx[i_iax:i_fax, i_diy:i_dfy] - sigmaxx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = \
+                    (coefs[c] * (sigmaxy[i_dix:i_dfx, i_iay:i_fay] - sigmaxy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+
+        memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x[1:, :] * memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] +
+                                                        a_x[1:, :] * value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy])
+        memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y[:, 1:] * memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] +
+                                                        a_y[:, 1:] * value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x[1:, :] +
+                                                       memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy])
+        value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
+                                                       memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        vx = dt * (value_dsigmaxx_dx + value_dsigmaxy_dy) / rho_grid_vx + vx
+
+        # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
+        i_dix = idx_fd[0, 1]
+        i_dfx = idx_fd[0, 3]
+        i_diy = idx_fd[0, 1]
+        i_dfy = idx_fd[0, 3]
+        for c in range(_ord):
+            # Eixo "x"
+            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            # eixo "y"
+            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
+            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
+            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
+            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
+            if c:
+                value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] += (
+                        coefs[c] * (sigmaxy[i_iax:i_fax, i_diy:i_dfy] - sigmaxy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] += (
+                        coefs[c] * (sigmayy[i_dix:i_dfx, i_iay:i_fay] - sigmayy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+            else:
+                value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (
+                        coefs[c] * (sigmaxy[i_iax:i_fax, i_diy:i_dfy] - sigmaxy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
+                value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (
+                        coefs[c] * (sigmayy[i_dix:i_dfx, i_iay:i_fay] - sigmayy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
+
+        memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (
+                b_x_half[:-1, :] * memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] +
+                a_x_half[:-1, :] * value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy])
+        memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (
+                b_y_half[:, :-1] * memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] +
+                a_y_half[:, :-1] * value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x_half[:-1, :] +
+                                                       memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy])
+        value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
+                                                       memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
+
+        vy = dt * (value_dsigmaxy_dx + value_dsigmayy_dy) / rho_grid_vy + vy
+
+        # add the source (force vector located at a given grid point)
+        for _isrc in range(NSRC):
+            val_src = source_term[it - 1, idx_src[_isrc]]
+            vy[ix_src[_isrc], iy_src[_isrc]] += val_src * dt / rho
+
+        # implement Dirichlet boundary conditions on the six edges of the grid
+        # which is the right condition to implement in order for C-PML to remain stable at long times
+        # xmin
+        qwe = vy[300:321, 300:321]
+        vx[:_ord, :] = ZERO
+        vy[:_ord, :] = ZERO
+
+        # xmax
+        vx[-_ord:, :] = ZERO
+        vy[-_ord:, :] = ZERO
+
+        # ymin
+        vx[:, :_ord] = ZERO
+        vy[:, :_ord] = ZERO
+
+        # ymax
+        vx[:, -_ord:] = ZERO
+        vy[:, -_ord:] = ZERO
+
+        # Store seismograms
+        for _i in range(idx_rec.shape[0]):
+            _irec = idx_rec[_i]
+            if it >= delay_recv[_irec]:
+                _x = ix_rec[_i]
+                _y = iy_rec[_i]
+                sisvx[it - 1, _irec] += vx[_x, _y]
+                sisvy[it - 1, _irec] += vy[_x, _y]
+
+        vsn2 = np.sqrt(np.max(vx[:, :] ** 2 + vy[:, :] ** 2))
+        if (it % IT_DISPLAY) == 0 or it == 5 or it == 1:
+            if show_debug:
+                print(f'Time step # {it} out of {NSTEP}')
+                print(f'Max norm velocity vector V (m/s) = {vsn2}')
+                print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}')
+                print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}')
+
+            if show_anim:
+                windows_cpu[0].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                windows_cpu[1].imv.setImage(vy[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                App.processEvents()
+
+        # Verifica a estabilidade da simulacao
+        if vsn2 > STABILITY_THRESHOLD:
+            print("Simulacao tornando-se instavel")
+            exit(2)
+
+
 # ----------------------------------------
 # Funcao do simulador em WebGPU
 # ----------------------------------------
@@ -92,8 +460,7 @@ def sim_webgpu(device):
     global simul_probes, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
-    global vx, vy, sigmaxx, sigmayy, sigmaxy, sigmaxx_ur, sigmayy_ur, sigmaxy_ur
-    global r_dot
+    global vx, vy, sigmaxx, sigmayy, sigmaxy
     global memory_dvx_dx, memory_dvx_dy
     global memory_dvy_dx, memory_dvy_dy
     global memory_dsigmaxx_dx, memory_dsigmayy_dy
@@ -129,9 +496,14 @@ def sim_webgpu(device):
             idx_rec_offset += _pr.num_elem
 
     # Source terms
-    source_term = np.concatenate(source_term, axis=1)
+    if len(source_term) > 1:
+        source_term = np.concatenate(source_term, axis=1)
+    else:
+        source_term = source_term[0][:, np.newaxis]
+
     if save_sources:
-        np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
+        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{
+            datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
 
     pos_sources = -np.ones((nx, ny), dtype=np.int32)
     pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()
@@ -148,14 +520,15 @@ def sim_webgpu(device):
 
     # Arrays com parametros inteiros (i32) e ponto flutuante (f32) para rodar o simulador
     _ord = coefs.shape[0]
-    params_i32 = np.array([nx, ny, NSTEP, source_term.shape[1], sisvx.shape[1], n_pto_rec, _ord, 0, N_SLS],
+    params_i32 = np.array([nx, ny, NSTEP, source_term.shape[1], sisvx.shape[1], n_pto_rec, _ord, 0, N_SLS,
+                           1 if viscoelastic_attn else 0],
                           dtype=np.int32)
     params_f32 = np.array([dx, dy, dt], dtype=flt32)
 
-    alpha_attenuation = np.array([alpha_p, alpha_s],dtype=flt32)
+    alpha_attenuation = np.array([alpha_p, alpha_s], dtype=flt32)
 
-    tau_attenuation = np.array([tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2],dtype=flt32)
-    print(tau_attenuation[0,1])
+    tau_attenuation = np.array([tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s], dtype=flt32)
+    print(tau_attenuation[0, 1])
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_2D_viscoelastic.wgsl') as shader_file:
         cshader_string = shader_file.read()
@@ -211,17 +584,15 @@ def sim_webgpu(device):
                                                                             wgpu.BufferUsage.COPY_SRC)
 
     # Parametros de absorcao
-    b_r_dot = device.create_buffer_with_data(data=r_dot, usage=wgpu.BufferUsage.STORAGE |
-                                                               wgpu.BufferUsage.COPY_DST |
-                                                               wgpu.BufferUsage.COPY_SRC)
+    # b_r_dot = device.create_buffer_with_data(data=r_dot, usage=wgpu.BufferUsage.STORAGE |
+    #                                                            wgpu.BufferUsage.COPY_DST |
+    #                                                            wgpu.BufferUsage.COPY_SRC)
 
     b_alpha_attenuation = device.create_buffer_with_data(data=alpha_attenuation, usage=wgpu.BufferUsage.STORAGE |
                                                                                        wgpu.BufferUsage.COPY_SRC)
 
     b_tau_attenuation = device.create_buffer_with_data(data=tau_attenuation, usage=wgpu.BufferUsage.STORAGE |
-                                                                                       wgpu.BufferUsage.COPY_SRC)
-
-
+                                                                                   wgpu.BufferUsage.COPY_SRC)
 
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     b_param_int32 = device.create_buffer_with_data(data=params_i32, usage=wgpu.BufferUsage.STORAGE |
@@ -272,16 +643,6 @@ def sim_webgpu(device):
                                                                    wgpu.BufferUsage.COPY_DST |
                                                                    wgpu.BufferUsage.COPY_SRC)
 
-    b_sigmaxx_ur = device.create_buffer_with_data(data=sigmaxx_ur, usage=wgpu.BufferUsage.STORAGE |
-                                                                   wgpu.BufferUsage.COPY_DST |
-                                                                   wgpu.BufferUsage.COPY_SRC)
-    b_sigmayy_ur = device.create_buffer_with_data(data=sigmayy_ur, usage=wgpu.BufferUsage.STORAGE |
-                                                                   wgpu.BufferUsage.COPY_DST |
-                                                                   wgpu.BufferUsage.COPY_SRC)
-    b_sigmaxy_ur = device.create_buffer_with_data(data=sigmaxy_ur, usage=wgpu.BufferUsage.STORAGE |
-                                                                   wgpu.BufferUsage.COPY_DST |
-                                                                   wgpu.BufferUsage.COPY_SRC)
-
     # Arrays de memoria do simulador
     # [STORAGE | COPY_SRC] pois sao valores passados para a GPU, mas nao necessitam retornar a CPU
     b_memory_dvx_dx = device.create_buffer_with_data(data=memory_dvx_dx, usage=wgpu.BufferUsage.STORAGE |
@@ -310,14 +671,14 @@ def sim_webgpu(device):
                                                                 wgpu.BufferUsage.COPY_DST |
                                                                 wgpu.BufferUsage.COPY_SRC)
     b_sens_sigxx = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
     b_sens_sigyy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
     b_sens_sigxy = device.create_buffer_with_data(data=sisvy, usage=wgpu.BufferUsage.STORAGE |
-                                                                wgpu.BufferUsage.COPY_DST |
-                                                                wgpu.BufferUsage.COPY_SRC)
+                                                                    wgpu.BufferUsage.COPY_DST |
+                                                                    wgpu.BufferUsage.COPY_SRC)
 
     # Tempo de espera para recepcao nos sensores
     b_delay_rec = device.create_buffer_with_data(data=delay_recv, usage=wgpu.BufferUsage.STORAGE |
@@ -367,7 +728,7 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(0, 17)
+         } for ii in range(0, 14)
     ]
 
     # Sensores
@@ -472,10 +833,10 @@ def sim_webgpu(device):
             "binding": 20,
             "resource": {"buffer": b_cs_map, "offset": 0, "size": b_cs_map.size},
         },
-        {
-            "binding": 21,
-            "resource": {"buffer": b_r_dot, "offset": 0, "size": b_r_dot.size},
-        },
+        # {
+        #     "binding": 21,
+        #     "resource": {"buffer": b_r_dot, "offset": 0, "size": b_r_dot.size},
+        # },
         {
             "binding": 22,
             "resource": {"buffer": b_alpha_attenuation, "offset": 0, "size": b_alpha_attenuation.size},
@@ -542,19 +903,6 @@ def sim_webgpu(device):
             "binding": 13,
             "resource": {"buffer": b_memory_dsigmaxy_dy, "offset": 0, "size": b_memory_dsigmaxy_dy.size},
         },
-        {
-            "binding": 14,
-            "resource": {"buffer": b_sigmaxx_ur, "offset": 0, "size": b_sigmaxx_ur.size},
-        },
-        {
-            "binding": 15,
-            "resource": {"buffer": b_sigmayy_ur, "offset": 0, "size": b_sigmayy_ur.size},
-        },
-        {
-            "binding": 16,
-            "resource": {"buffer": b_sigmaxy_ur, "offset": 0, "size": b_sigmaxy_ur.size},
-        },
-
     ]
     b_sensors = [
         {
@@ -623,7 +971,7 @@ def sim_webgpu(device):
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
 
-    v_max = 100.0
+    v_max = 10.0
     v_min = - v_max
     ix_min = simul_roi.get_ix_min()
     ix_max = simul_roi.get_ix_max()
@@ -704,9 +1052,9 @@ def sim_webgpu(device):
     # Pega os resultados da simulacao
     vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
     vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
-    sigxx_gpu = np.asarray(device.queue.read_buffer(b_sigmaxx_ur, buffer_offset=0).cast("f")).reshape((nx, ny))
-    sigyy_gpu = np.asarray(device.queue.read_buffer(b_sigmayy_ur, buffer_offset=0).cast("f")).reshape((nx, ny))
-    sigxy_gpu = np.asarray(device.queue.read_buffer(b_sigmaxy_ur, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxx_gpu = np.asarray(device.queue.read_buffer(b_sigmaxx, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigyy_gpu = np.asarray(device.queue.read_buffer(b_sigmayy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxy_gpu = np.asarray(device.queue.read_buffer(b_sigmaxy, buffer_offset=0).cast("f")).reshape((nx, ny))
     sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
     sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
     sens_sigxx = np.array(device.queue.read_buffer(b_sens_sigxx).cast("f")).reshape((NSTEP, NREC))
@@ -727,7 +1075,7 @@ def sim_webgpu(device):
 PI = flt32(np.pi)
 DEGREES_TO_RADIANS = flt32(PI / 180.0)
 ZERO = flt32(0.0)
-STABILITY_THRESHOLD = flt32(1.0e38)  # Limite para considerar que a simulacao esta instavel
+STABILITY_THRESHOLD = flt32(1.0e25)  # Limite para considerar que a simulacao esta instavel
 
 # Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
 coefs_Lui = [
@@ -749,7 +1097,7 @@ f0_attenuation = 16  # in Hz
 
 
 # Portar essa funçãobbbbbbbbbbb
-def compute_attenuation_coeffs(is_kappa):  #  n, q_kappa, f0, f_min,f_max):
+def compute_attenuation_coeffs(is_kappa):  # n, q_kappa, f0, f_min,f_max):
     if is_kappa:
         return (np.array([0.024081581857536852, 0.0046996089908613505, 0.00095679978724359251], dtype=flt32),
                 np.array([0.022560146386368083, 0.0045084712797122525, 0.00089378764037688395], dtype=flt32))
@@ -757,11 +1105,12 @@ def compute_attenuation_coeffs(is_kappa):  #  n, q_kappa, f0, f_min,f_max):
     return (np.array([0.024305444805272164, 0.0047281078292263955, 0.00096672526958635019], dtype=flt32),
             np.array([0.022509197794294895, 0.0045013880073380965, 0.00089173320953691182], dtype=flt32))
 
+
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='bloquinho_sa_2kx1.5k_cfg.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # -----------------------
@@ -806,17 +1155,21 @@ if "rho_map" in configs["specimen_params"]:
 simul_roi = SimulationROI(**configs["roi"], pad=coefs.shape[0] - 1, rho_map=rho_map)
 
 # Configuracao dos transdutores
+# TODO: Incluir essa parte em simul_utils, para ficar generico os tipos de transdutores suportados
 simul_probes = list()
 probes_cfg = configs["probes"]
 for p in probes_cfg:
-    if p["linear"]:
+    if "linear" in p:
         simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
+    elif "point" in p:
+        simul_probes.append(SimulationProbePoint(**p["point"]))
 print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
 
 # Configuracao geral dos ensaios
 n_iter_gpu = configs["simul_configs"]["n_iter_gpu"] if "n_iter_gpu" in configs["simul_configs"] else 1
 n_iter_cpu = configs["simul_configs"]["n_iter_cpu"] if "n_iter_cpu" in configs["simul_configs"] else 1
 do_sim_gpu = bool(configs["simul_configs"]["do_sim_gpu"]) if "do_sim_gpu" in configs["simul_configs"] else False
+do_sim_cpu = bool(configs["simul_configs"]["do_sim_cpu"]) if "do_sim_cpu" in configs["simul_configs"] else False
 show_anim = bool(configs["simul_configs"]["show_anim"]) if "show_anim" in configs["simul_configs"] else False
 show_debug = bool(configs["simul_configs"]["show_debug"]) if "show_debug" in configs["simul_configs"] else False
 plot_results = bool(configs["simul_configs"]["plot_results"]) if "plot_results" in configs["simul_configs"] else False
@@ -826,6 +1179,8 @@ save_bscan = bool(configs["simul_configs"]["save_bscan"]) if "save_bscan" in con
 save_sources = bool(configs["simul_configs"]["save_sources"]) if "save_sources" in configs["simul_configs"] else False
 show_results = bool(configs["simul_configs"]["show_results"]) if "show_results" in configs["simul_configs"] else False
 save_results = bool(configs["simul_configs"]["save_results"]) if "save_results" in configs["simul_configs"] else False
+viscoelastic_attn = bool(configs["simul_configs"]["viscoelastic_attn"]) \
+    if "viscoelastic_attn" in configs["simul_configs"] else False
 gpu_type = configs["simul_configs"]["gpu_type"] if "gpu_type" in configs["simul_configs"] else "high-perf"
 source_env = bool(configs["simul_configs"]["source_env"]) if "source_env" in configs["simul_configs"] else False
 if "emission_laws" in configs["simul_configs"] and os.path.isfile(configs["simul_configs"]["emission_laws"]):
@@ -966,29 +1321,26 @@ vy = np.zeros((nx, ny), dtype=flt32)
 sigmaxx = np.zeros((nx, ny), dtype=flt32)
 sigmayy = np.zeros((nx, ny), dtype=flt32)
 sigmaxy = np.zeros((nx, ny), dtype=flt32)
-sigmaxx_ur = np.zeros((nx, ny), dtype=flt32)
-sigmayy_ur = np.zeros((nx, ny), dtype=flt32)
-sigmaxy_ur = np.zeros((nx, ny), dtype=flt32)
 
-r_dot = np.zeros((3,N_SLS),dtype=flt32) # xx, yy, xy - 3
+# Arrays para armazenamento das variaveis de memoria para substituir a convolucao
+r_xx = np.zeros((nx, ny, N_SLS), dtype=flt32)
+r_yy = np.zeros((nx, ny, N_SLS), dtype=flt32)
+r_xy = np.zeros((nx, ny, N_SLS), dtype=flt32)
 
 # Calculo da faixa de atenuacao em frequencia: f_max/f_min=12 and (log(f_min)+log(f_max))/2 = log(f0)
-f_min_attenuation = np.exp(np.log(f0_attenuation) - np.log(12.0)/2.0)
+f_min_attenuation = np.exp(np.log(f0_attenuation) - np.log(12.0) / 2.0)
 f_max_attenuation = 12.0 * f_min_attenuation
 
-tau_epsilon_nu1, tau_sigma_nu1 = compute_attenuation_coeffs(is_kappa=True)
-tau_epsilon_nu2, tau_sigma_nu2 = compute_attenuation_coeffs(is_kappa=False)
+tau_epsilon_p, tau_sigma_p = compute_attenuation_coeffs(is_kappa=True)
+tau_epsilon_s, tau_sigma_s = compute_attenuation_coeffs(is_kappa=False)
 
-future_sum_tau_p = 1 - (tau_epsilon_nu1[:]/tau_sigma_nu1[:])
-future_sum_tau_s = 1 - (tau_epsilon_nu2[:]/tau_sigma_nu2[:])
-inv_L = 1/N_SLS
-alpha_p = 1-(inv_L*sum(future_sum_tau_p))
-alpha_s = 1-(inv_L*sum(future_sum_tau_s))
+alpha_p = sum(tau_epsilon_p / tau_sigma_p) / N_SLS
+alpha_s = sum(tau_epsilon_s / tau_sigma_s) / N_SLS
 
 # Total de arrays
 N_ARRAYS = 5 + 2 * 4
 
-print(f'2D elastic finite-difference code in velocity and stress formulation with C-PML')
+print(f'2D viscoelastic finite-difference code in velocity and stress formulation with C-PML')
 print(f'NX = {nx}')
 print(f'NY = {ny}')
 print(f'Total de pontos no grid = {nx * ny}')
@@ -1075,6 +1427,16 @@ sensor_cpu_result = list()
 # Configuracao e inicializacao da janela de exibicao
 if show_anim:
     App = pg.QtWidgets.QApplication([])
+    if do_sim_cpu:
+        x_pos = 200 + np.arange(3) * (nx + 50)
+        y_pos = 500 + np.arange(3) * (ny + 50)
+        windows_cpu_data = [
+            {"title": "Vx [CPU]", "geometry": (x_pos[0], y_pos[0],
+                                               simul_roi.get_nx(), simul_roi.get_nz())},
+            {"title": "Vy [CPU]", "geometry": (x_pos[1], y_pos[0],
+                                               simul_roi.get_nx(), simul_roi.get_nz())},
+        ]
+        windows_cpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_cpu_data]
 
     if do_sim_gpu:
         x_pos = 200 + np.arange(3) * (nx + 50)
@@ -1243,6 +1605,94 @@ if do_sim_gpu:
                 np.save(name + '_SigYY_GPU', sensor_sigyy_gpu)
                 np.save(name + '_SigXY_GPU', sensor_sigxy_gpu)
 
+# CPU
+if do_sim_cpu:
+    for n in range(n_iter_cpu):
+        print(f'SIMULACAO CPU')
+        print(f'Iteracao {n}')
+
+        n_laws = emission_laws.shape[0] if emission_laws is not None else 1
+        for law in range(n_laws):
+            print(f'\tLaw {law} of {n_laws}')
+
+            if emission_laws is not None:
+                for p in simul_probes:
+                    p.set_t0(emission_laws[law])
+
+            t_cpu = time()
+            sim_cpu()
+            times_cpu.append(time() - t_cpu)
+            print(f'{times_cpu[-1]:.3}s')
+            name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
+                    f'{simul_roi.get_len_x()}x{simul_roi.get_len_z()}_{NSTEP}_iter_{n}_law_{law}')
+
+            # Plota os mapas de velocidade
+            if plot_results:
+                vx_cpu_sim_result = plt.figure()
+                plt.title(f'CPU simulation Vx - law ({law})\n'
+                          f'({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vx[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0])
+                           )
+                plt.colorbar()
+
+                vy_cpu_sim_result = plt.figure()
+                plt.title(f'CPU simulation Vy - law ({law})\n'
+                          f'({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(vy[simul_roi.get_ix_min():simul_roi.get_ix_max(),
+                           simul_roi.get_iz_min():simul_roi.get_iz_max()].T,
+                           aspect='auto', cmap='gray',
+                           extent=(simul_roi.w_points[0], simul_roi.w_points[-1],
+                                   simul_roi.h_points[-1], simul_roi.h_points[0]))
+                plt.colorbar()
+
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    vx_cpu_sim_result.savefig(name + '_Vx_cpu.png')
+                    vy_cpu_sim_result.savefig(name + '_Vy_cpu.png')
+
+            # Plota as velocidades tomadas no sensores
+            if plot_results and plot_sensors:
+                for r in range(NREC):
+                    sensor_cpu_result, ax = plt.subplots(3, sharex=True, sharey=True)
+                    sensor_cpu_result.suptitle(f'Receptor {r + 1} [CPU] - law ({law})')
+                    ax[0].plot(sisvx[:, r])
+                    ax[0].set_title(r'$V_x$')
+                    ax[1].plot(sisvy[:, r])
+                    ax[1].set_title(r'$V_y$')
+                    ax[2].plot(sisvx[:, r] + sisvy[:, r], 'tab:orange')
+                    ax[2].set_title(r'$V_x + V_y$')
+
+                if show_results:
+                    plt.show(block=False)
+
+                if save_results:
+                    for s in range(NREC):
+                        try:
+                            sensor_cpu_result[s].savefig(name + f'_sensor_{s}_cpu.png')
+                        except IndexError:
+                            pass
+
+            if plot_results and plot_bscan:
+                cpu_bscan_sim_result = plt.figure()
+                plt.title(f'CPU simulation B-scan - law({law})\n'
+                          f'[CPU] ({simul_roi.get_len_x()}x{simul_roi.get_len_z()})')
+                plt.imshow(sisvx + sisvy, aspect='auto', cmap='viridis')
+                plt.colorbar()
+
+                if show_results:
+                    plt.show(block=False)
+
+            if save_bscan:
+                name = f'results/bscan_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_law{law}'
+                np.save(name + '_Vx_CPU', sisvx)
+                np.save(name + '_Vy_CPU', sisvy)
+
 if show_anim and App:
     App.exit()
 
@@ -1255,6 +1705,13 @@ print(f'TEMPO - {NSTEP} pontos de tempo')
 if do_sim_gpu and n_iter_gpu > 5:
     print(f'GPU: {times_gpu[5:].mean():.3}s (std = {times_gpu[5:].std()})')
 
+if do_sim_cpu and n_iter_cpu > 5:
+    print(f'CPU: {times_cpu[5:].mean():.3}s (std = {times_cpu[5:].std()})')
+
+if do_sim_gpu and do_sim_cpu:
+    print(f'MSE entre as simulacoes [Vx]: {np.sum((vx_gpu - vx) ** 2) / vx.size}')
+    print(f'MSE entre as simulacoes [Vy]: {np.sum((vy_gpu - vy) ** 2) / vy.size}')
+
 if save_results:
     name = (f'results/result_2D_elast_CPML_{now.strftime("%Y%m%d-%H%M%S")}_'
             f'{simul_roi.get_len_x()}x{simul_roi.get_len_z()}_{NSTEP}_iter_')
@@ -1262,6 +1719,8 @@ if save_results:
     if do_sim_gpu:
         np.savetxt(name + 'GPU_' + gpu_type + '.csv', times_gpu, '%10.3f', delimiter=',')
 
+    if do_sim_cpu:
+        np.savetxt(name + 'CPU.csv', times_cpu, '%10.3f', delimiter=',')
 
     with open(name + '_desc.txt', 'w') as f:
         f.write('Parametros do ensaio\n')
@@ -1279,7 +1738,14 @@ if save_results:
             else:
                 f.write(f'Tempo execucao: {times_gpu[0]:.3}s\n')
 
-
+        f.write(f'Simulacao CPU: {"Sim" if do_sim_cpu else "Nao"}\n')
+        if do_sim_cpu:
+            f.write(f'Numero de simulacoes CPU: {n_iter_cpu}\n')
+            if n_iter_cpu > 5:
+                f.write(f'Tempo medio de execucao: {times_cpu[5:].mean():.3}s\n')
+                f.write(f'Desvio padrao: {times_cpu[5:].std()}\n')
+            else:
+                f.write(f'Tempo execucao: {times_cpu[0]:.3}s\n')
 
 if show_results:
     plt.show()

@@ -396,9 +396,12 @@ class ElementRect:
     def get_element_exc_fn(self, t, out='r'):
         dt = t[1] - t[0]
         gp, _, egp = gausspulse((t - self.t0), fc=self.freq, bw=self.bw, retquad=True, retenv=True)
+        eps = np.finfo(np.float32).eps
         if out == 'e':
+            egp[np.abs(egp) < eps] = 0.0
             ss = egp
         else:
+            gp[np.abs(gp) < eps] = 0.0
             ss = gp
 
         return np.diff(self.gain * np.float32(ss) / dt, append=0.0).astype(np.float32)
@@ -452,7 +455,7 @@ class ElementRect:
         # Calcula a coordenada do primeiro ponto
         x_coord = np.float32(self.coord_center[0] - ((self.elem_dim_a - sim_roi.w_step) / 2.0 if num_pt_a // 2 else
                                                      (self.elem_dim_a / 2.0)))
-        y_coord = np.float32(0.0 if simul_type == "2d" else
+        y_coord = np.float32(0.0 if simul_type.lower() == "2d" else
                              (self.coord_center[1] - ((dim_p - sim_roi.d_step) / 2.0) if num_pt_p // 2 else
                               (dim_p / 2.0)))
         z_coord = self.coord_center[2]
@@ -736,7 +739,6 @@ class SimulationProbeLinearArray(SimulationProbe):
         Lista com o índice do elemento receptor de cada ponto receptor na ROI.
         """
         idx_rec = list()
-        # idx_count = 0
         for idx_st, e in enumerate(self.elem_list):
             try:
                 arr_elem = e.get_points_roi(sim_roi=sim_roi, probe_center=self.coord_center,
@@ -787,3 +789,198 @@ class SimulationProbeLinearArray(SimulationProbe):
 
         for idx_e, e in enumerate(self.elem_list):
             e.t0 = self.t0_emission[idx_e]
+
+
+class SimulationProbePoint(SimulationProbe):
+    """
+    Classe contendo as configurações de um transdutor do tipo ponto infinitesimal.
+    É uma classe derivada de ``SimulationProbe``, específica para os transdutores do tipo
+    "Point".
+
+    Parameters
+    ----------
+        coord_center : :class:`np.ndarray`
+            Coordenada relativa a posição espacial do transdutor. Por padrão se assume os
+            valores [0.0, 0.0, 0.0].
+
+        freq : int, float
+            Frequência central, em MHz. Por padrão, é 5 MHz.
+
+        bw : int, float
+            Banda passante, em percentual da frequência central. Por padrão,
+            é 0.5 (50%).
+
+        pulse_type : str
+            Tipo do pulso de excitação. Os tipos possíveis são: ``gaussian``,
+            ``cossquare``, ``hanning`` e ``hamming``. Por padrão, é
+            ``gaussian``.
+
+    Attributes
+    ----------
+
+    """
+
+    def __init__(self, coord_center=np.zeros((1, 3)),
+                 freq=5., bw=0.5, gain=1.0, pulse_type="gaussian", id="",
+                 emmiter="True", receiver="False", t0_emission=None, t0_reception=None):
+        # Chama o construtor da classe base.
+        super().__init__(coord_center)
+
+        # Identificacao do transdutor
+        self._id = id
+
+        # Numero de elementos, para manter compatibilidade com outros tipos de transdutores
+        self.num_elem = 1
+
+        # Le a configuracao se o transdutor e emissor
+        if type(emmiter) is str:
+            self.emmiters = [ eval(emmiter.lower().capitalize()) ]
+        else:
+            raise ValueError("emmiter must be a string")
+
+        # Le a configuracao se o transdutor e receptor
+        if type(receiver) is str:
+            self.receivers = [ eval(receiver.lower().capitalize()) ]
+        else:
+            raise ValueError("receiver must be a string")
+
+        # Tempo de atraso para emissao dos elementos. Se for um valor escalar, e assumido para todos os elementos.
+        # Se for um array, deve ter um valor para cada elemento.
+        # Se for um nome de um arquivo 'law',
+        if t0_emission is None:
+            self._t0_emission = np.float32(0.0)
+        else:
+            self._t0_emission = np.float32(t0_emission)
+
+        # Tempo de atraso para recepcao dos elementos. Se for um valor escalar, e assumido para todos os elementos.
+        # Se for um array, deve ter um valor para cada elemento.
+        if t0_reception is None:
+            self._t0_reception = np.float32(0.0)
+        else:
+            self._t0_reception = np.float32(t0_reception)
+
+        # Parametros eletricos gerais do transdutor
+        self._freq = freq
+        self._bw = bw
+        self._gain = gain
+        self._pulse_type = pulse_type
+
+    def get_freq(self, mode='common'):
+        """
+        Função que retorna a frequência do transdutor.
+
+        param mode: str
+            Este parâmetro define o modo de obtenção da frequência. Este parâmetro não faz sentido em um transdutor
+            pontual, mas existe para ser compatível com os demais transdutores.
+            "common" significa que será utilizado o parâmetro geral, utilizado por todos os elementos ativos.
+            Este é o padrão.
+
+        :return: numpy.float32
+            Retorna o valor da frequência do transdutor.
+        """
+        return self._freq
+
+    def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
+        """
+        Função que retorna a coordenada do ponto ativo do transdutor no grid de simulação,
+        no formato vetorizado.
+
+        Returns
+        -------
+            : list
+                Lista com 1 ponto ativo (fonte) do transdutor como índices de pontos na ROI.
+                É a coordenada cartesiana (como índice) de um ponto na ROI.
+
+        """
+        if type(dir) is str:
+            if (dir.lower() == "e" and not self.emmiters[0]) or (dir.lower() == "r" and not self.receivers[0]):
+                return list(), list()
+        else:
+            raise ValueError("'dir' must be a string")
+
+        # Calcula a coordenada do primeiro ponto
+        x_coord = np.float32(self.coord_center[0])
+        y_coord = np.float32(0.0 if simul_type.lower() == "2d" else self.coord_center[1])
+        z_coord = np.float32(self.coord_center[2])
+
+        # Pega os indices na ROI da coordenada do primeiro ponto
+        point_coord = np.array([x_coord, y_coord, z_coord], np.float32)
+        point_0 = sim_roi.get_nearest_grid_idx(point_coord)
+
+        # Monta listas de pontos e indices
+        list_out = [ [point_0[0], point_0[1], point_0[2]] ]
+        idx_src = [ 0 ]
+
+        return list_out, idx_src
+
+    def get_source_term(self, samples=1000, dt=1.0, out='r'):
+        """
+        Função que retorna o sinais do termo de fonte do transdutor. Além de retornar um
+        *array* com o sinal do termo de fonte de cada elemento ativo do transdutor, esta função
+        também retorna uma lista com o índice do termo de fonte para cada ponto da ROI que é
+        um ponto emissor.
+        :param out:
+        :param samples: int
+            Número de amostras de tempo na simulação.
+        :param dt: float
+            Valor do passo de tempo na simulação.
+
+        :return: :numpy.array
+        Array contém dimensões as N amostras de tempo.
+        """
+        t = np.arange(samples, dtype=np.float32) * dt
+        source_term = np.zeros(samples, dtype=np.float32)
+        if self.emmiters[0]:
+            dt = t[1] - t[0]
+            gp, _, egp = gausspulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
+            eps = np.finfo(np.float32).eps
+            if out == 'e':
+                egp[np.abs(egp) < eps] = 0.0
+                source_term = np.float32(egp)
+            else:
+                gp[np.abs(gp) < eps] = 0.0
+                source_term = np.float32(gp)
+
+        return source_term * self._gain
+
+    def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
+        """
+        Função que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
+        :param simul_type:
+        :param sim_roi:
+
+        :return: list
+        Lista com o índice do elemento receptor de cada ponto receptor na ROI.
+        """
+        return [ 0 ] if self.receivers[0] else list()
+
+    def get_delay_rx(self):
+        """
+        Função que retorna o valor do atraso na recepção.
+
+        :return: float
+        Tempo de atraso de recepção, em microssegundos.
+        """
+        return [self._t0_reception] if self.receivers[0] else list()
+
+    def set_t0(self, t0_emission=None):
+        """
+        Função que modifica o valor do atraso na emissão.
+
+        :return: None
+        """
+        if t0_emission is None:
+            self._t0_emission = np.float32(0.0)
+        elif type(t0_emission) is np.float32 or type(t0_emission) is float:
+            self._t0_emission = t0_emission
+        else:
+            raise ValueError("t0_emission must be either a float [numpy.float32].")
+
+    def get_receiver_points_count(self):
+        """
+        Função que retorna a quantidade de pontos receptores.
+
+        :return: float
+        Quantidade de pontos receptores.
+        """
+        return 1 if self.receivers[0] else 0
