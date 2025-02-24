@@ -1,0 +1,91 @@
+{
+  "roi" :
+    {
+      "coord_ref" : [[0.0, 0.0, 0.0]],
+      "height" : 300.0,
+      "h_len" : 600,
+      "width" : 300.0,
+      "w_len" : 600,
+      "depth" : 0.0,
+      "d_len" : 1,
+      "len_pml_xmin" : 10,
+      "len_pml_xmax" : 10,
+      "len_pml_ymin" : 10,
+      "len_pml_ymax" : 10,
+      "len_pml_zmin" : 10,
+      "len_pml_zmax" : 10
+    },
+  "probes":
+  [
+    {
+      "point": {
+        "id": "probe_emmiter",
+        "emmiter": "True",
+        "receiver": "False",
+        "freq": 35.0,
+        "bw": 1.0,
+        "gain": 1.0e11,
+        "pulse_type": "gaussian",
+        "coord_center": [
+          150.0,
+          0.0,
+          150.0
+        ],
+        "t0_emission": 0.08
+      }
+    },
+    {
+      "point": {
+        "id": "probe_receiver",
+        "emmiter": "False",
+        "receiver": "True",
+        "coord_center": [
+          230.10,
+          0.0,
+          230.10
+        ]
+      }
+    }
+  ],
+  "simul_params":
+  {
+    "time_steps": 11000,
+    "dt": 2.2e-5,
+    "ord": 2,
+    "rcoef": 0.001,
+    "it_display": 10,
+    "npower": 2.0,
+    "k_max_pml": 1.0
+  },
+  "simul_configs":
+  {
+    "n_iter_gpu": 1,
+    "n_iter_cpu": 1,
+    "do_sim_gpu": 0,
+    "do_sim_cpu": 1,
+    "viscoelastic_attn": 1,
+    "do_comp_fig_cpu_gpu": 1,
+    "use_refletors": 0,
+    "show_anim": 1,
+    "show_xy": 0,
+    "show_xz": 1,
+    "show_yz": 0,
+    "show_debug": 1,
+    "plot_results": 1,
+    "plot_sensors": 1,
+    "plot_bscan": 0,
+    "show_results": 1,
+    "save_results": 0,
+    "save_bscan": 0,
+    "save_sources": 0,
+    "gpu_type": "high-perf",
+    "sim_interactive": 1,
+    "source_env": 0
+  },
+  "specimen_params":
+  {
+    "cp": 2000.0,
+    "cs": 1154.7,
+    "rho": 2000.0
+  }
+}
