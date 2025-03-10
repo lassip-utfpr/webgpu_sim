@@ -457,10 +457,12 @@ def sim_cpu():
 # Funcao do simulador em WebGPU
 # ----------------------------------------
 def sim_webgpu(device):
+
     global simul_probes, coefs
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
+    global r_xx, r_yy, r_xy, tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s, alpha_p, alpha_s
     global memory_dvx_dx, memory_dvx_dy
     global memory_dvy_dx, memory_dvy_dy
     global memory_dsigmaxx_dx, memory_dsigmayy_dy
@@ -468,6 +470,7 @@ def sim_webgpu(device):
     global value_dvx_dx, value_dvy_dy
     global value_dsigmaxx_dx, value_dsigmaxy_dy
     global value_dsigmaxy_dx, value_dsigmayy_dy
+    global sisvx, sisvy
     global ix_src, iy_src, ix_rec, iy_rec
     global simul_roi, rho_grid_vx, cp_grid_vx, cs_grid_vx
     global windows_gpu
@@ -525,10 +528,10 @@ def sim_webgpu(device):
                           dtype=np.int32)
     params_f32 = np.array([dx, dy, dt], dtype=flt32)
 
-    alpha_attenuation = np.array([alpha_p, alpha_s], dtype=flt32)
+    alpha_attenuation = np.concatenate((alpha_p, alpha_s), axis=None, dtype=flt32)
 
     tau_attenuation = np.array([tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s], dtype=flt32)
-    print(tau_attenuation[0, 1])
+
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
     with open('shader_2D_viscoelastic.wgsl') as shader_file:
         cshader_string = shader_file.read()
@@ -584,9 +587,41 @@ def sim_webgpu(device):
                                                                             wgpu.BufferUsage.COPY_SRC)
 
     # Parametros de absorcao
-    # b_r_dot = device.create_buffer_with_data(data=r_dot, usage=wgpu.BufferUsage.STORAGE |
-    #                                                            wgpu.BufferUsage.COPY_DST |
-    #                                                            wgpu.BufferUsage.COPY_SRC)
+    b_r_xx = device.create_buffer_with_data(data=r_xx, usage=wgpu.BufferUsage.STORAGE |
+                                                                wgpu.BufferUsage.COPY_DST |
+                                                                wgpu.BufferUsage.COPY_SRC)
+
+    b_r_yy = device.create_buffer_with_data(data=r_yy, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_r_xy = device.create_buffer_with_data(data=r_xy, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_r_xx_old = device.create_buffer_with_data(data=r_xx_old, usage=wgpu.BufferUsage.STORAGE |
+                                                                wgpu.BufferUsage.COPY_DST |
+                                                                wgpu.BufferUsage.COPY_SRC)
+
+    b_r_yy_old = device.create_buffer_with_data(data=r_yy_old, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_r_xy_old = device.create_buffer_with_data(data=r_xy_old, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_sum_r_xx = device.create_buffer_with_data(data=sum_r_xx, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_sum_r_yy = device.create_buffer_with_data(data=sum_r_yy, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
+
+    b_sum_r_xy = device.create_buffer_with_data(data=sum_r_xy, usage=wgpu.BufferUsage.STORAGE |
+                                                             wgpu.BufferUsage.COPY_DST |
+                                                             wgpu.BufferUsage.COPY_SRC)
 
     b_alpha_attenuation = device.create_buffer_with_data(data=alpha_attenuation, usage=wgpu.BufferUsage.STORAGE |
                                                                                        wgpu.BufferUsage.COPY_SRC)
@@ -712,7 +747,47 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         }
+         },
+        {"binding": 24,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 25,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 26,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 27,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 28,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 29,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 30,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
+        {"binding": 31,
+         "visibility": wgpu.ShaderStage.COMPUTE,
+         "buffer": {
+             "type": wgpu.BufferBindingType.storage}
+         },
     ]
     bl_params += [
         {"binding": ii,
@@ -833,10 +908,10 @@ def sim_webgpu(device):
             "binding": 20,
             "resource": {"buffer": b_cs_map, "offset": 0, "size": b_cs_map.size},
         },
-        # {
-        #     "binding": 21,
-        #     "resource": {"buffer": b_r_dot, "offset": 0, "size": b_r_dot.size},
-        # },
+        {
+            "binding": 21,
+            "resource": {"buffer": b_r_xx, "offset": 0, "size": b_r_xx.size},
+        },
         {
             "binding": 22,
             "resource": {"buffer": b_alpha_attenuation, "offset": 0, "size": b_alpha_attenuation.size},
@@ -844,6 +919,38 @@ def sim_webgpu(device):
         {
             "binding": 23,
             "resource": {"buffer": b_tau_attenuation, "offset": 0, "size": b_tau_attenuation.size},
+        },
+        {
+            "binding": 24,
+            "resource": {"buffer": b_r_yy, "offset": 0, "size": b_r_yy.size},
+        },
+        {
+            "binding": 25,
+            "resource": {"buffer": b_r_xy, "offset": 0, "size": b_r_xy.size},
+        },
+        {
+            "binding": 26,
+            "resource": {"buffer": b_r_xx_old, "offset": 0, "size": b_r_xx_old.size},
+        },
+        {
+            "binding": 27,
+            "resource": {"buffer": b_r_yy_old, "offset": 0, "size": b_r_yy_old.size},
+        },
+        {
+            "binding": 28,
+            "resource": {"buffer": b_r_xy_old, "offset": 0, "size": b_r_xy_old.size},
+        },
+        {
+            "binding": 29,
+            "resource": {"buffer": b_sum_r_xx, "offset": 0, "size": b_sum_r_xx.size},
+        },
+        {
+            "binding": 30,
+            "resource": {"buffer": b_sum_r_yy, "offset": 0, "size": b_sum_r_yy.size},
+        },
+        {
+            "binding": 31,
+            "resource": {"buffer": b_sum_r_xy, "offset": 0, "size": b_sum_r_xy.size},
         },
     ]
     b_sim_arrays = [
@@ -1327,6 +1434,14 @@ r_xx = np.zeros((nx, ny, N_SLS), dtype=flt32)
 r_yy = np.zeros((nx, ny, N_SLS), dtype=flt32)
 r_xy = np.zeros((nx, ny, N_SLS), dtype=flt32)
 
+r_xx_old = np.zeros((nx, ny, N_SLS), dtype=flt32)
+r_yy_old = np.zeros((nx, ny, N_SLS), dtype=flt32)
+r_xy_old = np.zeros((nx, ny, N_SLS), dtype=flt32)
+
+sum_r_xx = np.zeros_like(sigmaxx, dtype=flt32)
+sum_r_yy = np.zeros_like(sigmayy, dtype=flt32)
+sum_r_xy = np.zeros_like(sigmaxy, dtype=flt32)
+
 # Calculo da faixa de atenuacao em frequencia: f_max/f_min=12 and (log(f_min)+log(f_max))/2 = log(f0)
 f_min_attenuation = np.exp(np.log(f0_attenuation) - np.log(12.0) / 2.0)
 f_max_attenuation = 12.0 * f_min_attenuation
@@ -1334,8 +1449,8 @@ f_max_attenuation = 12.0 * f_min_attenuation
 tau_epsilon_p, tau_sigma_p = compute_attenuation_coeffs(is_kappa=True)
 tau_epsilon_s, tau_sigma_s = compute_attenuation_coeffs(is_kappa=False)
 
-alpha_p = sum(tau_epsilon_p / tau_sigma_p) / N_SLS
-alpha_s = sum(tau_epsilon_s / tau_sigma_s) / N_SLS
+alpha_p = tau_epsilon_p / tau_sigma_p
+alpha_s = tau_epsilon_s / tau_sigma_s
 
 # Total de arrays
 N_ARRAYS = 5 + 2 * 4

@@ -8,6 +8,12 @@ fn ij(i: i32, j: i32, i_max: i32, j_max: i32) -> i32 {
     return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max);
 }
 
+// function to convert 3D [i,j,k] index into 1D [] index
+fn ijk(i: i32, j: i32, k: i32, i_max: i32, j_max: i32, k_max: i32) -> i32 {
+    let index = k + j * k_max + i * k_max * j_max;
+
+    return select(-1, index, i >= 0 && i < i_max && j >= 0 && j < j_max && k >= 0 && k < k_max);
+}
 // ++++++++++++++++++++++++++++++
 // ++++ Group 0 - parameters ++++
 // ++++++++++++++++++++++++++++++
@@ -292,23 +298,24 @@ fn get_cs(x: i32, y: i32) -> f32 {
     return select(0.0, cs_map[index], index != -1);
 }
 
-@group(0) @binding(21) //r_dot
-var<storage,read_write> r_dot: array<f32>;
+@group(0) @binding(21) //r_xx
+var<storage,read_write> r_xx: array<f32>;
 
-fn get_r_dot(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+fn get_r_xx(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
 
-    return select(0.0, r_dot[index], index != -1);
+    return select(0.0, r_xx[index], index != -1);
 }
 
-fn set_r_dot(x: i32, y: i32, val : f32) {
-    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+// function to set a vx array value
+fn set_r_xx(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
 
     if(index != -1) {
-        r_dot[index] = val;
+        r_xx[index] = val;
     }
 }
-@group(0) @binding(22) //alpha_p e alpha_s
+@group(0) @binding(22) //alpha_p e alpha_s nesse caso é um vetor dependente dos ZB, no teste atual são 3 alpha_p e 3 s
 var<storage,read> alpha_att: array<f32>;
 
 @group(0) @binding(23) //tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2 / o x indica qual tau e o y indica qual corpo zener
@@ -320,6 +327,148 @@ fn get_tau(x: i32, y: i32) -> f32 {
     return select(0.0, tau_att[index], index != -1);
 }
 
+@group(0) @binding(24) //r_yy
+var<storage,read_write> r_yy: array<f32>;
+
+fn get_r_yy(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_yy[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_yy(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_yy[index] = val;
+    }
+}
+
+@group(0) @binding(25) //r_xy
+var<storage,read_write> r_xy: array<f32>;
+
+fn get_r_xy(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xy[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xy(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xy[index] = val;
+    }
+}
+
+@group(0) @binding(26) //r_xx_old
+var<storage,read_write> r_xx_old: array<f32>;
+
+fn get_r_xx_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xx_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xx_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xx_old[index] = val;
+    }
+}
+
+@group(0) @binding(27) //r_yy_old
+var<storage,read_write> r_yy_old: array<f32>;
+
+fn get_r_yy_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_yy_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_yy_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_yy_old[index] = val;
+    }
+}
+
+@group(0) @binding(28) //r_xy_old
+var<storage,read_write> r_xy_old: array<f32>;
+
+fn get_r_xy_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xy_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xy_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xy_old[index] = val;
+    }
+}
+
+@group(0) @binding(29) //sum_r_xx
+var<storage,read_write> sum_r_xx: array<f32>;
+
+fn get_sum_r_xx(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, sum_r_xx[index], index != -1);
+}
+
+// function to set a sigmaxx array value
+fn set_sum_r_xx(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        sum_r_xx[index] = val;
+    }
+}
+
+@group(0) @binding(30) //sum_r_yy
+var<storage,read_write> sum_r_yy: array<f32>;
+
+fn get_sum_r_yy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    return select(0.0, sum_r_yy[index], index != -1);
+}
+
+// function to set a sigmaxx array value
+fn set_sum_r_yy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
+
+    if(index != -1) {
+        sum_r_yy[index] = val;
+    }
+}
+
+@group(0) @binding(31) //sum_r_xy
+var<storage,read_write> sum_r_xy: array<f32>;
+
+fn get_sum_r_xy(x: i32, y: i32) -> f32 {
+    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+
+    return select(0.0, sum_r_xy[index], index != -1);
+}
+
+fn set_sum_r_xy(x: i32, y: i32, val : f32) {
+    let index: i32 = ij(x, y, 3, sim_int_par.n_sls);
+
+    if(index != -1) {
+        sum_r_xy[index] = val;
+    }
+}
 // +++++++++++++++++++++++++++++++++++++
 // ++++ Group 1 - simulation arrays ++++
 // +++++++++++++++++++++++++++++++++++++
@@ -827,6 +976,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let lambda: f32 = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x_l * cs_h_x_l);
         let mu: f32 = rho_h_x * (cs_h_x_m * cs_h_x_m);
         let lambdaplus2mu: f32 = lambda + 2.0 * mu;
+        let lambdaplusmu: f32 = lambda + mu;
         var sigmaxx: f32 = 0.0;
         var sigmayy: f32 = 0.0;
 
@@ -834,23 +984,65 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             let inv_tau_sigma_p_0: f32 = 1.0/get_tau(1,0);
             let inv_tau_sigma_p_1: f32 = 1.0/get_tau(1,1);
             let inv_tau_sigma_p_2: f32 = 1.0/get_tau(1,2);
+            let inv_tau_sigma_s_0: f32 = 1.0/get_tau(3,0);
+            let inv_tau_sigma_s_1: f32 = 1.0/get_tau(3,1);
+            let inv_tau_sigma_s_2: f32 = 1.0/get_tau(3,2);
+            let sum_alpha_p: f32 = alpha_att[0] + alpha_att[1] + alpha_att[2];
+            let sum_alpha_s: f32 = alpha_att[3] + alpha_att[4] + alpha_att[5];
 
-            let r_dot_xx_0: f32 = (-inv_tau_sigma_p_0) * (get_r_dot(0,0) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
-            let r_dot_xx_1: f32 = (-inv_tau_sigma_p_1) * (get_r_dot(0,1) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
-            let r_dot_xx_2: f32 = (-inv_tau_sigma_p_2) * (get_r_dot(0,2) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvy_dy);
-            set_r_dot(0,0,r_dot_xx_0);
-            set_r_dot(0,1,r_dot_xx_1);
-            set_r_dot(0,2,r_dot_xx_2);
+            let deltat_phi_p_0: f32 = dt * (1.0 - alpha_att[0]) / get_tau(1,0) / sum_alpha_p; //Futuramente será otimizado para variar ZB, mas antes quero fazer funcionar
+            let deltat_phi_p_1: f32 = dt * (1.0 - alpha_att[1]) / get_tau(1,1) / sum_alpha_p;
+            let deltat_phi_p_2: f32 = dt * (1.0 - alpha_att[2]) / get_tau(1,2) / sum_alpha_p;
+            let deltat_phi_s_0: f32 = dt * (1.0 - alpha_att[3]) / get_tau(3,0) / sum_alpha_s;
+            let deltat_phi_s_1: f32 = dt * (1.0 - alpha_att[4]) / get_tau(3,1) / sum_alpha_s;
+            let deltat_phi_s_2: f32 = dt * (1.0 - alpha_att[5]) / get_tau(3,2) / sum_alpha_s;
 
-            let r_dot_yy_0: f32 = (-inv_tau_sigma_p_0) * (get_r_dot(1,0) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
-            let r_dot_yy_1: f32 = (-inv_tau_sigma_p_1) * (get_r_dot(1,1) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
-            let r_dot_yy_2: f32 = (-inv_tau_sigma_p_2) * (get_r_dot(1,2) + (lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - 2.0 * mu * alpha_att[1] * vdvx_dx);
-            set_r_dot(1,0,r_dot_yy_0);
-            set_r_dot(1,1,r_dot_yy_1);
-            set_r_dot(1,2,r_dot_yy_2);
+            let half_deltat_overtau_sigma_p_0: f32 = 0.5 * dt * inv_tau_sigma_p_0;
+            let half_deltat_overtau_sigma_p_1: f32 = 0.5 * dt * inv_tau_sigma_p_1;
+            let half_deltat_overtau_sigma_p_2: f32 = 0.5 * dt * inv_tau_sigma_p_2;
+            let half_deltat_overtau_sigma_s_0: f32 = 0.5 * dt * inv_tau_sigma_s_0;
+            let half_deltat_overtau_sigma_s_1: f32 = 0.5 * dt * inv_tau_sigma_s_1;
+            let half_deltat_overtau_sigma_s_2: f32 = 0.5 * dt * inv_tau_sigma_s_2;
 
-            sigmaxx = get_sigmaxx(x, y) + ((lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - (2.0 * mu * alpha_att[1] * vdvy_dy) + r_dot_xx_0 + r_dot_xx_1 + r_dot_xx_2)*dt;
-            sigmayy = get_sigmayy(x, y) + ((lambdaplus2mu * alpha_att[0] * (vdvx_dx + vdvy_dy)) - (2.0 * mu * alpha_att[1] * vdvx_dx) + r_dot_yy_0 + r_dot_yy_1 + r_dot_yy_2)*dt;
+            let mult_factor_tau_sigma_p_0: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_p_0);
+            let mult_factor_tau_sigma_p_1: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_p_1);
+            let mult_factor_tau_sigma_p_2: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_p_2);
+            let mult_factor_tau_sigma_s_0: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_0);
+            let mult_factor_tau_sigma_s_1: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_1);
+            let mult_factor_tau_sigma_s_2: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_2);
+
+            set_r_xx_old(x,y,0,get_r_xx(x,y,0));
+            set_r_xx_old(x,y,1,get_r_xx(x,y,1));
+            set_r_xx_old(x,y,2,get_r_xx(x,y,2));
+            set_r_yy_old(x,y,0,get_r_yy(x,y,0));
+            set_r_yy_old(x,y,1,get_r_yy(x,y,1));
+            set_r_yy_old(x,y,2,get_r_yy(x,y,2));
+            var sum_r_xx_: f32 = 0.0;
+            var sum_r_yy_: f32 = 0.0;
+
+            var r_xx_0: f32 = get_r_xx_old(x,y,0) + ((vdvx_dx + vdvy_dy) * deltat_phi_p_0 - get_r_xx_old(x,y,0) * half_deltat_overtau_sigma_p_0 * mult_factor_tau_sigma_p_0);
+            var r_xx_1: f32 = get_r_xx_old(x,y,1) + ((vdvx_dx + vdvy_dy) * deltat_phi_p_1 - get_r_xx_old(x,y,1) * half_deltat_overtau_sigma_p_1 * mult_factor_tau_sigma_p_1);
+            var r_xx_2: f32 = get_r_xx_old(x,y,2) + ((vdvx_dx + vdvy_dy) * deltat_phi_p_2 - get_r_xx_old(x,y,2) * half_deltat_overtau_sigma_p_2 * mult_factor_tau_sigma_p_2);
+            set_r_xx(x,y,0,r_xx_0);
+            set_r_xx(x,y,1,r_xx_1);
+            set_r_xx(x,y,2,r_xx_2);
+
+            var r_yy_0: f32 = get_r_yy_old(x,y,0) + (0.5 * (vdvx_dx - vdvy_dy) * deltat_phi_s_0 - get_r_yy_old(x,y,0) * half_deltat_overtau_sigma_s_0 * mult_factor_tau_sigma_s_0);
+            var r_yy_1: f32 = get_r_yy_old(x,y,1) + (0.5 * (vdvx_dx - vdvy_dy) * deltat_phi_s_1 - get_r_yy_old(x,y,1) * half_deltat_overtau_sigma_s_1 * mult_factor_tau_sigma_s_1);
+            var r_yy_2: f32 = get_r_yy_old(x,y,2) + (0.5 * (vdvx_dx - vdvy_dy) * deltat_phi_s_2 - get_r_yy_old(x,y,2) * half_deltat_overtau_sigma_s_2 * mult_factor_tau_sigma_s_2);
+            set_r_yy(x,y,0,r_yy_0);
+            set_r_yy(x,y,1,r_yy_1);
+            set_r_yy(x,y,2,r_yy_2);
+
+            sum_r_xx_ = get_r_xx_old(x,y,0) + get_r_xx_old(x,y,1) + get_r_xx_old(x,y,2) + get_r_xx(x,y,0) + get_r_xx(x,y,1) + get_r_xx(x,y,2);
+            sum_r_yy_ = get_r_yy_old(x,y,0) + get_r_yy_old(x,y,1) + get_r_yy_old(x,y,2) + get_r_yy(x,y,0) + get_r_yy(x,y,1) + get_r_yy(x,y,2);
+            set_sum_r_xx(x,y,sum_r_xx_);
+            set_sum_r_yy(x,y,sum_r_yy_);
+
+
+
+            sigmaxx = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda * vdvy_dy + 0.5 * lambdaplusmu * get_sum_r_xx(x,y) + mu * get_sum_r_yy(x,y)) * dt;
+            sigmayy = get_sigmayy(x, y) + (lambda * vdvx_dx + lambdaplus2mu * vdvy_dy + 0.5 * lambdaplusmu * get_sum_r_xx(x,y) - mu * get_sum_r_xx(x,y)) * dt;
         }
         else {
             sigmaxx = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
@@ -892,15 +1084,36 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             let inv_tau_sigma_s_0: f32 = 1.0/get_tau(3,0);
             let inv_tau_sigma_s_1: f32 = 1.0/get_tau(3,1);
             let inv_tau_sigma_s_2: f32 = 1.0/get_tau(3,2);
+            let sum_alpha_s: f32 = alpha_att[3] + alpha_att[4] + alpha_att[5];
 
-            let r_dot_xy_0: f32 = (-inv_tau_sigma_s_0) * (get_r_dot(2,0) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
-            let r_dot_xy_1: f32 = (-inv_tau_sigma_s_1) * (get_r_dot(2,1) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
-            let r_dot_xy_2: f32 = (-inv_tau_sigma_s_2) * (get_r_dot(2,2) + (mu * alpha_att[1] * (vdvy_dx + vdvx_dy)));
-            set_r_dot(2,0,r_dot_xy_0);
-            set_r_dot(2,1,r_dot_xy_1);
-            set_r_dot(2,2,r_dot_xy_2);
+            let deltat_phi_s_0: f32 = dt * (1.0 - alpha_att[3]) / get_tau(3,0) / sum_alpha_s;
+            let deltat_phi_s_1: f32 = dt * (1.0 - alpha_att[4]) / get_tau(3,1) / sum_alpha_s;
+            let deltat_phi_s_2: f32 = dt * (1.0 - alpha_att[5]) / get_tau(3,2) / sum_alpha_s;
 
-            sigmaxy = get_sigmaxy(x, y) + ((mu * alpha_att[1] * (vdvx_dy + vdvy_dx)) + r_dot_xy_0 + r_dot_xy_1 + r_dot_xy_2)*dt;
+            let half_deltat_overtau_sigma_s_0: f32 = 0.5 * dt * inv_tau_sigma_s_0;
+            let half_deltat_overtau_sigma_s_1: f32 = 0.5 * dt * inv_tau_sigma_s_1;
+            let half_deltat_overtau_sigma_s_2: f32 = 0.5 * dt * inv_tau_sigma_s_2;
+
+            let mult_factor_tau_sigma_s_0: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_0);
+            let mult_factor_tau_sigma_s_1: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_1);
+            let mult_factor_tau_sigma_s_2: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s_2);
+
+            set_r_xy_old(x,y,0,get_r_xy(x,y,0));
+            set_r_xy_old(x,y,1,get_r_xy(x,y,1));
+            set_r_xy_old(x,y,2,get_r_xy(x,y,2));
+            var sum_r_xy_: f32 = 0.0;
+
+            var r_xy_0: f32 = get_r_xy_old(x,y,0) + (vdvy_dx + vdvx_dy) * deltat_phi_s_0 - get_r_xy_old(x,y,0) * half_deltat_overtau_sigma_s_0 * mult_factor_tau_sigma_s_0;
+            var r_xy_1: f32 = get_r_xy_old(x,y,1) + (vdvy_dx + vdvx_dy) * deltat_phi_s_1 - get_r_xy_old(x,y,1) * half_deltat_overtau_sigma_s_1 * mult_factor_tau_sigma_s_1;
+            var r_xy_2: f32 = get_r_xy_old(x,y,2) + (vdvy_dx + vdvx_dy) * deltat_phi_s_2 - get_r_xy_old(x,y,2) * half_deltat_overtau_sigma_s_2 * mult_factor_tau_sigma_s_2;
+            set_r_xy(x,y,0,r_xy_0);
+            set_r_xy(x,y,1,r_xy_1);
+            set_r_xy(x,y,2,r_xy_2);
+
+            sum_r_xy_ = get_r_xy_old(x,y,0) + get_r_xy_old(x,y,1) + get_r_xy_old(x,y,2) + get_r_xy(x,y,0) + get_r_xy(x,y,1) + get_r_xy(x,y,2);
+            set_sum_r_xy(x,y,sum_r_xy_);
+
+            sigmaxy = get_sigmaxy(x, y) + (mu * (vdvy_dx + vdvx_dy) + 0.5 * get_sum_r_xy(x,y)) * dt;
         }
         else {
             sigmaxy = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
