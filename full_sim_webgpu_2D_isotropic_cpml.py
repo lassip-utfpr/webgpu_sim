@@ -957,7 +957,7 @@ def sim_webgpu(device):
 PI = flt32(np.pi)
 DEGREES_TO_RADIANS = flt32(PI / 180.0)
 ZERO = flt32(0.0)
-STABILITY_THRESHOLD = flt32(1.0e25)  # Limite para considerar que a simulacao esta instavel
+STABILITY_THRESHOLD = flt32(1.0e38)  # Limite para considerar que a simulacao esta instavel
 
 # Definicao das constantes para a o calculo das derivadas, seguindo Lui 2009 (10.1111/j.1365-246X.2009.04305.x)
 coefs_Lui = [
@@ -970,10 +970,11 @@ coefs_Lui = [
 ]
 
 # ----------------------------------------------------------
+# ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config2D.json')
 args = parser.parse_args()
 
 # -----------------------
