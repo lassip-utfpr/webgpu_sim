@@ -1179,7 +1179,7 @@ def compute_attenuation_coeffs(is_kappa):  # n, q_kappa, f0, f_min,f_max):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='teste_giovanni.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # -----------------------
