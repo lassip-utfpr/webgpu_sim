@@ -315,8 +315,8 @@ fn set_r_xx(x: i32, y: i32, z: i32, val: f32) {
         r_xx[index] = val;
     }
 }
-@group(0) @binding(22) //alpha_p e alpha_s nesse caso é um vetor dependente dos ZB, no teste atual são 3 alpha_p e 3 s
-var<storage,read> alpha_att: array<f32>;
+@group(0) @binding(22) //somatorio alpha_p e alpha_s
+var<storage,read> sum_alpha: array<f32>;
 
 @group(0) @binding(23) //tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2 / o x indica qual tau e o y indica qual corpo zener
 var<storage,read> tau_att: array<f32>;
@@ -931,15 +931,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         if(visco_attn) {
 
-            var sum_alpha_p:f32 = 0.0;
-            var sum_alpha_s:f32 = 0.0;
             var sum_r_xx: f32 = 0.0;
             var sum_r_yy: f32 = 0.0;
-
-            for(var _n: i32 = 0; _n < sim_int_par.n_sls; _n++) { //Evito dois for calculando esses somatórios na cpu?
-                sum_alpha_s += get_tau(2,_n) / get_tau(3,_n);
-                sum_alpha_p += get_tau(0,_n) / get_tau(1,_n);
-            }
 
             for(var _l: i32 = 0; _l < sim_int_par.n_sls; _l++) {
 
@@ -949,8 +942,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
                 var alpha_p:f32 = get_tau(0,_l)/get_tau(1,_l);
                 var alpha_s:f32 = get_tau(2,_l)/get_tau(3,_l);
 
-                var deltat_phi_p: f32 = dt * (1.0 - alpha_p) * inv_tau_sigma_p / sum_alpha_p;
-                var deltat_phi_s: f32 = dt * (1.0 - alpha_s) * inv_tau_sigma_s / sum_alpha_s;
+                var deltat_phi_p: f32 = dt * (1.0 - alpha_p) * inv_tau_sigma_p / sum_alpha[0];
+                var deltat_phi_s: f32 = dt * (1.0 - alpha_s) * inv_tau_sigma_s / sum_alpha[1];
 
                 var half_deltat_overtau_sigma_p: f32 = 0.5 * dt * inv_tau_sigma_p;
                 var half_deltat_overtau_sigma_s: f32 = 0.5 * dt * inv_tau_sigma_s;
@@ -1014,16 +1007,12 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
         if(visco_attn) {
 
-            var sum_alpha_s:f32 = 0.0;
             var sum_r_xy: f32 = 0.0;
 
-            for(var _n: i32 = 0; _n < sim_int_par.n_sls; _n++) {
-                sum_alpha_s += get_tau(2,_n) / get_tau(3,_n);
-            }
             for(var _l: i32 = 0; _l < sim_int_par.n_sls; _l++) {
                 var inv_tau_sigma_s: f32 = 1.0/get_tau(3,_l);
                 var alpha_s:f32 =  get_tau(2,_l) / get_tau(3,_l);
-                var deltat_phi_s: f32 = dt * (1.0 - alpha_s) * inv_tau_sigma_s / sum_alpha_s;
+                var deltat_phi_s: f32 = dt * (1.0 - alpha_s) * inv_tau_sigma_s / sum_alpha[1];
 
                 var half_deltat_overtau_sigma_s: f32 = 0.5 * dt * inv_tau_sigma_s;
                 var mult_factor_tau_sigma_s: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s);

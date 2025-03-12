@@ -462,7 +462,7 @@ def sim_webgpu(device):
     global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
     global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
     global vx, vy, sigmaxx, sigmayy, sigmaxy
-    global r_xx, r_yy, r_xy, tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s, alpha_p, alpha_s
+    global r_xx, r_yy, r_xy, tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s, sum_alpha_p, sum_alpha_s
     global r_xx_old, r_yy_old, r_xy_old
     global memory_dvx_dx, memory_dvx_dy
     global memory_dvy_dx, memory_dvy_dy
@@ -529,7 +529,7 @@ def sim_webgpu(device):
                           dtype=np.int32)
     params_f32 = np.array([dx, dy, dt], dtype=flt32)
 
-    alpha_attenuation = np.array([alpha_p, alpha_s], dtype=flt32)
+    alpha_sum = np.array([sum_alpha_p, sum_alpha_s], dtype=flt32)
 
     tau_attenuation = np.array([tau_epsilon_p, tau_sigma_p, tau_epsilon_s, tau_sigma_s], dtype=flt32)
 
@@ -612,7 +612,7 @@ def sim_webgpu(device):
                                                              wgpu.BufferUsage.COPY_DST |
                                                              wgpu.BufferUsage.COPY_SRC)
 
-    b_alpha_attenuation = device.create_buffer_with_data(data=alpha_attenuation, usage=wgpu.BufferUsage.STORAGE |
+    b_alpha_sum = device.create_buffer_with_data(data=alpha_sum, usage=wgpu.BufferUsage.STORAGE |
                                                                                        wgpu.BufferUsage.COPY_SRC)
 
     b_tau_attenuation = device.create_buffer_with_data(data=tau_attenuation, usage=wgpu.BufferUsage.STORAGE |
@@ -888,7 +888,7 @@ def sim_webgpu(device):
         },
         {
             "binding": 22,
-            "resource": {"buffer": b_alpha_attenuation, "offset": 0, "size": b_alpha_attenuation.size},
+            "resource": {"buffer": b_alpha_sum, "offset": 0, "size": b_alpha_sum.size},
         },
         {
             "binding": 23,
@@ -1179,7 +1179,7 @@ def compute_attenuation_coeffs(is_kappa):  # n, q_kappa, f0, f_min,f_max):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='teste_giovanni.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # -----------------------
@@ -1409,6 +1409,9 @@ tau_epsilon_s, tau_sigma_s = compute_attenuation_coeffs(is_kappa=False)
 
 alpha_p = tau_epsilon_p / tau_sigma_p
 alpha_s = tau_epsilon_s / tau_sigma_s
+sum_alpha_p = sum(alpha_p)
+sum_alpha_s = sum(alpha_s)
+
 
 # Total de arrays
 N_ARRAYS = 5 + 2 * 4
