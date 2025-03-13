@@ -954,8 +954,8 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
                 var r_xx_old: f32 = get_r_xx(x,y,_l);
                 var r_yy_old: f32 = get_r_yy(x,y,_l);
 
-                var r_xx: f32 = r_xx_old + (((vdvx_dx + vdvy_dy) * deltat_phi_p) - (r_xx_old * half_deltat_overtau_sigma_p * mult_factor_tau_sigma_p));
-                var r_yy: f32 = r_yy_old + ((0.5 * (vdvx_dx - vdvy_dy) * deltat_phi_s) - (r_yy_old * half_deltat_overtau_sigma_s * mult_factor_tau_sigma_s));
+                var r_xx: f32 = ((r_xx_old + (vdvx_dx + vdvy_dy) * deltat_phi_p - r_xx_old * half_deltat_overtau_sigma_p) * mult_factor_tau_sigma_p);
+                var r_yy: f32 = ((r_yy_old + 0.5 * (vdvx_dx - vdvy_dy) * deltat_phi_s - r_yy_old * half_deltat_overtau_sigma_s) * mult_factor_tau_sigma_s);
 
                 sum_r_xx += r_xx_old + r_xx;
                 sum_r_yy += r_yy_old + r_yy;
@@ -1018,7 +1018,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
                 var mult_factor_tau_sigma_s: f32 = 1.0 / (1.0 + half_deltat_overtau_sigma_s);
 
                 var r_xy_old: f32 = get_r_xy(x,y,_l);
-                var r_xy: f32 = r_xy_old + (vdvy_dx + vdvx_dy) * deltat_phi_s - r_xy_old * half_deltat_overtau_sigma_s * mult_factor_tau_sigma_s;
+                var r_xy: f32 = ((r_xy_old + (vdvy_dx + vdvx_dy) * deltat_phi_s - r_xy_old * half_deltat_overtau_sigma_s) * mult_factor_tau_sigma_s);
 
                 sum_r_xy += r_xy_old + r_xy;
 
