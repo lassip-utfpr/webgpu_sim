@@ -322,7 +322,7 @@ var<storage,read> sum_alpha: array<f32>;
 var<storage,read> tau_att: array<f32>;
 
 fn get_tau(x: i32, y: i32) -> f32 {
-    let index: i32 = ij(x, y, 2, sim_int_par.n_sls);
+    let index: i32 = ij(x, y, 4, sim_int_par.n_sls);
 
     return select(0.0, tau_att[index], index != -1);
 }
