@@ -1,0 +1,24 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Isotropic 2D - bloquinho_cfg",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "full_sim_webgpu_2D_isotropic_cpml.py",
+            "console": "integratedTerminal",
+            "args": "--config=bloquinho_cfg.json"
+        },
+        {
+            "name": "Isotropic 2D choosen config file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "full_sim_webgpu_2D_isotropic_cpml.py",
+            "console": "integratedTerminal",
+            "args": "--config=${command:pickArgs}"
+        }
+    ]
+}

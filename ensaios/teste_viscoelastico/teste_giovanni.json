@@ -61,8 +61,8 @@
   {
     "n_iter_gpu": 1,
     "n_iter_cpu": 1,
-    "do_sim_gpu": 0,
-    "do_sim_cpu": 1,
+    "do_sim_gpu": 1,
+    "do_sim_cpu": 0,
     "viscoelastic_attn": 1,
     "do_comp_fig_cpu_gpu": 1,
     "use_refletors": 0,
