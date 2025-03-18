@@ -1,5 +1,6 @@
 import wgpu
-from PySide6 import QtWidgets
+from PyQt6 import QtCore
+from PyQt6.QtCore import QEventLoop
 from wgpu.gui.qt import WgpuCanvas
 import pyqtgraph as pg
 
@@ -55,9 +56,9 @@ def sim_webgpu(device):
             st = _pr.get_source_term(samples=NSTEP, dt=dt)
             _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         if len(i_src) > 0:
-            source_term.append(st)
-            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += _pr.num_elem
+                source_term.append(st)
+                idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
+                idx_src_offset += _pr.num_elem
 
         i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
         if len(i_rec) > 0:
@@ -252,6 +253,15 @@ def sim_webgpu(device):
               | wgpu.TextureUsage.COPY_DST,
         format=wgpu.TextureFormat.rgba8unorm,
     )
+    storage_texture2 = device.create_texture(
+        size=(nx, ny),
+        usage=wgpu.TextureUsage.STORAGE_BINDING
+              | wgpu.TextureUsage.TEXTURE_BINDING
+              | wgpu.TextureUsage.RENDER_ATTACHMENT
+              | wgpu.TextureUsage.COPY_SRC
+              | wgpu.TextureUsage.COPY_DST,
+        format=wgpu.TextureFormat.rgba8unorm,
+    )
 
     canvas_texture = device.create_texture(
         size=(nx, ny),
@@ -333,6 +343,16 @@ def sim_webgpu(device):
             "format": "rgba8unorm",  # Formato da textura
             "view_dimension": "2d",  # Dimensão da textura
             },
+        },
+        {
+            "binding": 1,
+            "visibility": wgpu.ShaderStage.COMPUTE,  # Ou FRAGMENT, dependendo do uso
+            "storage_texture":
+                {
+                    "access": "write-only",  # write-only, read-only ou read-write
+                    "format": "rgba8unorm",  # Formato da textura
+                    "view_dimension": "2d",  # Dimensão da textura
+                },
         },
     ]
 
@@ -520,6 +540,10 @@ def sim_webgpu(device):
             "binding": 0,
             "resource": storage_texture.create_view(dimension="2d", )
         },
+        {
+            "binding": 1,
+            "resource": storage_texture2.create_view(dimension="2d", )
+        },
     ]
 
     # Coloca tudo junto
@@ -559,7 +583,70 @@ def sim_webgpu(device):
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
 
+    def plot_func(canvas, command_encoder, texture):
+        context = canvas.get_context()
+        render_texture_format = context.get_preferred_format(device.adapter)
+        context.configure(device=device, format="bgra8unorm-srgb")
+        current_texture_view = context.get_current_texture().create_view()
+        render_pass = command_encoder.begin_render_pass(
+            color_attachments=[
+                {
+                    "view": current_texture_view,
+                    "load_op": wgpu.LoadOp.clear,
+                    "store_op": wgpu.StoreOp.store,
+                }
+            ],
+        )
 
+        render_pass.set_vertex_buffer(0, vertex_buffer)
+
+        buffer_layout = {
+            "array_stride": 16,
+            "attributes": [
+                {"format": "float32x2", "offset": 0, "shader_location": 0},
+                {"format": "float32x2", "offset": 8, "shader_location": 1}
+            ],
+        }
+
+        shader = device.create_shader_module(code=render_shader)
+        device.queue.write_buffer(vertex_buffer, 0, vertex_data)
+        render_pipeline = device.create_render_pipeline(
+            layout="auto",
+            vertex={
+                "module": shader,
+                "entry_point": "vertexMain",
+                "buffers": [buffer_layout]
+            },
+            fragment={
+                "module": shader,
+                "entry_point": "fragmentMain",
+                "targets": [{
+                    "format": render_texture_format,
+                }]
+            },
+            primitive={
+                "topology": wgpu.PrimitiveTopology.triangle_strip
+            }
+        )
+
+        render_bind_group_layout = render_pipeline.get_bind_group_layout(0)
+
+        render_bind_group = device.create_bind_group(
+            layout=render_bind_group_layout,
+            entries=[{
+                "binding": 0,
+                "resource": sampler
+            },
+                {
+                    "binding": 1,
+                    "resource": texture.create_view()
+                }]
+        )
+
+        render_pass.set_pipeline(render_pipeline)
+        render_pass.set_bind_group(0, render_bind_group)
+        render_pass.draw(4)
+        render_pass.end()
 
 
     v_max = 100.0
@@ -568,11 +655,22 @@ def sim_webgpu(device):
     ix_max = simul_roi.get_ix_max()
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
+
+
     App = pg.QtWidgets.QApplication([])
     canvas = WgpuCanvas(size=(nx, ny), title="Plot VY usando WebGPU")
+    canvas2 = WgpuCanvas(size=(nx, ny), title="Plot VX usando WebGPU")
     device.queue.write_buffer(vertex_buffer, 0, vertex_data)
     # Laco de tempo para execucao da simulacao
     for it in range(1, NSTEP + 1):
+        if (it % IT_DISPLAY) == 0 or it == 5:
+            App.thread().start()
+            App.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+            ##App.thread().sleep(1)
+            print(f'Time step # {it}')
+
+
+
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -620,80 +718,29 @@ def sim_webgpu(device):
         # Termina o passo de execucao
         compute_pass.end()
 
-        context = canvas.get_context()
-        render_texture_format = context.get_preferred_format(device.adapter)
-        context.configure(device=device, format="bgra8unorm-srgb")
-        ##mudei
+        plot_func(canvas, command_encoder, storage_texture)
+        plot_func(canvas2, command_encoder, storage_texture2)
 
-        current_texture_view = context.get_current_texture().create_view()
-        render_pass = command_encoder.begin_render_pass(
-            color_attachments=[
-                {
-                    "view": current_texture_view,
-                    "load_op": wgpu.LoadOp.clear,
-                    "store_op": wgpu.StoreOp.store,
-                }
-            ],
-        )
-
-
-        render_pass.set_vertex_buffer(0, vertex_buffer)
-
-        buffer_layout = {
-            "array_stride": 16,
-            "attributes": [
-                {"format": "float32x2", "offset": 0, "shader_location": 0},
-                {"format": "float32x2", "offset": 8, "shader_location": 1}
-            ],
-        }
-
-        shader = device.create_shader_module(code=render_shader)
-
-        render_pipeline = device.create_render_pipeline(
-            layout="auto",
-            vertex={
-                "module": shader,
-                "entry_point": "vertexMain",
-                "buffers": [buffer_layout]
-            },
-            fragment={
-                "module": shader,
-                "entry_point": "fragmentMain",
-                "targets": [{
-                    "format": render_texture_format,
-                }]
-            },
-            primitive={
-                "topology": wgpu.PrimitiveTopology.triangle_strip
-            }
-        )
-
-        render_bind_group_layout = render_pipeline.get_bind_group_layout(0)
-
-        render_bind_group = device.create_bind_group(
-            layout=render_bind_group_layout,
-            entries=[{
-                "binding": 0,
-                "resource": sampler
-            },
-                {
-                    "binding": 1,
-                    "resource": storage_texture.create_view()
-                }]
-        )
-
-        render_pass.set_pipeline(render_pipeline)
-        render_pass.set_bind_group(0, render_bind_group)
-        render_pass.draw(4)
-        render_pass.end()
-        device.queue.submit([command_encoder.finish()])
 
         canvas.request_draw()  # comando para atualizar janela
-        if (it % 10) == 0:
-            App.processEvents()
+        canvas2.request_draw()
+
+        device.queue.submit([command_encoder.finish()])
+
     # Pega os resultados da simulacao
-    run()
-    return vxgpu, vygpu, sens_vx, sens_vy, device.adapter.info["device"]
+
+    vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
+    vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxx_gpu = np.asarray(device.queue.read_buffer(b_sigmaxx, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigyy_gpu = np.asarray(device.queue.read_buffer(b_sigmayy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sigxy_gpu = np.asarray(device.queue.read_buffer(b_sigmaxy, buffer_offset=0).cast("f")).reshape((nx, ny))
+    sens_vx = np.array(device.queue.read_buffer(b_sens_x).cast("f")).reshape((NSTEP, NREC))
+    sens_vy = np.array(device.queue.read_buffer(b_sens_y).cast("f")).reshape((NSTEP, NREC))
+    sens_sigxx = np.array(device.queue.read_buffer(b_sens_sigxx).cast("f")).reshape((NSTEP, NREC))
+    sens_sigyy = np.array(device.queue.read_buffer(b_sens_sigyy).cast("f")).reshape((NSTEP, NREC))
+    sens_sigxy = np.array(device.queue.read_buffer(b_sens_sigxy).cast("f")).reshape((NSTEP, NREC))
+    return (vxgpu, vygpu, sigxx_gpu, sigyy_gpu, sigxy_gpu, sens_vx, sens_vy, sens_sigxx, sens_sigyy, sens_sigxy,
+            device.adapter.info["device"])
 
 
 # ----------------------------------------------------------

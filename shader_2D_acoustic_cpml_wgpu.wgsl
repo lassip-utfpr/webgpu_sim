@@ -908,18 +908,25 @@ fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
 
 @group(3) @binding(0) var out_tex : texture_storage_2d<rgba8unorm, write>;
+@group(3) @binding(1) var out_tex2 : texture_storage_2d<rgba8unorm, write>;
+
 //binds para render
 @compute
 @workgroup_size(wsx, wsy)
 fn write_texture_kernel(@builtin(global_invocation_id) index: vec3<u32>){
     var texel : vec4f;
+    var texel2 : vec4f;
     let x: i32 = i32(index.x);
     let y: i32 = i32(index.y);
     let ncor = (get_vy(x, y) - (-50.0)) /(300 - (-50.0));// converte o valor para o intervalo 0.1
+    let ncor2 = (get_vx(x, y) - (-50.0)) /(300 - (-50.0));// converte o valor para o intervalo 0.1
+
     // texel = vec4f(ncor * 0.64 , 0.36 * ncor, 0.0, 1.0);
     texel = vec4f(ncor , ncor , ncor , 1.0);
+    texel2 = vec4f(ncor2 , ncor2 , ncor2 , 1.0);
     //texel = vec4f( ncor, ncor, ncor, 1.0);
     textureStore(out_tex, vec2(x, y), texel);
+    textureStore(out_tex2, vec2(x, y), texel2);
 }
 
 // Kernel to increase time iteraction [it]
