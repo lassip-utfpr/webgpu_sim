@@ -1,4 +1,5 @@
 import wgpu
+from PyQt6.QtCore import QEventLoop, QTimer
 
 if wgpu.version_info[1] > 11:
     import wgpu.backends.wgpu_native  # Select backend 0.13.X
@@ -968,7 +969,7 @@ coefs_Lui = [
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+parser.add_argument('-c', '--config', help='Configuration file', default='config2D.json')
 args = parser.parse_args()
 
 # -----------------------
