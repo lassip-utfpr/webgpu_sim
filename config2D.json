@@ -97,7 +97,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 20000,
+    "time_steps": 2000,
     "dt": 2.0e-3,
     "ord": 4,
     "rcoef": 0.0001,
@@ -107,13 +107,13 @@
   },
   "simul_configs":
   {
-    "n_iter_gpu": 1,
+    "n_iter_gpu": 20,
     "n_iter_cpu": 1,
     "do_sim_gpu": 1,
     "do_sim_cpu": 0,
     "do_comp_fig_cpu_gpu": 1,
     "use_refletors": 0,
-    "show_anim": 1,
+    "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
@@ -122,7 +122,7 @@
     "plot_sensors": 0,
     "plot_bscan": 1,
     "show_results": 1,
-    "save_results": 0,
+    "save_results": 1,
     "save_bscan": 1,
     "save_sources": 0,
     "gpu_type": "high-perf",

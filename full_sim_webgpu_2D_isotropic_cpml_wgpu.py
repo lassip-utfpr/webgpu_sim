@@ -656,21 +656,7 @@ def sim_webgpu(device):
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
 
-
-    App = pg.QtWidgets.QApplication([])
-    canvas = WgpuCanvas(size=(nx, ny), title="Plot VY usando WebGPU")
-    canvas2 = WgpuCanvas(size=(nx, ny), title="Plot VX usando WebGPU")
-    device.queue.write_buffer(vertex_buffer, 0, vertex_data)
-    # Laco de tempo para execucao da simulacao
-    for it in range(1, NSTEP + 1):
-        if (it % IT_DISPLAY) == 0 or it == 5:
-            App.thread().start()
-            App.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
-            ##App.thread().sleep(1)
-            print(f'Time step # {it}')
-
-
-
+    def up_sim():
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -721,11 +707,25 @@ def sim_webgpu(device):
         plot_func(canvas, command_encoder, storage_texture)
         plot_func(canvas2, command_encoder, storage_texture2)
 
-
-        canvas.request_draw()  # comando para atualizar janela
-        canvas2.request_draw()
-
         device.queue.submit([command_encoder.finish()])
+
+    App = pg.QtWidgets.QApplication([])
+    canvas = WgpuCanvas(size=(nx, ny), title="Plot VY usando WebGPU")
+    canvas2 = WgpuCanvas(size=(nx, ny), title="Plot VX usando WebGPU")
+    device.queue.write_buffer(vertex_buffer, 0, vertex_data)
+
+    it=0
+    # Laco de tempo para execucao da simulacao
+    while(it != NSTEP +1):
+        up_sim()
+        if(it % IT_DISPLAY) == 0 or it == 5:
+            canvas.request_draw()  # comando para atualizar janela
+            canvas2.request_draw()
+            App.thread().start()
+            App.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+            App.thread().quit()
+            print(f'Time step # {it}')
+        it += 1
 
     # Pega os resultados da simulacao
 

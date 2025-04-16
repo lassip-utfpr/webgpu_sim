@@ -1,5 +1,9 @@
 import wgpu
-from PyQt6.QtCore import QEventLoop, QTimer
+import atexit
+import glfw
+from wgpu.backends.wgpu_native import GPUCanvasContext
+from wgpu.gui.glfw import get_glfw_present_methods, poll_glfw_briefly
+
 
 if wgpu.version_info[1] > 11:
     import wgpu.backends.wgpu_native  # Select backend 0.13.X
@@ -12,7 +16,6 @@ import argparse
 import ast
 import matplotlib.pyplot as plt
 from time import time
-
 from simul_utils import SimulationROI, SimulationProbeLinearArray
 import os.path
 import file_law
@@ -22,304 +25,32 @@ import file_law
 # ==========================================================
 flt32 = np.float32
 
+glfw.init()
+atexit.register(glfw.terminate)
 
-# -----------------------------------------------
-# Codigo para visualizacao da janela de simulacao
-# -----------------------------------------------
-# Image View class
+class MinimalGlfwCanvas:  # implements WgpuCanvasInterface
+    """Minimal canvas interface required by wgpu."""
 
-# --------------------------
-# Funcao do simulador em CPU
-# --------------------------
-def sim_cpu():
-    global simul_probes, coefs
-    global a_x, a_x_half, b_x, b_x_half, k_x, k_x_half
-    global a_y, a_y_half, b_y, b_y_half, k_y, k_y_half
-    global vx, vy, sigmaxx, sigmayy, sigmaxy
-    global memory_dvx_dx, memory_dvx_dy
-    global memory_dvy_dx, memory_dvy_dy
-    global memory_dsigmaxx_dx, memory_dsigmayy_dy
-    global memory_dsigmaxy_dx, memory_dsigmaxy_dy
-    global value_dvx_dx, value_dvy_dy
-    global value_dsigmaxx_dx, value_dsigmaxy_dy
-    global value_dsigmaxy_dx, value_dsigmayy_dy
-    global sisvx, sisvy
-    global ix_src, iy_src, ix_rec, iy_rec
-    global windows_cpu
-    global rho_grid_vx, cp_grid_vx, cs_grid_vx
+    def __init__(self, title):
+        # disable automatic API selection, we are not using opengl
+        glfw.window_hint(glfw.CLIENT_API, glfw.NO_API)
+        glfw.window_hint(glfw.RESIZABLE, glfw.FALSE)
 
-    _ord = coefs.shape[0]
-    idx_fd = np.array([[c + _ord,  # ini half grid
-                        -c + _ord - 1,  # ini full grid
-                        c - _ord + 1,  # fin half grid
-                        -c - _ord]  # fin full grid
-                       for c in range(_ord)], dtype=np.int32)
+        self.window = glfw.create_window(nx, ny, title, None, None)
+        self.context = GPUCanvasContext(self, get_glfw_present_methods(self.window))
+        glfw.set_input_mode(self.window, glfw.CURSOR, glfw.CURSOR_HIDDEN)
 
-    v_max = 100.0
-    v_min = - v_max
-    ix_min = simul_roi.get_ix_min()
-    ix_max = simul_roi.get_ix_max()
-    iy_min = simul_roi.get_iz_min()
-    iy_max = simul_roi.get_iz_max()
 
-    # Obtem fontes e receptores dos transdutores
-    source_term = list()
-    idx_src = list()
-    idx_rec = list()
-    idx_src_offset = 0
-    idx_rec_offset = 0
-    for _pr in simul_probes:
-        if source_env:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
-        else:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt)
-        if len(i_src) > 0:
-            source_term.append(st)
-            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += len(i_src)
+    def get_physical_size(self):
+        """get framebuffer size in integer pixels"""
+        psize = glfw.get_framebuffer_size(self.window)
+        return nx, ny
 
-        i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
-        if len(i_rec) > 0:
-            idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
-            idx_rec_offset += len(i_rec)
+    def get_context(self, kind="wgpu"):
+        return self.context
 
-    # Source terms
-    source_term = np.concatenate(source_term, axis=1)
-    if save_sources:
-        np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
-
-    idx_src = np.array(idx_src).astype(np.int32).flatten()
-    idx_rec = np.array(idx_rec).astype(np.int32).flatten()
-
-    # rho_grid_vy e a matriz de densidade calculada no ponto medio do grid de vx (grid de vy)
-    rho_grid_vy = rho_grid_vx
-    rho_grid_vy[:-1, :-1] = flt32(0.25) * (
-            rho_grid_vx[:-1, :-1] + rho_grid_vx[1:, :-1] + rho_grid_vx[1:, 1:] + rho_grid_vx[:-1, 1:])
-
-    # Inicializa os mapas dos parametros de Lame
-    mu_grid_vx = mu_grid_sig_norm = mu_grid_sig_trans = rho_grid_vx * cs_grid_vx * cs_grid_vx
-    lambda_grid_vx = lambda_grid_sig_norm = rho_grid_vx * (cp_grid_vx * cp_grid_vx - 2.0 * cs_grid_vx * cs_grid_vx)
-
-    mu_grid_sig_norm[:-1, :-1] = flt32(0.5) * (mu_grid_vx[1:, :-1] + mu_grid_vx[:-1, :-1])
-    lambda_grid_sig_norm[:-1, :-1] = flt32(0.5) * (lambda_grid_vx[1:, :-1] + lambda_grid_vx[:-1, :-1])
-    lambdaplus2mu_grid_sig_norm = lambda_grid_sig_norm + flt32(2.0) * mu_grid_sig_norm
-    mu_grid_sig_trans[:-1, :-1] = flt32(0.5) * (mu_grid_vx[:-1, 1:] + mu_grid_vx[:-1, :-1])
-
-    # Inicio do laco de tempo
-    for it in range(1, NSTEP + 1):
-        # Calculo da tensao [stress] - {sigma} (equivalente a pressao nos gases-liquidos)
-        # sigma_ii -> tensoes normais; sigma_ij -> tensoes cisalhantes
-        # Primeiro "laco" i: 1,NX-1; j: 2,NY -> [1:-2, 2:-1]
-        i_dix = idx_fd[0, 1]
-        i_dfx = idx_fd[0, 3]
-        i_diy = idx_fd[0, 0]
-        i_dfy = idx_fd[0, 2]
-        for c in range(_ord):
-            # Eixo "x"
-            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            # eixo "y"
-            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            if c:
-                value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (vx[i_iax:i_fax, i_diy:i_dfy] - vx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (vy[i_dix:i_dfx, i_iay:i_fay] - vy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-            else:
-                value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (vx[i_iax:i_fax, i_diy:i_dfy] - vx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (vy[i_dix:i_dfx, i_iay:i_fay] - vy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-
-        memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x_half[:-1, :] * memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] +
-                                                   a_x_half[:-1, :] * value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy])
-        memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y[:, 1:] * memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] +
-                                                   a_y[:, 1:] * value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dvx_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x_half[:-1, :] +
-                                                  memory_dvx_dx[i_dix:i_dfx, i_diy:i_dfy])
-        value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dvy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
-                                                  memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        # compute the stress using the Lame parameters
-        sigmaxx = sigmaxx + (lambdaplus2mu_grid_sig_norm * value_dvx_dx + lambda_grid_sig_norm * value_dvy_dy) * dt
-        sigmayy = sigmayy + (lambda_grid_sig_norm * value_dvx_dx + lambdaplus2mu_grid_sig_norm * value_dvy_dy) * dt
-
-        # Segundo "laco" i: 2,NX; j: 1,NY-1 -> [2:-1, 1:-2]
-        i_dix = idx_fd[0, 0]
-        i_dfx = idx_fd[0, 2]
-        i_diy = idx_fd[0, 1]
-        i_dfy = idx_fd[0, 3]
-        for c in range(_ord):
-            # Eixo "x"
-            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            # eixo "y"
-            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            if c:
-                value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (vy[i_iax:i_fax, i_diy:i_dfy] - vy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (vx[i_dix:i_dfx, i_iay:i_fay] - vx[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-            else:
-                value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (vy[i_iax:i_fax, i_diy:i_dfy] - vy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (vx[i_dix:i_dfx, i_iay:i_fay] - vx[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-
-        memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x[1:, :] * memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] +
-                                                   a_x[1:, :] * value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy])
-        memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y_half[:, :-1] * memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] +
-                                                   a_y_half[:, :-1] * value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dvy_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x[1:, :] +
-                                                  memory_dvy_dx[i_dix:i_dfx, i_diy:i_dfy])
-        value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dvx_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
-                                                  memory_dvx_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        # compute the stress using the Lame parameters
-        sigmaxy = sigmaxy + dt * mu_grid_sig_trans * (value_dvx_dy + value_dvy_dx)
-
-        # Calculo da velocidade
-        # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
-        i_dix = idx_fd[0, 0]
-        i_dfx = idx_fd[0, 2]
-        i_diy = idx_fd[0, 0]
-        i_dfy = idx_fd[0, 2]
-        for c in range(_ord):
-            # Eixo "x"
-            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            # eixo "y"
-            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            if c:
-                value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (sigmaxx[i_iax:i_fax, i_diy:i_dfy] - sigmaxx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] += \
-                    (coefs[c] * (sigmaxy[i_dix:i_dfx, i_iay:i_fay] - sigmaxy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-            else:
-                value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (sigmaxx[i_iax:i_fax, i_diy:i_dfy] - sigmaxx[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = \
-                    (coefs[c] * (sigmaxy[i_dix:i_dfx, i_iay:i_fay] - sigmaxy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-
-        memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = (b_x[1:, :] * memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] +
-                                                        a_x[1:, :] * value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy])
-        memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (b_y[:, 1:] * memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] +
-                                                        a_y[:, 1:] * value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x[1:, :] +
-                                                       memory_dsigmaxx_dx[i_dix:i_dfx, i_diy:i_dfy])
-        value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y[:, 1:] +
-                                                       memory_dsigmaxy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        vx = dt * (value_dsigmaxx_dx + value_dsigmaxy_dy) / rho_grid_vx + vx
-
-        # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
-        i_dix = idx_fd[0, 1]
-        i_dfx = idx_fd[0, 3]
-        i_diy = idx_fd[0, 1]
-        i_dfy = idx_fd[0, 3]
-        for c in range(_ord):
-            # Eixo "x"
-            i_iax = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fax = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_ibx = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fbx = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            # eixo "y"
-            i_iay = None if idx_fd[c, 0] == 0 else idx_fd[c, 0]
-            i_fay = None if idx_fd[c, 2] == 0 else idx_fd[c, 2]
-            i_iby = None if idx_fd[c, 1] == 0 else idx_fd[c, 1]
-            i_fby = None if idx_fd[c, 3] == 0 else idx_fd[c, 3]
-            if c:
-                value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] += (
-                        coefs[c] * (sigmaxy[i_iax:i_fax, i_diy:i_dfy] - sigmaxy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] += (
-                        coefs[c] * (sigmayy[i_dix:i_dfx, i_iay:i_fay] - sigmayy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-            else:
-                value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (
-                        coefs[c] * (sigmaxy[i_iax:i_fax, i_diy:i_dfy] - sigmaxy[i_ibx:i_fbx, i_diy:i_dfy]) * one_dx)
-                value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (
-                        coefs[c] * (sigmayy[i_dix:i_dfx, i_iay:i_fay] - sigmayy[i_dix:i_dfx, i_iby:i_fby]) * one_dy)
-
-        memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (
-                b_x_half[:-1, :] * memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] +
-                a_x_half[:-1, :] * value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy])
-        memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (
-                b_y_half[:, :-1] * memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] +
-                a_y_half[:, :-1] * value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy] / k_x_half[:-1, :] +
-                                                       memory_dsigmaxy_dx[i_dix:i_dfx, i_diy:i_dfy])
-        value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] = (value_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy] / k_y_half[:, :-1] +
-                                                       memory_dsigmayy_dy[i_dix:i_dfx, i_diy:i_dfy])
-
-        vy = dt * (value_dsigmaxy_dx + value_dsigmayy_dy) / rho_grid_vy + vy
-
-        # add the source (force vector located at a given grid point)
-        for _isrc in range(NSRC):
-            vy[ix_src[_isrc], iy_src[_isrc]] += source_term[it - 1, idx_src[_isrc]] * dt / rho
-
-        # implement Dirichlet boundary conditions on the six edges of the grid
-        # which is the right condition to implement in order for C-PML to remain stable at long times
-        # xmin
-        vx[:_ord, :] = ZERO
-        vy[:_ord, :] = ZERO
-
-        # xmax
-        vx[-_ord:, :] = ZERO
-        vy[-_ord:, :] = ZERO
-
-        # ymin
-        vx[:, :_ord] = ZERO
-        vy[:, :_ord] = ZERO
-
-        # ymax
-        vx[:, -_ord:] = ZERO
-        vy[:, -_ord:] = ZERO
-
-        # Store seismograms
-        for _i in range(idx_rec.shape[0]):
-            _irec = idx_rec[_i]
-            if it >= delay_recv[_irec]:
-                _x = ix_rec[_i]
-                _y = iy_rec[_i]
-                sisvx[it - 1, _irec] += vx[_x, _y]
-                sisvy[it - 1, _irec] += vy[_x, _y]
-
-        vsn2 = np.sqrt(np.max(vx[:, :] ** 2 + vy[:, :] ** 2))
-        if (it % IT_DISPLAY) == 0 or it == 5:
-            if show_debug:
-                print(f'Time step # {it} out of {NSTEP}')
-                print(f'Max Vx = {np.max(vx)}, Vy = {np.max(vy)}')
-                print(f'Min Vx = {np.min(vx)}, Vy = {np.min(vy)}')
-                print(f'Max norm velocity vector V (m/s) = {vsn2}')
-
-            if show_anim:
-                windows_cpu[0].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                windows_cpu[1].imv.setImage(vy[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                App.processEvents()
-
-        # Verifica a estabilidade da simulacao
-        if vsn2 > STABILITY_THRESHOLD:
-            print("Simulacao tornando-se instavel")
-            exit(2)
-
+    def updade(self):
+        glfw.swap_buffers(self.window)
 
 # ----------------------------------------
 # Funcao do simulador em WebGPU
@@ -338,7 +69,6 @@ def sim_webgpu(device):
     global value_dsigmaxy_dx, value_dsigmayy_dy
     global ix_src, iy_src, ix_rec, iy_rec
     global simul_roi, rho_grid_vx, cp_grid_vx, cs_grid_vx
-    global windows_gpu
 
     # Obtem fontes e receptores dos transdutores
     source_term = list()
@@ -354,9 +84,9 @@ def sim_webgpu(device):
             st = _pr.get_source_term(samples=NSTEP, dt=dt)
             _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         if len(i_src) > 0:
-            source_term.append(st)
-            idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += _pr.num_elem
+                source_term.append(st)
+                idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
+                idx_src_offset += _pr.num_elem
 
         i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
         if len(i_rec) > 0:
@@ -388,13 +118,17 @@ def sim_webgpu(device):
     params_f32 = np.array([dx, dy, dt], dtype=flt32)
 
     # Cria o shader para calculo contido no arquivo ``shader_2D_elast_cpml.wgsl''
-    with open('shader_2D_elast_cpml.wgsl') as shader_file:
+    with open('shader_2D_acoustic_cpml_wgpu_glfw.wgsl') as shader_file:
         cshader_string = shader_file.read()
         cshader_string = cshader_string.replace('wsx', f'{wsx}')
         cshader_string = cshader_string.replace('wsy', f'{wsy}')
         cshader_string = cshader_string.replace('idx_rec_offset', f'{idx_rec_offset}')
         cshader = device.create_shader_module(code=cshader_string)
 
+    shader = "render.wgsl"
+    f = open(os.getcwd() + "/shaders/" + shader, "r")
+    render_shader = f.read()
+    f.close()
     # Definicao dos buffers que terao informacoes compartilhadas entre CPU e GPU
     # ------- Buffers para o binding de parametros -------------
     # Buffer de parametros com valores em ponto flutuante
@@ -537,6 +271,45 @@ def sim_webgpu(device):
     b_offset_sensors = device.create_buffer_with_data(data=offset_sensors, usage=wgpu.BufferUsage.STORAGE |
                                                                                  wgpu.BufferUsage.COPY_SRC)
 
+    ##Buffers para escrever a textura
+    storage_texture = device.create_texture(
+        size=(nx, ny),
+        usage=wgpu.TextureUsage.STORAGE_BINDING
+              | wgpu.TextureUsage.TEXTURE_BINDING
+              | wgpu.TextureUsage.RENDER_ATTACHMENT
+              | wgpu.TextureUsage.COPY_SRC
+              | wgpu.TextureUsage.COPY_DST,
+        format=wgpu.TextureFormat.rgba8unorm,
+    )
+
+    canvas_texture = device.create_texture(
+        size=(nx, ny),
+        usage=wgpu.TextureUsage.STORAGE_BINDING
+              | wgpu.TextureUsage.TEXTURE_BINDING
+              | wgpu.TextureUsage.RENDER_ATTACHMENT
+              | wgpu.TextureUsage.COPY_SRC
+              | wgpu.TextureUsage.COPY_DST,
+        format=wgpu.TextureFormat.rgba8unorm,
+    )
+    ##Sampler para plotar a matriz
+    sampler = device.create_sampler(
+        mag_filter="linear",
+        min_filter="linear",
+    )
+
+    ## buffer de vertex
+    vertex_data = np.array([
+        -1.0, 1.0, 0.0, 0.0,  # First vertex
+        -1.0, -1.0, 0.0, 1.0,  # Second vertex
+        1.0, 1.0, 1.0, 0.0,  # Third vertex
+        1.0, -1.0, 1.0, 1.0  # Fourth vertex
+    ], dtype=np.float32)
+
+    vertex_buffer = device.create_buffer(
+        size=vertex_data.nbytes,
+        usage=wgpu.BufferUsage.VERTEX | wgpu.BufferUsage.COPY_DST
+    )
+
     # Esquema de amarracao dos parametros (binding layouts [bl])
     # Parametros
     bl_params = [
@@ -577,6 +350,19 @@ def sim_webgpu(device):
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
          } for ii in range(2, 5)
+    ]
+
+    bl_texture = [
+        {
+        "binding": 0,
+        "visibility": wgpu.ShaderStage.COMPUTE,  # Ou FRAGMENT, dependendo do uso
+        "storage_texture":
+            {
+            "access": "write-only",  # write-only, read-only ou read-write
+            "format": "rgba8unorm",  # Formato da textura
+            "view_dimension": "2d",  # Dimensão da textura
+            },
+        },
     ]
 
     # Configuracao das amarracoes (bindings)
@@ -758,15 +544,23 @@ def sim_webgpu(device):
             "resource": {"buffer": b_sens_sigxy, "offset": 0, "size": b_sens_sigxy.size},
         },
     ]
+    b_texture = [
+        {
+            "binding": 0,
+            "resource": storage_texture.create_view(dimension="2d", )
+        },
+    ]
 
     # Coloca tudo junto
     bgl_0 = device.create_bind_group_layout(entries=bl_params)
     bgl_1 = device.create_bind_group_layout(entries=bl_sim_arrays)
     bgl_2 = device.create_bind_group_layout(entries=bl_sensors)
-    pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2])
+    bgl_3 = device.create_bind_group_layout(entries=bl_texture)
+    pipeline_layout = device.create_pipeline_layout(bind_group_layouts=[bgl_0, bgl_1, bgl_2, bgl_3])
     bg_0 = device.create_bind_group(layout=bgl_0, entries=b_params)
     bg_1 = device.create_bind_group(layout=bgl_1, entries=b_sim_arrays)
     bg_2 = device.create_bind_group(layout=bgl_2, entries=b_sensors)
+    bg_3 = device.create_bind_group(layout=bgl_3, entries=b_texture)
 
     # Cria os pipelines de execucao
     compute_teste_kernel = device.create_compute_pipeline(layout=pipeline_layout,
@@ -787,9 +581,80 @@ def sim_webgpu(device):
     compute_store_sensors_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                                   compute={"module": cshader,
                                                                            "entry_point": "store_sensors_kernel"})
+    compute_write_texture_kernel = device.create_compute_pipeline(layout=pipeline_layout,
+                                                                  compute={"module": cshader,
+                                                                           "entry_point": "write_texture_kernel"})
     compute_incr_it_kernel = device.create_compute_pipeline(layout=pipeline_layout,
                                                             compute={"module": cshader,
                                                                      "entry_point": "incr_it_kernel"})
+
+
+
+    def plot_func(canvas, command_encoder):
+        context = canvas.get_context()
+        render_texture_format = context.get_preferred_format(device.adapter)
+        context.configure(device=device, format="bgra8unorm-srgb")
+        current_texture_view = context.get_current_texture().create_view()
+        render_pass = command_encoder.begin_render_pass(
+            color_attachments=[
+                {
+                    "view": current_texture_view,
+                    "load_op": wgpu.LoadOp.clear,
+                    "store_op": wgpu.StoreOp.store,
+                }
+            ],
+        )
+
+        render_pass.set_vertex_buffer(0, vertex_buffer)
+
+        buffer_layout = {
+            "array_stride": 16,
+            "attributes": [
+                {"format": "float32x2", "offset": 0, "shader_location": 0},
+                {"format": "float32x2", "offset": 8, "shader_location": 1}
+            ],
+        }
+
+        shader = device.create_shader_module(code=render_shader)
+        device.queue.write_buffer(vertex_buffer, 0, vertex_data)
+        render_pipeline = device.create_render_pipeline(
+            layout="auto",
+            vertex={
+                "module": shader,
+                "entry_point": "vertexMain",
+                "buffers": [buffer_layout]
+            },
+            fragment={
+                "module": shader,
+                "entry_point": "fragmentMain",
+                "targets": [{
+                    "format": render_texture_format,
+                }]
+            },
+            primitive={
+                "topology": wgpu.PrimitiveTopology.triangle_strip
+            }
+        )
+
+        render_bind_group_layout = render_pipeline.get_bind_group_layout(0)
+
+        render_bind_group = device.create_bind_group(
+            layout=render_bind_group_layout,
+            entries=[{
+                "binding": 0,
+                "resource": sampler
+            },
+                {
+                    "binding": 1,
+                    "resource": storage_texture.create_view()
+                }]
+        )
+
+        render_pass.set_pipeline(render_pipeline)
+        render_pass.set_bind_group(0, render_bind_group)
+        render_pass.draw(4)
+        render_pass.end()
+
 
     v_max = 100.0
     v_min = - v_max
@@ -798,8 +663,7 @@ def sim_webgpu(device):
     iy_min = simul_roi.get_iz_min()
     iy_max = simul_roi.get_iz_max()
 
-    # Laco de tempo para execucao da simulacao
-    for it in range(1, NSTEP + 1):
+    def up_sim():
         # Cria o codificador de comandos
         command_encoder = device.create_command_encoder()
 
@@ -810,6 +674,7 @@ def sim_webgpu(device):
         compute_pass.set_bind_group(0, bg_0, [], 0, 999999)  # last 2 elements not used
         compute_pass.set_bind_group(1, bg_1, [], 0, 999999)  # last 2 elements not used
         compute_pass.set_bind_group(2, bg_2, [], 0, 999999)  # last 2 elements not used
+        compute_pass.set_bind_group(3, bg_3, [], 0, 999999)  # last 2 elements not used
 
         # Ativa o pipeline de teste
         # compute_pass.set_pipeline(compute_teste_kernel)
@@ -835,6 +700,10 @@ def sim_webgpu(device):
         compute_pass.set_pipeline(compute_store_sensors_kernel)
         compute_pass.dispatch_workgroups(1)
 
+        # Ativa o pipeline de escrita da textura
+        compute_pass.set_pipeline(compute_write_texture_kernel)
+        compute_pass.dispatch_workgroups(nx // wsx, ny // wsy)
+
         # Ativa o pipeline de atualizacao da amostra de tempo
         compute_pass.set_pipeline(compute_incr_it_kernel)
         compute_pass.dispatch_workgroups(1)
@@ -842,10 +711,28 @@ def sim_webgpu(device):
         # Termina o passo de execucao
         compute_pass.end()
 
-        # Efetua a execucao dos comandos na GPU
+        plot_func(canvas, command_encoder)
+
         device.queue.submit([command_encoder.finish()])
 
-        #
+    canvas = MinimalGlfwCanvas("Plot VY usando WebGPU")
+
+
+    it = 0
+
+    while (it != NSTEP + 1):
+        up_sim()
+        if (it % IT_DISPLAY) == 0 or it == 5:
+            glfw.poll_events()
+            canvas.context.present()
+            canvas.updade()
+            print(f'Time step # {it}')
+        it += 1
+
+
+
+
+
     # Pega os resultados da simulacao
     vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
     vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
@@ -857,8 +744,11 @@ def sim_webgpu(device):
     sens_sigxx = np.array(device.queue.read_buffer(b_sens_sigxx).cast("f")).reshape((NSTEP, NREC))
     sens_sigyy = np.array(device.queue.read_buffer(b_sens_sigyy).cast("f")).reshape((NSTEP, NREC))
     sens_sigxy = np.array(device.queue.read_buffer(b_sens_sigxy).cast("f")).reshape((NSTEP, NREC))
+    glfw.destroy_window(canvas.window)
+    poll_glfw_briefly()
     return (vxgpu, vygpu, sigxx_gpu, sigyy_gpu, sigxy_gpu, sens_vx, sens_vy, sens_sigxx, sens_sigyy, sens_sigxy,
-            device.adapter.info["device"])
+                device.adapter.info["device"])
+
 
 
 # ----------------------------------------------------------
@@ -967,15 +857,8 @@ device_gpu = None
 if do_sim_gpu:
     # =====================
     # webgpu configurations
-    if gpu_type == "high-perf":
-        device_gpu = wgpu.utils.get_default_device()
-    else:
-        if wgpu.version_info[1] > 11:
-            adapter = wgpu.gpu.request_adapter(power_preference="low-power")  # 0.13.X
-        else:
-            adapter = wgpu.request_adapter(canvas=None, power_preference="low-power")  # 0.9.5
-
-        device_gpu = adapter.request_device()
+    adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
+    device_gpu = adapter.request_device_sync(required_limits=None)
 
     # Escolha dos valores de wsx, wsy e wsz (GPU)
     wsx = np.gcd(simul_roi.get_nx(), 16)
@@ -1180,8 +1063,6 @@ times_gpu = list()
 times_cpu = list()
 sensor_gpu_result = list()
 sensor_cpu_result = list()
-
-
 
 # WebGPU
 now = datetime.now()
@@ -1423,8 +1304,6 @@ if do_sim_cpu:
                 np.save(name + '_Vx_CPU', sisvx)
                 np.save(name + '_Vy_CPU', sisvy)
 
-if show_anim and App:
-    App.exit()
 
 times_gpu = np.array(times_gpu)
 times_cpu = np.array(times_cpu)
