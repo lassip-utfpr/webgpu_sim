@@ -13,6 +13,14 @@
             "args": "--config=bloquinho_cfg.json"
         },
         {
+            "name": "Isotropic 2D - Henrique",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "full_sim_webgpu_2D_isotropic_cpml.py",
+            "console": "integratedTerminal",
+            "args": "--config=bloquinho_sa_800x600_cfg.json"
+        },
+        {
             "name": "Isotropic 2D choosen config file",
             "type": "debugpy",
             "request": "launch",
