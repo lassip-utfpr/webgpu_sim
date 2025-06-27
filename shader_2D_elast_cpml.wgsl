@@ -936,7 +936,7 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let v_2_old: f32 = v_2;
 
     // Apply Dirichlet conditions
-    if(x <= id_x_i || x >= id_x_f || y <= id_y_i || y >= id_y_f) {
+    if(x < id_x_i || x > id_x_f || y < id_y_i || y > id_y_f) {
         set_vx(x, y, 0.0);
         set_vy(x, y, 0.0);
     }

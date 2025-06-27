@@ -128,9 +128,11 @@ def sim_cpu():
     idx_rec_offset = 0
     for _pr in simul_probes:
         if source_env:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
+            st = _pr.get_source_term(samples=NSTEP, dt=dt, out='e')
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         else:
-            st, i_src = _pr.get_source_term(samples=NSTEP, dt=dt)
+            st = _pr.get_source_term(samples=NSTEP, dt=dt)
+            _, i_src = _pr.get_points_roi(sim_roi=simul_roi, simul_type="2d")
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
@@ -142,7 +144,11 @@ def sim_cpu():
             idx_rec_offset += len(i_rec)
 
     # Source terms
-    source_term = np.concatenate(source_term, axis=1)
+    if len(source_term) > 1:
+        source_term = np.concatenate(source_term, axis=1)
+    else:
+        source_term = source_term[0]
+        
     if save_sources:
         np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
 
@@ -336,20 +342,20 @@ def sim_cpu():
         # implement Dirichlet boundary conditions on the six edges of the grid
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
-        vx[:_ord, :] = ZERO
-        vy[:_ord, :] = ZERO
+        vx[:_ord - 1, :] = ZERO
+        vy[:_ord - 1, :] = ZERO
 
         # xmax
-        vx[-_ord:, :] = ZERO
-        vy[-_ord:, :] = ZERO
+        vx[-_ord - 1:, :] = ZERO
+        vy[-_ord - 1:, :] = ZERO
 
         # ymin
-        vx[:, :_ord] = ZERO
-        vy[:, :_ord] = ZERO
+        vx[:, :_ord - 1] = ZERO
+        vy[:, :_ord - 1] = ZERO
 
         # ymax
-        vx[:, -_ord:] = ZERO
-        vy[:, -_ord:] = ZERO
+        vx[:, -_ord - 1:] = ZERO
+        vy[:, -_ord - 1:] = ZERO
 
         # Store seismograms
         for _i in range(idx_rec.shape[0]):
@@ -414,18 +420,18 @@ def sim_webgpu(device):
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += _pr.num_elem
+            idx_src_offset += len(i_src)
 
         i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
         if len(i_rec) > 0:
             idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
-            idx_rec_offset += _pr.num_elem
+            idx_rec_offset += len(i_rec)
 
     # Source terms
     if len(source_term) > 1:
         source_term = np.concatenate(source_term, axis=1)
     else:
-        source_term = source_term[0][:, np.newaxis]
+        source_term = source_term[0]
 
     if save_sources:
         np.save(f'results/sources_2D_elast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
@@ -1024,7 +1030,7 @@ simul_probes = list()
 probes_cfg = configs["probes"]
 for p in probes_cfg:
     if "linear" in p:
-        simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
+        simul_probes.append(SimulationProbeLinearArray(**p["linear"], dec=simul_roi.get_dec()))
     elif "point" in p:
         simul_probes.append(SimulationProbePoint(**p["point"]))
 print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
@@ -1461,8 +1467,10 @@ if do_sim_cpu:
         n_laws = emission_laws.shape[0] if emission_laws is not None else 1
         for law in range(n_laws):
             print(f'\tLaw {law} of {n_laws}')
-            for p in simul_probes:
-                p.set_t0(emission_laws[law])
+            
+            if emission_laws is not None:
+                for p in simul_probes:
+                    p.set_t0(emission_laws[law])
 
             t_cpu = time()
             sim_cpu()
@@ -1538,9 +1546,6 @@ if do_sim_cpu:
                 np.save(name + '_Vx_CPU', sisvx)
                 np.save(name + '_Vy_CPU', sisvy)
 
-if show_anim and App:
-    App.exit()
-
 times_gpu = np.array(times_gpu)
 times_cpu = np.array(times_cpu)
 if do_sim_gpu:
@@ -1593,4 +1598,7 @@ if save_results:
                 f.write(f'Tempo execucao: {times_cpu[0]:.3}s\n')
 
 if show_results:
-    plt.show()
+    plt.show(block=False)
+    
+if show_anim and App:
+    App.exec()
