@@ -115,21 +115,21 @@ class SimulationROI:
 
         # Passo dos pontos da ROI no sentido da altura.
         self.h_step = height / h_len
-        self.dec_h = int(abs(np.log10(self.h_step))) + 2
-        self.h_step = np.round(self.h_step, decimals=self.dec_h).astype(np.float32)
+        self._dec_h = int(abs(np.log10(self.h_step))) + 2
+        self.h_step = np.round(self.h_step, decimals=self._dec_h).astype(np.float32)
 
         # Passo dos pontos da ROI no sentido da largura.
         self.w_step = width / w_len
-        self.dec_w = int(abs(np.log10(self.w_step))) + 2
-        self.w_step = np.round(self.w_step, decimals=self.dec_w).astype(np.float32)
+        self._dec_w = int(abs(np.log10(self.w_step))) + 2
+        self.w_step = np.round(self.w_step, decimals=self._dec_w).astype(np.float32)
 
         # Passo dos pontos da ROI no sentido da profundidade.
         if depth > 0.0 and d_len > 1:
             self.d_step = depth / d_len
         else:
             self.d_step = self.w_step
-        self.dec_d = int(abs(np.log10(self.d_step))) + 2
-        self.d_step = np.round(self.d_step, decimals=self.dec_d).astype(np.float32)
+        self._dec_d = int(abs(np.log10(self.d_step))) + 2
+        self.d_step = np.round(self.d_step, decimals=self._dec_d).astype(np.float32)
 
         # Se for definido um mapa de densidades, pega o numero de pontos do mapa
         w_len_map = 0
@@ -167,15 +167,15 @@ class SimulationROI:
 
         # Vetor com as coordenadas da ROI no sentido da largura (dimensão 1 - eixo 'x') da simulacao.
         self.w_points = np.linspace(coord_ref[0, 0], coord_ref[0, 0] + self.width, num=int(self._w_len),
-                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_w)
+                                    endpoint=False, dtype=np.float32).round(decimals=self._dec_w)
 
         # Vetor com as coordenadas da ROI no sentido da profundidade (dimensão 2 - eixo 'y') da simulacao.
         self.d_points = np.linspace(coord_ref[0, 1], coord_ref[0, 1] + self.depth, num=int(self._d_len),
-                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_d)
+                                    endpoint=False, dtype=np.float32).round(decimals=self._dec_d)
 
         # Vetor com as coordenadas da ROI no sentido da altura (dimensao 3 - eixo 'z') da simulacao.
         self.h_points = np.linspace(coord_ref[0, 2], coord_ref[0, 2] + self.height, num=int(self._h_len),
-                                    endpoint=False, dtype=np.float32).round(decimals=self.dec_h)
+                                    endpoint=False, dtype=np.float32).round(decimals=self._dec_h)
 
         # Tamanho das camadas de PML, 0 se não for para calcular
         self._pml_xmin_len = len_pml_xmin
@@ -232,6 +232,9 @@ class SimulationROI:
 
     def get_pml_thickness_z(self):
         return (self._pml_zmin_len + self._pml_zmax_len) * self.h_step
+    
+    def get_dec(self):
+        return self._dec_w, self._dec_d, self._dec_h
 
     def is_point_in_roi(self, point):
         """
@@ -261,12 +264,12 @@ class SimulationROI:
         if not self.is_point_in_roi(point):
             raise IndexError(f"[{point[0]}, {point[1]}, {point[2]}] out of bounds")
 
-        ix = np.absolute(self.w_points - np.round(point[0] - self.w_step / 10.0 ** (self.dec_w - 1),
-                                                  decimals=self.dec_w)).argmin() + self._pml_xmin_len + self._pad
-        iy = np.absolute(self.d_points - np.round(point[1] - self.d_step / 10.0 ** (self.dec_d - 1),
-                                                  decimals=self.dec_d)).argmin() + self._pml_ymin_len + self._pad
-        iz = np.absolute(self.h_points - np.round(point[2] - self.h_step / 10.0 ** (self.dec_h - 1),
-                                                  decimals=self.dec_h)).argmin() + self._pml_zmin_len + self._pad
+        ix = np.absolute(self.w_points - np.round(point[0] - self.w_step / 10.0 ** (self._dec_w - 1),
+                                                  decimals=self._dec_w)).argmin() + self._pml_xmin_len + self._pad
+        iy = np.absolute(self.d_points - np.round(point[1] - self.d_step / 10.0 ** (self._dec_d - 1),
+                                                  decimals=self._dec_d)).argmin() + self._pml_ymin_len + self._pad
+        iz = np.absolute(self.h_points - np.round(point[2] - self.h_step / 10.0 ** (self._dec_h - 1),
+                                                  decimals=self._dec_h)).argmin() + self._pml_zmin_len + self._pad
         return [ix, iy, iz]
 
     def calc_pml_array(self, axis='x', grid='f', dt=1.0, d0=1.0, npower=2.0, alpha_max=30.0, k_max=1.0):
@@ -275,45 +278,50 @@ class SimulationROI:
         """
         # Origem da PML (posicao das bordas direita e esquerda menos a espessura, em unidades de distancia)
         if axis == 'x' or axis == 'X':
-            delta = self.w_step
+            delta = np.float32(self.w_step)
             tam_pml = self._w_len + self._pml_xmin_len + self._pml_xmax_len
             orig_left = self._pml_xmin_len * delta
             orig_right = (self._pml_xmin_len + self._w_len - 1) * delta
             thickness_pml_left = self._pml_xmin_len * delta
             thickness_pml_right = self._pml_xmax_len * delta
+            dec = self._dec_w
         elif axis == 'y' or axis == 'Y':
-            delta = self.d_step
+            delta = np.float32(self.d_step)
             tam_pml = self._d_len + self._pml_ymin_len + self._pml_ymax_len
             orig_left = self._pml_ymin_len * delta
             orig_right = (self._pml_ymin_len + self._d_len - 1) * delta
             thickness_pml_left = self._pml_ymin_len * delta
             thickness_pml_right = self._pml_ymax_len * delta
+            dec = self._dec_d
         elif axis == 'z' or axis == 'Z':
-            delta = self.h_step
+            delta = np.float32(self.h_step)
             tam_pml = self._h_len + self._pml_zmin_len + self._pml_zmax_len
             orig_left = self._pml_zmin_len * delta
             orig_right = (self._pml_zmin_len + self._h_len - 1) * delta
             thickness_pml_left = self._pml_zmin_len * delta
             thickness_pml_right = self._pml_zmax_len * delta
+            dec = self._dec_h
         else:
             raise IndexError(f"'axis' = {axis} not supported")
 
         # Inicializacao para full ou half grid
-        val = delta * np.arange(tam_pml)
+        val = np.round(delta * np.arange(tam_pml), decimals=dec).astype(np.float32)
         if grid == 'f' or grid == 'F':
-            val_pml_left = orig_left - val
-            val_pml_right = val - orig_right
+            val_pml_left = np.round(orig_left - val, decimals=dec)
+            val_pml_right = np.round(val - orig_right, decimals=dec)
         elif grid == 'h' or grid == 'H':
-            val_pml_left = orig_left - (val + delta / 2.0)
-            val_pml_right = (val + delta / 2.0) - orig_right
+            val_pml_left = np.round(orig_left - (val + delta / 2.0), decimals=dec).astype(np.float32)
+            val_pml_right = np.round((val + delta / 2.0) - orig_right, decimals=dec).astype(np.float32)
         else:
             raise IndexError(f"'grid' = {grid} not supported")
 
         # Calculo dos coeficientes
-        pml_mask_left = np.where(val_pml_left < 0.0, False, True)
-        pml_mask_right = np.where(val_pml_right < 0.0, False, True)
+        pml_mask_left = np.where(val_pml_left < 0.0, False, True) if thickness_pml_left > 0.0 \
+            else np.zeros(val_pml_left.shape, dtype=bool)
+        pml_mask_right = np.where(val_pml_right < 0.0, False, True) if thickness_pml_right > 0.0 \
+            else np.zeros(val_pml_right.shape, dtype=bool)
         mask = np.logical_or(pml_mask_left, pml_mask_right)
-        pml = np.zeros(tam_pml)
+        pml = np.zeros(tam_pml, dtype=np.float32)
         if thickness_pml_left:
             pml[pml_mask_left] = val_pml_left[pml_mask_left] / thickness_pml_left
         if thickness_pml_right:
@@ -416,9 +424,10 @@ class ElementRect:
                 Quantidade de pontos ativos (fontes) do elemento transdutor.
 
         """
+        dec_w, dec_d, dec_h = sim_roi.get_dec()
         dim_p = min(self.elem_dim_p, sim_roi.depth)
-        num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w))
-        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d)) if dim_p != 0.0 else 1
+        num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=dec_w))
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=dec_d)) if dim_p != 0.0 else 1
         simul_type = simul_type.lower()
         num_coord = num_pt_a
         if simul_type == "3d":
@@ -445,9 +454,10 @@ class ElementRect:
         else:
             raise ValueError("'dir' must be a string")
 
+        dec_w, dec_d, dec_h = sim_roi.get_dec()
         dim_p = min(self.elem_dim_p, sim_roi.depth)
-        num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=sim_roi.dec_w) + 0.5)
-        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=sim_roi.dec_d) + 0.5) if dim_p != 0.0 else 1
+        num_pt_a = int(np.round(self.elem_dim_a / sim_roi.w_step, decimals=dec_w) + 0.5)
+        num_pt_p = int(np.round(dim_p / sim_roi.d_step, decimals=dec_d) + 0.5) if dim_p != 0.0 else 1
         num_coord = num_pt_a
         if simul_type.lower() == "3d":
             num_coord *= num_pt_p
@@ -527,7 +537,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def __init__(self, coord_center=np.zeros((1, 3)), num_elem=32, dim_a=0.5, dim_p=10.0, inter_elem=0.1,
                  freq=5., bw=0.5, gain=1.0, pulse_type="gaussian", id="",
-                 emmiters="all", receivers="all", t0_emission=None, t0_reception=None):
+                 emmiters="all", receivers="all", t0_emission=None, t0_reception=None, dec=(2, 2, 2)):
         # Chama o construtor da classe base.
         super().__init__(coord_center)
 
@@ -605,8 +615,8 @@ class SimulationProbeLinearArray(SimulationProbe):
         self.num_elem = num_elem
         offset_center = np.array([((num_elem - 1) * self.pitch + dim_a) / 2.0, 0.0, 0.0], dtype=np.float32)
         self.elem_list = [ElementRect(dim_a=dim_a, dim_p=dim_p,
-                                      coord_center=np.array([dim_a / 2.0 + i * self.pitch, 0.0, 0.0],
-                                                            dtype=np.float32) - offset_center,
+                                      coord_center=np.round(np.array([dim_a / 2.0 + i * self.pitch, 0.0, 0.0],
+                                                            dtype=np.float32) - offset_center, decimals=np.max(dec)),
                                       freq=freq, bw=bw, gain=gain, pulse_type=pulse_type,
                                       tx_en=self.emmiters[i],
                                       rx_en=self.receivers[i],
@@ -721,7 +731,8 @@ class SimulationProbeLinearArray(SimulationProbe):
         :return: :numpy.array
         Array contém dimensões de N amostras de tempo (linhas) por M elementos do transdutor (colunas).
         """
-        t = np.arange(samples, dtype=np.float32) * dt
+        dec = int(abs(np.log10(dt))) + 2
+        t = np.round(np.arange(samples, dtype=np.float32) * dt, decimals=dec)
         source_term = np.zeros((samples, self.num_elem), dtype=np.float32)
         for idx_st, e in enumerate(self.elem_list):
             if e.tx_en:
