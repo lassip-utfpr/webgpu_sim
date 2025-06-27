@@ -8,12 +8,12 @@
       "w_len" : 2000,
       "depth" : 0.0,
       "d_len" : 1,
-      "len_pml_xmin" : 0,
-      "len_pml_xmax" : 0,
-      "len_pml_ymin" : 10,
-      "len_pml_ymax" : 10,
-      "len_pml_zmin" : 1,
-      "len_pml_zmax" : 0
+      "len_pml_xmin" : 10,
+      "len_pml_xmax" : 10,
+      "len_pml_ymin" : 1,
+      "len_pml_ymax" : 1,
+      "len_pml_zmin" : 0,
+      "len_pml_zmax" : 10
     },
   "probes":
   [
@@ -26,15 +26,15 @@
         "inter_elem": 0.1,
         "freq": 5.0,
         "bw": 0.6,
-        "gain": 1e8,
+        "gain": 1e6,
         "pulse_type": "gaussian",
         "coord_center": [
           40.0,
           0.0,
-          0.0
+          0.1
         ],
         "emmiters": "all",
-        "t0_emission": 1.0,
+        "t0_emission": 1.5,
         "receivers": "all",
         "t0_reception": 0.0
       }
@@ -42,9 +42,9 @@
   ],
   "simul_params":
   {
-    "time_steps": 20000,
+    "time_steps": 13000,
     "dt": 2e-3,
-    "ord": 6,
+    "ord": 4,
     "rcoef": 0.0001,
     "it_display": 10,
     "npower": 2.0,
@@ -64,10 +64,10 @@
     "plot_results": 1,
     "plot_sensors": 0,
     "plot_bscan": 1,
-    "show_results": 0,
-    "save_results": 1,
+    "show_results": 1,
+    "save_results": 0,
     "save_bscan": 1,
-    "save_sources": 1,
+    "save_sources": 0,
     "gpu_type": "high-perf",
     "source_env": 0,
     "emission_laws": "./"
