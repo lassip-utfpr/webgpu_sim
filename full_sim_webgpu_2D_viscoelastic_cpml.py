@@ -151,8 +151,7 @@ def sim_cpu():
         source_term = source_term[0][:, np.newaxis]
 
     if save_sources:
-        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{
-            datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
+        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
 
     idx_src = np.array(idx_src).astype(np.int32).flatten()
     idx_rec = np.array(idx_rec).astype(np.int32).flatten()
@@ -506,8 +505,7 @@ def sim_webgpu(device):
         source_term = source_term[0][:, np.newaxis]
 
     if save_sources:
-        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{
-            datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
+        np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
 
     pos_sources = -np.ones((nx, ny), dtype=np.int32)
     pos_sources[ix_src, iy_src] = np.array(idx_src).astype(np.int32).flatten()

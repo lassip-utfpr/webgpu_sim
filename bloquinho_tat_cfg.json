@@ -155,7 +155,7 @@
     "show_results": 1,
     "save_results": 0,
     "save_bscan": 1,
-    "save_sources": 0,
+    "save_sources": 1,
     "gpu_type": "high-perf",
     "source_env": 0,
     "emission_laws": "./"
