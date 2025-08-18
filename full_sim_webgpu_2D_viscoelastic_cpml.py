@@ -148,7 +148,7 @@ def sim_cpu():
     if len(source_term) > 1:
         source_term = np.concatenate(source_term, axis=1)
     else:
-        source_term = source_term[0][:, np.newaxis]
+        source_term = source_term[0]
 
     if save_sources:
         np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_CPU', source_term)
@@ -409,20 +409,20 @@ def sim_cpu():
         # which is the right condition to implement in order for C-PML to remain stable at long times
         # xmin
         qwe = vy[300:321, 300:321]
-        vx[:_ord, :] = ZERO
-        vy[:_ord, :] = ZERO
+        vx[:_ord - 1, :] = ZERO
+        vy[:_ord - 1, :] = ZERO
 
         # xmax
-        vx[-_ord:, :] = ZERO
-        vy[-_ord:, :] = ZERO
+        vx[-_ord - 1:, :] = ZERO
+        vy[-_ord - 1:, :] = ZERO
 
         # ymin
-        vx[:, :_ord] = ZERO
-        vy[:, :_ord] = ZERO
+        vx[:, :_ord - 1] = ZERO
+        vy[:, :_ord - 1] = ZERO
 
         # ymax
-        vx[:, -_ord:] = ZERO
-        vy[:, -_ord:] = ZERO
+        vx[:, -_ord - 1:] = ZERO
+        vy[:, -_ord - 1:] = ZERO
 
         # Store seismograms
         for _i in range(idx_rec.shape[0]):
@@ -491,18 +491,18 @@ def sim_webgpu(device):
         if len(i_src) > 0:
             source_term.append(st)
             idx_src += [np.array(_s) + idx_src_offset for _s in i_src]
-            idx_src_offset += _pr.num_elem
+            idx_src_offset += len(i_src)
 
         i_rec = _pr.get_idx_rec(sim_roi=simul_roi, simul_type="2D")
         if len(i_rec) > 0:
             idx_rec += [np.array(_r) + idx_rec_offset for _r in i_rec]
-            idx_rec_offset += _pr.num_elem
+            idx_rec_offset += len(i_rec)
 
     # Source terms
     if len(source_term) > 1:
         source_term = np.concatenate(source_term, axis=1)
     else:
-        source_term = source_term[0][:, np.newaxis]
+        source_term = source_term[0]
 
     if save_sources:
         np.save(f'ensaios/teste_viscoelastico/results/sources_2D_viscoelast_CPML_{datetime.now().strftime("%Y%m%d-%H%M%S")}_GPU', source_term)
@@ -1227,7 +1227,7 @@ simul_probes = list()
 probes_cfg = configs["probes"]
 for p in probes_cfg:
     if "linear" in p:
-        simul_probes.append(SimulationProbeLinearArray(**p["linear"]))
+        simul_probes.append(SimulationProbeLinearArray(**p["linear"], dec=simul_roi.get_dec()))
     elif "point" in p:
         simul_probes.append(SimulationProbePoint(**p["point"]))
 print(f'Ordem da acuracia: {coefs.shape[0] * 2}')
