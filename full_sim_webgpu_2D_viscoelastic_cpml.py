@@ -720,53 +720,13 @@ def sim_webgpu(device):
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
          },
-        {"binding": 21,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 22,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 23,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.read_only_storage}
-         },
-        {"binding": 24,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 25,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 26,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 27,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
-        {"binding": 28,
-         "visibility": wgpu.ShaderStage.COMPUTE,
-         "buffer": {
-             "type": wgpu.BufferBindingType.storage}
-         },
     ]
     bl_params += [
         {"binding": ii,
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.read_only_storage}
-         } for ii in range(1, 21)
+         } for ii in range(1, 23)
     ]
 
     # Arrays da simulacao
@@ -775,7 +735,7 @@ def sim_webgpu(device):
          "visibility": wgpu.ShaderStage.COMPUTE,
          "buffer": {
              "type": wgpu.BufferBindingType.storage}
-         } for ii in range(0, 14)
+         } for ii in range(0, 20)
     ]
 
     # Sensores
@@ -882,35 +842,11 @@ def sim_webgpu(device):
         },
         {
             "binding": 21,
-            "resource": {"buffer": b_r_xx, "offset": 0, "size": b_r_xx.size},
-        },
-        {
-            "binding": 22,
             "resource": {"buffer": b_alpha_sum, "offset": 0, "size": b_alpha_sum.size},
         },
         {
-            "binding": 23,
+            "binding": 22,
             "resource": {"buffer": b_tau_attenuation, "offset": 0, "size": b_tau_attenuation.size},
-        },
-        {
-            "binding": 24,
-            "resource": {"buffer": b_r_yy, "offset": 0, "size": b_r_yy.size},
-        },
-        {
-            "binding": 25,
-            "resource": {"buffer": b_r_xy, "offset": 0, "size": b_r_xy.size},
-        },
-        {
-            "binding": 26,
-            "resource": {"buffer": b_r_xx_old, "offset": 0, "size": b_r_xx_old.size},
-        },
-        {
-            "binding": 27,
-            "resource": {"buffer": b_r_yy_old, "offset": 0, "size": b_r_yy_old.size},
-        },
-        {
-            "binding": 28,
-            "resource": {"buffer": b_r_xy_old, "offset": 0, "size": b_r_xy_old.size},
         },
     ]
     b_sim_arrays = [
@@ -969,6 +905,30 @@ def sim_webgpu(device):
         {
             "binding": 13,
             "resource": {"buffer": b_memory_dsigmaxy_dy, "offset": 0, "size": b_memory_dsigmaxy_dy.size},
+        },
+        {
+            "binding": 14,
+            "resource": {"buffer": b_r_xx, "offset": 0, "size": b_r_xx.size},
+        },
+        {
+            "binding": 15,
+            "resource": {"buffer": b_r_yy, "offset": 0, "size": b_r_yy.size},
+        },
+        {
+            "binding": 16,
+            "resource": {"buffer": b_r_xy, "offset": 0, "size": b_r_xy.size},
+        },
+        {
+            "binding": 17,
+            "resource": {"buffer": b_r_xx_old, "offset": 0, "size": b_r_xx_old.size},
+        },
+        {
+            "binding": 18,
+            "resource": {"buffer": b_r_yy_old, "offset": 0, "size": b_r_yy_old.size},
+        },
+        {
+            "binding": 19,
+            "resource": {"buffer": b_r_xy_old, "offset": 0, "size": b_r_xy_old.size},
         },
     ]
     b_sensors = [

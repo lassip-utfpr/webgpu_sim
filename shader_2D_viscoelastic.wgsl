@@ -299,122 +299,15 @@ fn get_cs(x: i32, y: i32) -> f32 {
 }
 
 @group(0) @binding(21) //r_xx
-var<storage,read_write> r_xx: array<f32>;
-
-fn get_r_xx(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_xx[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_xx(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_xx[index] = val;
-    }
-}
-@group(0) @binding(22) //somatorio alpha_p e alpha_s
 var<storage,read> sum_alpha: array<f32>;
 
-@group(0) @binding(23) //tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2 / o x indica qual tau e o y indica qual corpo zener
+@group(0) @binding(22) //somatorio alpha_p e alpha_s
 var<storage,read> tau_att: array<f32>;
 
 fn get_tau(x: i32, y: i32) -> f32 {
     let index: i32 = ij(x, y, 4, sim_int_par.n_sls);
 
     return select(0.0, tau_att[index], index != -1);
-}
-
-@group(0) @binding(24) //r_yy
-var<storage,read_write> r_yy: array<f32>;
-
-fn get_r_yy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_yy[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_yy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_yy[index] = val;
-    }
-}
-
-@group(0) @binding(25) //r_xy
-var<storage,read_write> r_xy: array<f32>;
-
-fn get_r_xy(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_xy[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_xy(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_xy[index] = val;
-    }
-}
-
-@group(0) @binding(26) //r_xx_old
-var<storage,read_write> r_xx_old: array<f32>;
-
-fn get_r_xx_old(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_xx_old[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_xx_old(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_xx_old[index] = val;
-    }
-}
-
-@group(0) @binding(27) //r_yy_old
-var<storage,read_write> r_yy_old: array<f32>;
-
-fn get_r_yy_old(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_yy_old[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_yy_old(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_yy_old[index] = val;
-    }
-}
-
-@group(0) @binding(28) //r_xy_old
-var<storage,read_write> r_xy_old: array<f32>;
-
-fn get_r_xy_old(x: i32, y: i32, z: i32) -> f32 {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    return select(0.0, r_xy_old[index], index != -1);
-}
-
-// function to set a vx array value
-fn set_r_xy_old(x: i32, y: i32, z: i32, val: f32) {
-    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
-
-    if(index != -1) {
-        r_xy_old[index] = val;
-    }
 }
 
 // +++++++++++++++++++++++++++++++++++++
@@ -698,6 +591,126 @@ fn set_mdsxy_dy(x: i32, y: i32, val : f32) {
 
     if(index != -1) {
         mdsxy_dy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(14) //tau_epsilon_nu1,tau_sigma_nu1,tau_epsilon_nu2, tau_sigma_nu2 / o x indica qual tau e o y indica qual corpo zener
+var<storage,read_write> r_xx: array<f32>;
+
+fn get_r_xx(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xx[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xx(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xx[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(15) //r_yy
+var<storage,read_write> r_yy: array<f32>;
+
+fn get_r_yy(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_yy[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_yy(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_yy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(16) //r_xy
+var<storage,read_write> r_xy: array<f32>;
+
+fn get_r_xy(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xy[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xy(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xy[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(17) //r_xx_old
+var<storage,read_write> r_xx_old: array<f32>;
+
+fn get_r_xx_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xx_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xx_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xx_old[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(18) //r_yy_old
+var<storage,read_write> r_yy_old: array<f32>;
+
+fn get_r_yy_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_yy_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_yy_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_yy_old[index] = val;
+    }
+}
+
+// ----------------------------------
+
+@group(1) @binding(19) //r_xy_old
+var<storage,read_write> r_xy_old: array<f32>;
+
+fn get_r_xy_old(x: i32, y: i32, z: i32) -> f32 {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    return select(0.0, r_xy_old[index], index != -1);
+}
+
+// function to set a vx array value
+fn set_r_xy_old(x: i32, y: i32, z: i32, val: f32) {
+    let index: i32 = ijk(x, y, z, sim_int_par.x_sz, sim_int_par.y_sz, sim_int_par.n_sls);
+
+    if(index != -1) {
+        r_xy_old[index] = val;
     }
 }
 
