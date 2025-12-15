@@ -83,10 +83,6 @@ print(f"Erro RMS: {erro_rms:.2f}")
 print(f"Erro percentual: {erro_percentual:.2f}%")
 print(f"Correlação: {correlacao:.4f}\n")
 
-# Atenuação
-atenuacao_amplitude = np.max(np.abs(sinal_recebido)) / np.max(np.abs(sinal_emitido))
-atenuacao_db = 20 * np.log10(atenuacao_amplitude)
-
 # Ganho por frequência
 pos_mask = freq > 0
 freq_pos = freq[pos_mask]
@@ -135,14 +131,12 @@ axes2[0, 0].plot(freq_pos, 20 * np.log10(np.abs(X[pos_mask]) + 1e-10), 'b-', lin
 axes2[0, 0].set_title('X(f): Sinal Emitido')
 axes2[0, 0].set_ylabel('Magnitude (dB)')
 axes2[0, 0].set_xlim([0, 15])
-axes2[0, 0].axvline(2.85, color='red', linestyle='--', alpha=0.5)
 axes2[0, 0].grid(True, alpha=0.3)
 
 axes2[0, 1].plot(freq_pos, 20 * np.log10(np.abs(Y[pos_mask]) + 1e-10), 'r-', linewidth=1.5)
 axes2[0, 1].set_title('Y(f): Sinal Recebido')
 axes2[0, 1].set_ylabel('Magnitude (dB)')
 axes2[0, 1].set_xlim([0, 15])
-axes2[0, 1].axvline(2.85, color='red', linestyle='--', alpha=0.5)
 axes2[0, 1].grid(True, alpha=0.3)
 
 axes2[1, 0].plot(freq_pos, H_mag_db, 'green', linewidth=1.5)
@@ -150,11 +144,6 @@ axes2[1, 0].set_title('H(f) = Y(f)/X(f) com filtro passa-banda')
 axes2[1, 0].set_xlabel('Frequência (MHz)')
 axes2[1, 0].set_ylabel('Ganho (dB)')
 axes2[1, 0].set_xlim([0, 15])
-axes2[1, 0].axhline(0, color='gray', linestyle=':', alpha=0.5)
-axes2[1, 0].axhline(atenuacao_db, color='orange', linestyle='--', alpha=0.7, linewidth=1.5,
-                    label=f'Atenuação: {atenuacao_db:.1f} dB')
-axes2[1, 0].axvline(1.5, color='orange', linestyle='--', alpha=0.5, linewidth=1)
-axes2[1, 0].axvline(4.5, color='orange', linestyle='--', alpha=0.5, linewidth=1)
 axes2[1, 0].legend()
 axes2[1, 0].grid(True, alpha=0.3)
 
