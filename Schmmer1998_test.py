@@ -1,54 +1,66 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.fft import fft, fftfreq
-from framework import file_m2k, file_civa
+from scipy.special import j0, j1
+from framework import file_m2k
 
-D = 24.2          # Espessura (mm)
-fs = 125e6        # Taxa de amostragem (Hz)
-epsilon = 0.05  # Valor para evitar divisão por zero
+# --- parametros ---
+D      = 24.2e-3       # espessura (m)
+a      = (0.25 * 25.4e-3) / 2   # raio transdutor (m)
+cp     = 5940.0        # velocidade P (m/s)
+fs     = 125e6
+eps_f  = 0.05
+f_min, f_max = 1.75, 5.25   # MHz
 
-FRONT_START, FRONT_END = 0, 500
-BACK_START, BACK_END = 750, 1250
+# gates em passos — eco 1 e eco 2 de fundo
+ECO1 = (900, 1250)
+ECO2 = (1950, 2300)
 
-f_min, f_max = 2.5, 7.5  # MHz
+# --- carregar ---
+ensaio = file_m2k.read("./Mono_3.5MHz_ferro.m2k", 3.5, 0.5, 'Gaussian')
+signal = ensaio.ascan_data[:, 0, 0, 0].astype(np.float64)
+t      = np.arange(len(signal)) / fs
 
+# --- extrair ecos com janela Hann ---
+def extrair(t, sig, sa, sb):
+    mask = (np.arange(len(sig)) >= sa) & (np.arange(len(sig)) <= sb)
+    seg  = sig[mask]
+    out  = np.zeros_like(sig)
+    out[mask] = seg * np.hanning(len(seg))
+    return out
 
-ensaio_real = file_m2k.read("./Mono_5MHz_ferro.m2k", 5, 0.5, 'Gaussian')
-signal = ensaio_real.ascan_data[:,0,0,0]
+e1 = extrair(t, signal, *ECO1)
+e2 = extrair(t, signal, *ECO2)
 
-front = signal[FRONT_START:FRONT_END]
-back = signal[BACK_START:BACK_END]
+NFFT  = int(2 ** np.ceil(np.log2(len(signal) * 2)))
+V1    = np.fft.rfft(e1, n=NFFT)
+V2    = np.fft.rfft(e2, n=NFFT)
+freqs = np.fft.rfftfreq(NFFT, d=1.0/fs)
 
-n_fft = int(2 ** np.ceil(np.log2(max(len(front), len(back)) * 4)))
+# --- correcao de difracao Eq. 9.56 ---
+def Dp(freqs, a, D_eff, cp):
+    f   = np.where(freqs == 0, 1e-10, freqs)
+    arg = 2*np.pi*f/cp * a**2 / (2*D_eff)
+    return 1.0 - np.exp(1j*arg) * (j0(arg) - 1j*j1(arg))
 
-F_mag = np.abs(fft(front, n_fft))
-B_mag = np.abs(fft(back, n_fft))
+dp1 = Dp(freqs, a, D,     cp)
+dp2 = Dp(freqs, a, 2.0*D, cp)
 
-epsilon = (epsilon) * np.max(F_mag)
+# --- filtro de Wiener Eq. 9.60 ---
+F   = V1 * (np.abs(dp2) / (np.abs(dp1) + 1e-30))
+B   = V2
+aF  = np.abs(F);  aB = np.abs(B)
+eps = eps_f * aF.max()
 
-calc = (B_mag * F_mag) / (F_mag**2 + epsilon**2)
-calc = np.clip(calc, 1e-20, None)
+e2aD  = (aB * aF) / (aF**2 + eps**2)
+alpha = -np.log(np.clip(e2aD, 1e-30, None)) / (2.0 * D)   # Np/m
 
-alpha = -np.log(calc) / (2.0 * D)
+# --- plot na banda ---
+fMHz = freqs / 1e6
+mask = (fMHz >= f_min) & (fMHz <= f_max)
 
-freq = fftfreq(n_fft, 1.0/fs)
-pos_mask = freq >= 0
-freq_MHz = freq[pos_mask] / 1e6
-alpha_pos = alpha[pos_mask]
-
-plt.figure(0)
-
-mask = (freq_MHz >= f_min) & (freq_MHz <= f_max)
-freq_band = freq_MHz[mask]
-alpha_band = alpha_pos[mask]
-
-
-valid = np.isfinite(alpha_band) & (alpha_band > 0) & (alpha_band < 0.1)
-freq_valid = freq_band[valid]
-alpha_valid = alpha_band[valid]
-
-plt.plot(freq_valid, alpha_valid, 'b-', linewidth=1.5)
-
-plt.xlabel('Frequency (MHz)', fontsize=12)
-plt.ylabel('Np/mm', fontsize=12)
+plt.figure()
+plt.plot(fMHz[mask], alpha[mask] / 1000.0, 'k-', lw=1.5)   # Np/m -> Np/mm
+plt.xlabel('Frequencia (MHz)')
+plt.ylabel('alpha (Np/mm)')
+plt.grid(True, alpha=0.3)
 plt.show()
